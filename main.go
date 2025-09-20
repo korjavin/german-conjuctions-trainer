@@ -1561,11 +1561,11 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 	requestBody, err := json.Marshal(map[string]interface{}{
 		"text":     req.Text,
 		"model_id": "eleven_multilingual_v2",
-		"voice_settings": map[string]float64{
-			"stability":                0.5,
-			"similarity_boost":         0.75,
-			"style":                    0.0,
-			"use_speaker_boost":        true,
+		"voice_settings": map[string]interface{}{
+			"stability":        0.5,
+			"similarity_boost": 0.75,
+			"style":            0.0,
+			"use_speaker_boost": true,
 		},
 	})
 	if err != nil {
