@@ -431,7 +431,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Replace exercise content with statistics
         document.getElementById('exercise-container').classList.add('hidden');
-        document.getElementById('controls-container').classList.add('hidden');
         document.querySelector('main .max-w-3xl').appendChild(statsContainer);
 
         // Add event listeners for the buttons
@@ -444,10 +443,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statsContainer) {
             statsContainer.remove();
         }
-        
+
         document.getElementById('exercise-container').classList.remove('hidden');
-        document.getElementById('controls-container').classList.remove('hidden');
-        
+
         state.currentExerciseIndex = 0;
         state.mistakes = 0;
         state.hintsUsed = 0;
@@ -455,7 +453,16 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isSessionComplete = false;
         state.startTime = null;
         state.exercises = [];
-        
+
+        // Clean up loading state and timers
+        loadingSpinner.classList.add('hidden');
+        if (state.timerInterval) {
+            clearInterval(state.timerInterval);
+        }
+
+        // Re-enable the generate button
+        generateBtn.disabled = false;
+
         updateStats();
         renderExercise(); // Show empty state
     }
@@ -465,17 +472,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statsContainer) {
             statsContainer.remove();
         }
-        
+
         document.getElementById('exercise-container').classList.remove('hidden');
-        document.getElementById('controls-container').classList.remove('hidden');
-        
+
         state.currentExerciseIndex = 0;
         state.mistakes = 0;
         state.hintsUsed = 0;
         state.sessionTime = 0;
         state.isSessionComplete = false;
         state.startTime = Date.now();
-        
+
+        // Clean up loading state and timers
+        loadingSpinner.classList.add('hidden');
+        if (state.timerInterval) {
+            clearInterval(state.timerInterval);
+        }
+
+        // Re-enable the generate button
+        generateBtn.disabled = false;
+
         updateStats();
         renderExercise();
     }
