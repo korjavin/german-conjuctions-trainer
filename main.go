@@ -1684,6 +1684,55 @@ func getVoiceIDByName(voiceName string) (string, error) {
 	return "", fmt.Errorf("voice '%s' not found", voiceName)
 }
 
+func updateLegacyExercisesWithAudio(text, audioPath string) {
+	// This function runs in a goroutine to update legacy exercises in Airtable
+	// Search for exercises where the German sentence matches and AudioFilePath is empty
+
+	table := airtableClient.GetTable(airtableBaseID, exercisesTableName)
+
+	// We need to search through all exercises to find matches
+	// This is not the most efficient, but Airtable doesn't have great filtering for JSON content
+	records, err := table.GetRecords().Do()
+	if err != nil {
+		log.Printf("Warning: failed to get exercises for audio update: %v", err)
+		return
+	}
+
+	var recordsToUpdate []*airtable.Record
+	for _, record := range records.Records {
+		// Skip if already has audio
+		if audioFilePath, ok := record.Fields["AudioFilePath"].(string); ok && audioFilePath != "" {
+			continue
+		}
+
+		// Check if ExerciseJSON contains the matching German sentence
+		if exerciseJSON, ok := record.Fields["ExerciseJSON"].(string); ok && exerciseJSON != "" {
+			var exercise struct {
+				CorrectGermanSentence string `json:"correct_german_sentence"`
+			}
+			if err := json.Unmarshal([]byte(exerciseJSON), &exercise); err == nil {
+				if exercise.CorrectGermanSentence == text {
+					// Found a match! Add to update list
+					record.Fields["AudioFilePath"] = audioPath
+					recordsToUpdate = append(recordsToUpdate, record)
+					log.Printf("Found legacy exercise to update with audio: %s", text)
+				}
+			}
+		}
+	}
+
+	// Update records in batches
+	if len(recordsToUpdate) > 0 {
+		updateRecords := &airtable.Records{Records: recordsToUpdate}
+		_, err := table.UpdateRecords(updateRecords)
+		if err != nil {
+			log.Printf("Warning: failed to update legacy exercises with audio: %v", err)
+		} else {
+			log.Printf("Successfully updated %d legacy exercises with audio path: %s", len(recordsToUpdate), audioPath)
+		}
+	}
+}
+
 func handleTTS(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1788,6 +1837,10 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Successfully created audio file: %s", filename)
+
+	// Try to update any legacy exercises that match this text
+	go updateLegacyExercisesWithAudio(req.Text, filename)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
 }

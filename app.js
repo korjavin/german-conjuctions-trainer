@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Application State ---
     let state = {
         lastAudioUrl: '',
+        lastAudioText: '',
         currentTopicId: '',
         topics: [],
         exercises: [],
@@ -110,13 +111,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function playSentenceAudio(audioPath) {
-        if (!audioPath) return;
-        try {
-            const audio = new Audio(audioPath);
-            await audio.play();
-        } catch (error) {
-            console.error("Error playing audio:", error);
+    async function playSentenceAudio(audioPath, text) {
+        // If audio path exists, try to play it directly
+        if (audioPath) {
+            try {
+                const audio = new Audio(audioPath);
+                await audio.play();
+                return;
+            } catch (error) {
+                console.error("Error playing cached audio:", error);
+                // Fall through to generate new audio
+            }
+        }
+
+        // If no audio path or playback failed, generate audio via TTS
+        if (text) {
+            try {
+                const response = await fetch('/api/tts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text })
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to fetch audio:', response.statusText);
+                    return;
+                }
+
+                const data = await response.json();
+                if (data.filePath) {
+                    const audio = new Audio(data.filePath);
+                    await audio.play();
+                    // Update the lastAudioUrl so replay button works
+                    state.lastAudioUrl = data.filePath;
+                }
+            } catch (error) {
+                console.error('Error generating audio:', error);
+            }
         }
     }
 
@@ -283,7 +316,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isCorrect) {
             correctSentenceDisplay.textContent = `Correct! "${exercise.correct_german_sentence}"`;
             state.lastAudioUrl = exercise.audio_file_path;
-            playSentenceAudio(state.lastAudioUrl);
+            state.lastAudioText = exercise.correct_german_sentence;
+            playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
 
             // Show replay and next buttons
             replayAudioBtn.classList.remove('hidden');
@@ -458,9 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleReplayAudio() {
-        if (state.lastAudioUrl) {
-            playSentenceAudio(state.lastAudioUrl);
-        }
+        playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
     }
 
     function handleNextExercise() {
