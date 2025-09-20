@@ -49,12 +49,13 @@ type PromptVersion struct {
 }
 
 type Exercise struct {
-	ID           string    `json:"id"`
-	AirtableID   string    `json:"airtable_id"`
-	TopicID      string    `json:"topic_id"`
-	PromptHash   string    `json:"prompt_hash"`
-	ExerciseJSON string    `json:"exercise_json"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	AirtableID    string    `json:"airtable_id"`
+	TopicID       string    `json:"topic_id"`
+	PromptHash    string    `json:"prompt_hash"`
+	ExerciseJSON  string    `json:"exercise_json"`
+	AudioFilePath string    `json:"audio_file_path"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type UserExerciseView struct {
@@ -257,6 +258,7 @@ func createAirtableTables() error {
 	log.Printf("   • TopicID: Single line text (Link to 'Topics' table is recommended)")
 	log.Printf("   • PromptHash: Single line text")
 	log.Printf("   • ExerciseJSON: Long text")
+	log.Printf("   • AudioFilePath: Single line text")
 	log.Printf("   • CreatedAt: Created time (Airtable managed)")
 	log.Printf("")
 	log.Printf("📋 Table 4: 'UserExerciseViews'")
@@ -747,15 +749,16 @@ func getPromptHash(prompt string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func createExercise(topicID, promptHash, exerciseJSON string) (*Exercise, error) {
+func createExercise(topicID, promptHash, exerciseJSON, audioFilePath string) (*Exercise, error) {
 	table := airtableClient.GetTable(airtableBaseID, exercisesTableName)
 	records := &airtable.Records{
 		Records: []*airtable.Record{
 			{
 				Fields: map[string]any{
-					"TopicID":      topicID,
-					"PromptHash":   promptHash,
-					"ExerciseJSON": exerciseJSON,
+					"TopicID":       topicID,
+					"PromptHash":    promptHash,
+					"ExerciseJSON":  exerciseJSON,
+					"AudioFilePath": audioFilePath,
 				},
 			},
 		},
@@ -772,11 +775,12 @@ func createExercise(topicID, promptHash, exerciseJSON string) (*Exercise, error)
 
 	rec := result.Records[0]
 	exercise := &Exercise{
-		AirtableID:   rec.ID,
-		TopicID:      topicID,
-		PromptHash:   promptHash,
-		ExerciseJSON: exerciseJSON,
-		CreatedAt:    time.Now(), // Approximate, actual time is on Airtable
+		AirtableID:    rec.ID,
+		TopicID:       topicID,
+		PromptHash:    promptHash,
+		ExerciseJSON:  exerciseJSON,
+		AudioFilePath: audioFilePath,
+		CreatedAt:     time.Now(), // Approximate, actual time is on Airtable
 	}
 	return exercise, nil
 }
@@ -806,6 +810,9 @@ func getExercisesForTopic(topicID, promptHash string) ([]*Exercise, error) {
 		}
 		if val, ok := record.Fields["ExerciseJSON"].(string); ok {
 			exercise.ExerciseJSON = val
+		}
+		if val, ok := record.Fields["AudioFilePath"].(string); ok {
+			exercise.AudioFilePath = val
 		}
 		if val, ok := record.Fields["CreatedAt"].(string); ok {
 			if t, err := time.Parse(time.RFC3339, val); err == nil {
@@ -1167,6 +1174,88 @@ func refinePrompt(originalPrompt, apiKey, openaiURL, modelName string) (string, 
 	return refinedPrompt, nil
 }
 
+func generateAndSaveAudio(text string) (string, error) {
+	if elevenlabsAPIKey == "" {
+		return "", fmt.Errorf("TTS service is not configured")
+	}
+
+	// Generate a unique filename from the hash of the text
+	hasher := sha256.New()
+	hasher.Write([]byte(text))
+	hash := hex.EncodeToString(hasher.Sum(nil))
+	filename := fmt.Sprintf("audio_cache/%s.mp3", hash)
+
+	// Check if the file already exists (caching)
+	if _, err := os.Stat(filename); err == nil {
+		log.Printf("Using cached audio file: %s", filename)
+		return filename, nil
+	}
+
+	// If not cached, generate the audio
+	log.Printf("Generating new audio file for text: %s", text)
+
+	// Get voice ID by name
+	voiceID, err := getVoiceIDByName(elevenlabsVoiceName)
+	if err != nil {
+		log.Printf("Failed to get voice ID for '%s': %v. Using default voice.", elevenlabsVoiceName, err)
+		voiceID = "21m00Tcm4TlvDq8ikWAM" // Default voice ID for "Rachel"
+	}
+
+	// ElevenLabs API request
+	apiURL := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
+
+	requestBody, err := json.Marshal(map[string]interface{}{
+		"text":     text,
+		"model_id": "eleven_multilingual_v2",
+		"voice_settings": map[string]interface{}{
+			"stability":        0.5,
+			"similarity_boost": 0.75,
+			"style":            0.0,
+			"use_speaker_boost": true,
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create request body for ElevenLabs: %w", err)
+	}
+
+	client := &http.Client{}
+	apiReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		return "", fmt.Errorf("failed to create API request for ElevenLabs: %w", err)
+	}
+
+	apiReq.Header.Set("Content-Type", "application/json")
+	apiReq.Header.Set("xi-api-key", elevenlabsAPIKey)
+	apiReq.Header.Set("Accept", "audio/mpeg")
+
+	resp, err := client.Do(apiReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to call ElevenLabs API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Printf("ElevenLabs API Error: %s - %s", resp.Status, string(bodyBytes))
+		return "", fmt.Errorf("ElevenLabs API error: %s", resp.Status)
+	}
+
+	// Save the audio file
+	outFile, err := os.Create(filename)
+	if err != nil {
+		return "", fmt.Errorf("failed to create audio file: %w", err)
+	}
+	defer outFile.Close()
+
+	_, err = io.Copy(outFile, resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to save audio file: %w", err)
+	}
+
+	log.Printf("Successfully created audio file: %s", filename)
+	return filename, nil
+}
+
 func handleExercises(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1249,13 +1338,20 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Prepare response
-	var responseExercises []json.RawMessage
+	type ExerciseResponse struct {
+		ExerciseJSON  json.RawMessage `json:"exercise_json"`
+		AudioFilePath string          `json:"audio_file_path"`
+	}
+	var responseExercises []ExerciseResponse
 	for _, ex := range finalExercises {
-		responseExercises = append(responseExercises, []byte(ex.ExerciseJSON))
+		responseExercises = append(responseExercises, ExerciseResponse{
+			ExerciseJSON:  []byte(ex.ExerciseJSON),
+			AudioFilePath: ex.AudioFilePath,
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string][]json.RawMessage{"exercises": responseExercises})
+	json.NewEncoder(w).Encode(map[string][]ExerciseResponse{"exercises": responseExercises})
 }
 
 func generateAndCacheExercises(topic *Topic) ([]*Exercise, error) {
@@ -1311,7 +1407,13 @@ func generateAndCacheExercises(topic *Topic) ([]*Exercise, error) {
 
 	// The actual content is a JSON string inside the response.
 	var exerciseData struct {
-		Exercises []json.RawMessage `json:"exercises"`
+		Exercises []struct {
+			CorrectGermanSentence string `json:"correct_german_sentence"`
+			// Include other fields from the JSON so they are preserved
+			ConjunctionTopic string   `json:"conjunction_topic"`
+			EnglishHint      string   `json:"english_hint"`
+			ScrambledWords   []string `json:"scrambled_words"`
+		} `json:"exercises"`
 	}
 	if err := json.Unmarshal([]byte(openaiResp.Choices[0].Message.Content), &exerciseData); err != nil {
 		return nil, fmt.Errorf("failed to parse exercises from OpenAI response: %w", err)
@@ -1319,8 +1421,23 @@ func generateAndCacheExercises(topic *Topic) ([]*Exercise, error) {
 
 	promptHash := getPromptHash(topic.Prompt)
 	var newlyGenerated []*Exercise
-	for _, exJSON := range exerciseData.Exercises {
-		exercise, err := createExercise(topic.ID, promptHash, string(exJSON))
+	for _, exData := range exerciseData.Exercises {
+		// Generate audio for the correct sentence
+		audioPath, err := generateAndSaveAudio(exData.CorrectGermanSentence)
+		if err != nil {
+			log.Printf("Warning: failed to generate audio for exercise: %v", err)
+			// Continue without audio, or skip? For now, we'll save it without audio.
+			audioPath = ""
+		}
+
+		// Re-marshal the individual exercise to store as a JSON string
+		exJSONBytes, err := json.Marshal(exData)
+		if err != nil {
+			log.Printf("Warning: failed to re-marshal exercise JSON: %v", err)
+			continue
+		}
+
+		exercise, err := createExercise(topic.ID, promptHash, string(exJSONBytes), audioPath)
 		if err != nil {
 			log.Printf("Warning: failed to cache exercise: %v", err)
 			continue
