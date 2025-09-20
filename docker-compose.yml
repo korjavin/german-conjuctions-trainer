@@ -14,6 +14,8 @@ services:
       - "io.containers.autoupdate=image"
 
     restart: unless-stopped
+    volumes:
+      - audio_cache:/app/audio_cache
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_URL=${OPENAI_URL}
@@ -26,6 +28,9 @@ services:
       - GOOGLE_ADMIN_ID=${GOOGLE_ADMIN_ID}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - ELEVENLABS_VOICE_NAME=${ELEVENLABS_VOICE_NAME}
+
+volumes:
+  audio_cache:
 
 networks:
   vaultwarden_default:
