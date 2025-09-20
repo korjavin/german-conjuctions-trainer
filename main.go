@@ -93,6 +93,10 @@ type UpdateTopicRequest struct {
 	Prompt string `json:"prompt"`
 }
 
+type TTSRequest struct {
+	Text string `json:"text"`
+}
+
 type ResponseFormat struct {
 	Type string `json:"type"`
 }
@@ -138,6 +142,11 @@ var (
 	// For observability
 	lastRefinedPrompt      string
 	lastRefinedPromptMutex sync.RWMutex
+)
+
+// ElevenLabs configuration
+var (
+	elevenlabsAPIKey string
 )
 
 // Google OAuth2 configuration
@@ -907,12 +916,27 @@ func initOAuth() {
 	}
 }
 
+func init() {
+	// Ensure the audio cache directory exists
+	if err := os.MkdirAll("audio_cache", os.ModePerm); err != nil {
+		log.Fatalf("Failed to create audio_cache directory: %v", err)
+	}
+}
+
 func main() {
 	// Initialize storage backend
 	initStorage()
 
 	// Initialize Google OAuth
 	initOAuth()
+
+	// Initialize ElevenLabs
+	elevenlabsAPIKey = os.Getenv("ELEVENLABS_API_KEY")
+	if elevenlabsAPIKey == "" {
+		log.Println("Warning: ELEVENLABS_API_KEY not set. TTS functionality will be disabled.")
+	} else {
+		log.Println("ElevenLabs integration enabled.")
+	}
 	
 	// Initialize default topics
 	initializeDefaultTopics()
@@ -964,6 +988,12 @@ func main() {
 	// User stats and settings endpoints
 	http.HandleFunc("/api/user/stats", handleUserStats)
 	http.HandleFunc("/api/user/settings", handleUserSettings)
+
+	// TTS endpoint
+	http.HandleFunc("/api/tts", handleTTS)
+
+	// Audio file server
+	http.Handle("/audio_cache/", http.StripPrefix("/audio_cache/", http.FileServer(http.Dir("./audio_cache"))))
 	
 	// Health check endpoint
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -1484,6 +1514,109 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 	w.Write(respBody)
 }
+
+func handleTTS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if elevenlabsAPIKey == "" {
+		http.Error(w, "TTS service is not configured", http.StatusInternalServerError)
+		return
+	}
+
+	var req TTSRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Text == "" {
+		http.Error(w, "Text is required", http.StatusBadRequest)
+		return
+	}
+
+	// Generate a unique filename from the hash of the text
+	hasher := sha256.New()
+	hasher.Write([]byte(req.Text))
+	hash := hex.EncodeToString(hasher.Sum(nil))
+	filename := fmt.Sprintf("audio_cache/%s.mp3", hash)
+
+	// Check if the file already exists (caching)
+	if _, err := os.Stat(filename); err == nil {
+		log.Printf("Serving cached audio file: %s", filename)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
+		return
+	}
+
+	// If not cached, generate the audio
+	log.Printf("Generating new audio file for text: %s", req.Text)
+	voiceID := "21m00Tcm4TlvDq8ikWAM" // A default voice ID, e.g., "Rachel"
+
+	// ElevenLabs API request
+	apiURL := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
+
+	requestBody, err := json.Marshal(map[string]interface{}{
+		"text":     req.Text,
+		"model_id": "eleven_multilingual_v2",
+		"voice_settings": map[string]float64{
+			"stability":                0.5,
+			"similarity_boost":         0.75,
+			"style":                    0.0,
+			"use_speaker_boost":        true,
+		},
+	})
+	if err != nil {
+		http.Error(w, "Failed to create request body for ElevenLabs", http.StatusInternalServerError)
+		return
+	}
+
+	client := &http.Client{}
+	apiReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(requestBody))
+	if err != nil {
+		http.Error(w, "Failed to create API request for ElevenLabs", http.StatusInternalServerError)
+		return
+	}
+
+	apiReq.Header.Set("Content-Type", "application/json")
+	apiReq.Header.Set("xi-api-key", elevenlabsAPIKey)
+	apiReq.Header.Set("Accept", "audio/mpeg")
+
+	resp, err := client.Do(apiReq)
+	if err != nil {
+		http.Error(w, "Failed to call ElevenLabs API", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Printf("ElevenLabs API Error: %s - %s", resp.Status, string(bodyBytes))
+		http.Error(w, fmt.Sprintf("ElevenLabs API error: %s", resp.Status), resp.StatusCode)
+		return
+	}
+
+	// Save the audio file
+	outFile, err := os.Create(filename)
+	if err != nil {
+		http.Error(w, "Failed to create audio file", http.StatusInternalServerError)
+		return
+	}
+	defer outFile.Close()
+
+	_, err = io.Copy(outFile, resp.Body)
+	if err != nil {
+		http.Error(w, "Failed to save audio file", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Successfully created audio file: %s", filename)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
+}
+
 
 func handleGetLastRefinedPrompt(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
