@@ -58,9 +58,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
+    const replayAudioBtn = document.getElementById('replay-audio-btn');
+    const nextExerciseBtn = document.getElementById('next-exercise-btn');
 
     // --- Application State ---
     let state = {
+        lastAudioUrl: '',
         currentTopicId: '',
         topics: [],
         exercises: [],
@@ -107,32 +110,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function playSentenceAudio(text) {
-        if (!text) return;
-
+    async function playSentenceAudio(audioPath) {
+        if (!audioPath) return;
         try {
-            const response = await fetch('/api/tts', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ text })
-            });
-
-            if (!response.ok) {
-                // Don't alert the user, just log the error to the console.
-                // The audio playback is a non-critical feature.
-                console.error('Failed to fetch audio:', response.statusText);
-                return;
-            }
-
-            const data = await response.json();
-            if (data.filePath) {
-                const audio = new Audio(data.filePath);
-                audio.play().catch(e => console.error("Error playing audio:", e));
-            }
+            const audio = new Audio(audioPath);
+            await audio.play();
         } catch (error) {
-            console.error('Error in playSentenceAudio:', error);
+            console.error("Error playing audio:", error);
         }
     }
 
@@ -162,6 +146,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderExercise() {
         state.isLocked = false;
         state.userSentence = [];
+
+        // Hide buttons by default
+        replayAudioBtn.classList.add('hidden');
+        nextExerciseBtn.classList.add('hidden');
 
         if (state.exercises.length === 0) {
             exerciseContent.classList.add('hidden');
@@ -291,19 +279,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleSentenceCompletion(exercise, correctWordArray) {
         state.isLocked = true;
         const isCorrect = state.userSentence.join(' ') === correctWordArray.join(' ');
-        
+
         if (isCorrect) {
             correctSentenceDisplay.textContent = `Correct! "${exercise.correct_german_sentence}"`;
-            playSentenceAudio(exercise.correct_german_sentence);
-            
-            setTimeout(() => {
-                if (state.currentExerciseIndex < state.exercises.length - 1) {
-                    state.currentExerciseIndex++;
-                    renderExercise();
-                } else {
-                    showStatisticsPage();
-                }
-            }, 2000);
+            state.lastAudioUrl = exercise.audio_file_path;
+            playSentenceAudio(state.lastAudioUrl);
+
+            // Show replay and next buttons
+            replayAudioBtn.classList.remove('hidden');
+            nextExerciseBtn.classList.remove('hidden');
         } else {
             state.mistakes++;
             updateStats();
@@ -470,6 +454,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.click();
                 break;
             }
+        }
+    }
+
+    function handleReplayAudio() {
+        if (state.lastAudioUrl) {
+            playSentenceAudio(state.lastAudioUrl);
+        }
+    }
+
+    function handleNextExercise() {
+        if (state.currentExerciseIndex < state.exercises.length - 1) {
+            state.currentExerciseIndex++;
+            renderExercise();
+        } else {
+            showStatisticsPage();
         }
     }
 
@@ -645,7 +644,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.exercises && data.exercises.length > 0) {
-                state.exercises = data.exercises;
+                state.exercises = data.exercises.map(ex => ({
+                    ...ex.exercise_json,
+                    audio_file_path: ex.audio_file_path
+                }));
                 state.currentExerciseIndex = 0;
                 state.mistakes = 0;
                 state.hintsUsed = 0;
@@ -850,6 +852,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     generateBtn.addEventListener('click', fetchExercises);
     hintBtn.addEventListener('click', handleHintClick);
+    replayAudioBtn.addEventListener('click', handleReplayAudio);
+    nextExerciseBtn.addEventListener('click', handleNextExercise);
     document.addEventListener('keydown', handleKeyPress);
 
     viewLastRefinedPromptBtn.addEventListener('click', showLastRefinedPrompt);
