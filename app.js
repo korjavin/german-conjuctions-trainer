@@ -107,6 +107,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function playSentenceAudio(text) {
+        if (!text) return;
+
+        try {
+            const response = await fetch('/api/tts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ text })
+            });
+
+            if (!response.ok) {
+                // Don't alert the user, just log the error to the console.
+                // The audio playback is a non-critical feature.
+                console.error('Failed to fetch audio:', response.statusText);
+                return;
+            }
+
+            const data = await response.json();
+            if (data.filePath) {
+                const audio = new Audio(data.filePath);
+                audio.play().catch(e => console.error("Error playing audio:", e));
+            }
+        } catch (error) {
+            console.error('Error in playSentenceAudio:', error);
+        }
+    }
+
     function isPunctuation(token) {
         return /^[^\p{L}\p{N}]+$/u.test(token);
     }
@@ -265,6 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (isCorrect) {
             correctSentenceDisplay.textContent = `Correct! "${exercise.correct_german_sentence}"`;
+            playSentenceAudio(exercise.correct_german_sentence);
             
             setTimeout(() => {
                 if (state.currentExerciseIndex < state.exercises.length - 1) {
