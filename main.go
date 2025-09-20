@@ -1712,9 +1712,14 @@ func updateLegacyExercisesWithAudio(text, audioPath string) {
 			}
 			if err := json.Unmarshal([]byte(exerciseJSON), &exercise); err == nil {
 				if exercise.CorrectGermanSentence == text {
-					// Found a match! Add to update list
-					record.Fields["AudioFilePath"] = audioPath
-					recordsToUpdate = append(recordsToUpdate, record)
+					// Found a match! Create update record with ID and new fields
+					updateRecord := &airtable.Record{
+						ID: record.ID,
+						Fields: map[string]any{
+							"AudioFilePath": audioPath,
+						},
+					}
+					recordsToUpdate = append(recordsToUpdate, updateRecord)
 					log.Printf("Found legacy exercise to update with audio: %s", text)
 				}
 			}
