@@ -146,7 +146,8 @@ var (
 
 // ElevenLabs configuration
 var (
-	elevenlabsAPIKey string
+	elevenlabsAPIKey   string
+	elevenlabsVoiceName string
 )
 
 // Google OAuth2 configuration
@@ -932,10 +933,15 @@ func main() {
 
 	// Initialize ElevenLabs
 	elevenlabsAPIKey = os.Getenv("ELEVENLABS_API_KEY")
+	elevenlabsVoiceName = os.Getenv("ELEVENLABS_VOICE_NAME")
 	if elevenlabsAPIKey == "" {
 		log.Println("Warning: ELEVENLABS_API_KEY not set. TTS functionality will be disabled.")
 	} else {
-		log.Println("ElevenLabs integration enabled.")
+		if elevenlabsVoiceName == "" {
+			elevenlabsVoiceName = "Rachel" // Default voice name
+			log.Println("ELEVENLABS_VOICE_NAME not set. Using default voice: Rachel")
+		}
+		log.Printf("ElevenLabs integration enabled with voice: %s", elevenlabsVoiceName)
 	}
 	
 	// Initialize default topics
@@ -1515,6 +1521,52 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 	w.Write(respBody)
 }
 
+func getVoiceIDByName(voiceName string) (string, error) {
+	client := &http.Client{}
+
+	// Use /v1/voices endpoint to get all voices
+	apiURL := "https://api.elevenlabs.io/v1/voices"
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("xi-api-key", elevenlabsAPIKey)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to call ElevenLabs API: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("ElevenLabs API error: %s - %s", resp.Status, string(bodyBytes))
+	}
+
+	var voicesResponse struct {
+		Voices []struct {
+			VoiceID string `json:"voice_id"`
+			Name    string `json:"name"`
+		} `json:"voices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&voicesResponse); err != nil {
+		return "", fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	// Search for the voice by name (case-insensitive)
+	for _, voice := range voicesResponse.Voices {
+		if strings.EqualFold(voice.Name, voiceName) {
+			return voice.VoiceID, nil
+		}
+	}
+
+	return "", fmt.Errorf("voice '%s' not found", voiceName)
+}
+
 func handleTTS(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1553,7 +1605,13 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 
 	// If not cached, generate the audio
 	log.Printf("Generating new audio file for text: %s", req.Text)
-	voiceID := "21m00Tcm4TlvDq8ikWAM" // A default voice ID, e.g., "Rachel"
+
+	// Get voice ID by name
+	voiceID, err := getVoiceIDByName(elevenlabsVoiceName)
+	if err != nil {
+		log.Printf("Failed to get voice ID for '%s': %v. Using default voice.", elevenlabsVoiceName, err)
+		voiceID = "21m00Tcm4TlvDq8ikWAM" // Default voice ID for "Rachel"
+	}
 
 	// ElevenLabs API request
 	apiURL := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
