@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logout-btn');
     const replayAudioBtn = document.getElementById('replay-audio-btn');
     const nextExerciseBtn = document.getElementById('next-exercise-btn');
+    const exerciseControls = document.getElementById('exercise-controls');
 
     // --- Application State ---
     let state = {
@@ -180,9 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isLocked = false;
         state.userSentence = [];
 
-        // Hide buttons by default
-        replayAudioBtn.classList.add('hidden');
-        nextExerciseBtn.classList.add('hidden');
+        // Hide control buttons by default
+        exerciseControls.classList.add('hidden');
 
         if (state.exercises.length === 0) {
             exerciseContent.classList.add('hidden');
@@ -319,9 +319,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.lastAudioText = exercise.correct_german_sentence;
             playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
 
-            // Show replay and next buttons
-            replayAudioBtn.classList.remove('hidden');
-            nextExerciseBtn.classList.remove('hidden');
+            // Show exercise controls
+            exerciseControls.classList.remove('hidden');
         } else {
             state.mistakes++;
             updateStats();
