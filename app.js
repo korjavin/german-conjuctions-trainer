@@ -181,8 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isLocked = false;
         state.userSentence = [];
 
-        // Hide control buttons by default
+        // Hide control buttons by default and show hint button
         exerciseControls.classList.add('hidden');
+        hintBtn.classList.remove('hidden');
 
         if (state.exercises.length === 0) {
             exerciseContent.classList.add('hidden');
@@ -195,7 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
         exerciseContent.classList.remove('hidden');
         emptyStateContainer.classList.add('hidden');
         exerciseCounter.classList.remove('hidden');
-        hintBtn.classList.remove('hidden');
 
         const exercise = state.exercises[state.currentExerciseIndex];
 
@@ -319,8 +319,9 @@ document.addEventListener('DOMContentLoaded', () => {
             state.lastAudioText = exercise.correct_german_sentence;
             playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
 
-            // Show exercise controls
+            // Show exercise controls and hide hint button
             exerciseControls.classList.remove('hidden');
+            hintBtn.classList.add('hidden');
         } else {
             state.mistakes++;
             updateStats();
@@ -348,17 +349,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const exercise = state.exercises[state.currentExerciseIndex];
         const correctWordArray = exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [];
         const nonPunctuationWords = correctWordArray.filter(token => !isPunctuation(token));
-        
-        if (state.userSentence.length < nonPunctuationWords.length) {
-            const nextCorrectWord = nonPunctuationWords[state.userSentence.length];
+
+        // Use the same logic as word selection - filter user sentence for non-punctuation words
+        const userWords = state.userSentence.filter(token => !isPunctuation(token));
+
+        if (userWords.length < nonPunctuationWords.length) {
+            const nextCorrectWord = nonPunctuationWords[userWords.length];
             const availableButtons = scrambledWordsContainer.querySelectorAll('.btn-word:not(.hidden)');
-            
+
             for (const button of availableButtons) {
                 if (button.dataset.word === nextCorrectWord) {
                     button.classList.add('hint-word');
                     state.hintsUsed++;
                     updateStats();
-                    
+
                     setTimeout(() => {
                         button.classList.remove('hint-word');
                     }, 2000);
