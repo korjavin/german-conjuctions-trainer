@@ -106,6 +106,7 @@ type OpenAIRequest struct {
 	Model          string          `json:"model"`
 	Messages       []Message       `json:"messages"`
 	ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
+	Temperature    float64         `json:"temperature,omitempty"`
 }
 
 type Message struct {
@@ -1145,9 +1146,14 @@ func refinePrompt(originalPrompt, apiKey, openaiURL, modelName string) (string, 
 	}
 
 	// For refining, we expect a text response, not a JSON object
+	temperature, err := strconv.ParseFloat(os.Getenv("OPENAI_TEMPERATURE"), 64)
+	if err != nil {
+		temperature = 0.0 // Default value if not set or invalid
+	}
 	refineReq := OpenAIRequest{
-		Model:    modelName,
-		Messages: refineMessages,
+		Model:       modelName,
+		Messages:    refineMessages,
+		Temperature: temperature,
 	}
 
 	reqBody, err := json.Marshal(refineReq)
@@ -1396,10 +1402,16 @@ func generateAndCacheExercises(topic *Topic) ([]*Exercise, error) {
 		lastRefinedPromptMutex.Unlock()
 	}
 
+	temperature, err := strconv.ParseFloat(os.Getenv("OPENAI_TEMPERATURE"), 64)
+	if err != nil {
+		temperature = 0.0 // Default value if not set or invalid
+	}
+
 	openaiReq := OpenAIRequest{
 		Model:          modelName,
 		Messages:       []Message{{Role: "user", Content: finalPrompt}},
 		ResponseFormat: &ResponseFormat{Type: "json_object"},
+		Temperature:    temperature,
 	}
 
 	reqBody, _ := json.Marshal(openaiReq)
@@ -1588,6 +1600,11 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		lastRefinedPromptMutex.Unlock()
 	}
 
+	temperature, err := strconv.ParseFloat(os.Getenv("OPENAI_TEMPERATURE"), 64)
+	if err != nil {
+		temperature = 0.0 // Default value if not set or invalid
+	}
+
 	// Create OpenAI request with the (potentially refined) prompt
 	openaiReq := OpenAIRequest{
 		Model: modelName,
@@ -1598,6 +1615,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 		ResponseFormat: &ResponseFormat{Type: "json_object"},
+		Temperature:    temperature,
 	}
 
 	// Marshal request
