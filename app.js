@@ -74,6 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isLocked: false,
         mistakes: 0,
         hintsUsed: 0,
+        exercisesWithMistakes: new Set(), // Track exercises with mistakes
+        exercisesWithHints: new Set(), // Track exercises with hints
         startTime: null,
         sessionTime: 0,
         isSessionComplete: false,
@@ -300,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             // Incorrect word
             state.mistakes++;
+            state.exercisesWithMistakes.add(state.currentExerciseIndex);
             updateStats();
 
             button.classList.add('incorrect-answer-feedback');
@@ -361,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (button.dataset.word === nextCorrectWord) {
                     button.classList.add('hint-word');
                     state.hintsUsed++;
+                    state.exercisesWithHints.add(state.currentExerciseIndex);
                     updateStats();
 
                     setTimeout(() => {
@@ -419,6 +423,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="text-gray-600">Avg per Exercise</div>
                 </div>
             </div>
+            <div class="mb-8">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">Session Analysis</h3>
+                <div class="max-w-xs mx-auto">
+                    <canvas id="session-chart"></canvas>
+                </div>
+            </div>
             <div class="flex flex-col sm:flex-row gap-4 justify-center">
                 <button id="new-session-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold text-lg">
                     Start New Session
@@ -436,6 +446,51 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add event listeners for the buttons
         document.getElementById('new-session-btn').addEventListener('click', resetForNewSession);
         document.getElementById('same-exercises-btn').addEventListener('click', resetForSameExercises);
+
+        // --- Chart.js Implementation ---
+        const mistakesCount = state.exercisesWithMistakes.size;
+        let solvedWithHintsOnlyCount = 0;
+        let solvedAloneCount = 0;
+
+        for (let i = 0; i < state.exercises.length; i++) {
+            const hadMistake = state.exercisesWithMistakes.has(i);
+            const hadHint = state.exercisesWithHints.has(i);
+
+            if (!hadMistake && !hadHint) {
+                solvedAloneCount++;
+            } else if (!hadMistake && hadHint) {
+                solvedWithHintsOnlyCount++;
+            }
+        }
+
+        const ctx = document.getElementById('session-chart').getContext('2d');
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Mistakes', 'Solved with Hints', 'Solved Alone'],
+                datasets: [{
+                    data: [mistakesCount, solvedWithHintsOnlyCount, solvedAloneCount],
+                    backgroundColor: [
+                        '#EF4444', // Red for mistakes
+                        '#3B82F6', // Blue for hints
+                        '#22C55E'  // Green for solved alone
+                    ],
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: false,
+                        text: 'Session Performance'
+                    }
+                }
+            }
+        });
     }
 
     function resetForNewSession() {
@@ -453,6 +508,8 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isSessionComplete = false;
         state.startTime = null;
         state.exercises = [];
+        state.exercisesWithMistakes.clear();
+        state.exercisesWithHints.clear();
 
         // Clean up loading state and timers
         loadingSpinner.classList.add('hidden');
@@ -481,6 +538,8 @@ document.addEventListener('DOMContentLoaded', () => {
         state.sessionTime = 0;
         state.isSessionComplete = false;
         state.startTime = Date.now();
+        state.exercisesWithMistakes.clear();
+        state.exercisesWithHints.clear();
 
         // Clean up loading state and timers
         loadingSpinner.classList.add('hidden');
