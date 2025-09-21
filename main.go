@@ -147,8 +147,10 @@ var (
 
 // ElevenLabs configuration
 var (
-	elevenlabsAPIKey   string
-	elevenlabsVoiceName string
+	elevenlabsAPIKey     string
+	elevenlabsVoiceName  string
+	elevenlabsModelID    string
+	elevenlabsVoiceSpeed float64
 )
 
 // Google OAuth2 configuration
@@ -948,7 +950,25 @@ func main() {
 			elevenlabsVoiceName = "Rachel" // Default voice name
 			log.Println("ELEVENLABS_VOICE_NAME not set. Using default voice: Rachel")
 		}
-		log.Printf("ElevenLabs integration enabled with voice: %s", elevenlabsVoiceName)
+		elevenlabsModelID = os.Getenv("ELEVENLABS_MODEL_ID")
+		if elevenlabsModelID == "" {
+			elevenlabsModelID = "eleven_multilingual_v2"
+			log.Println("ELEVENLABS_MODEL_ID not set. Using default model: eleven_multilingual_v2")
+		}
+		voiceSpeedStr := os.Getenv("ELEVENLABS_VOICE_SPEED")
+		if voiceSpeedStr == "" {
+			elevenlabsVoiceSpeed = 1.0
+			log.Println("ELEVENLABS_VOICE_SPEED not set. Using default speed: 1.0")
+		} else {
+			speed, err := strconv.ParseFloat(voiceSpeedStr, 64)
+			if err != nil {
+				elevenlabsVoiceSpeed = 1.0
+				log.Printf("Invalid ELEVENLABS_VOICE_SPEED value: '%s'. Using default speed: 1.0", voiceSpeedStr)
+			} else {
+				elevenlabsVoiceSpeed = speed
+			}
+		}
+		log.Printf("ElevenLabs integration enabled with voice: %s, model: %s, speed: %.1f", elevenlabsVoiceName, elevenlabsModelID, elevenlabsVoiceSpeed)
 	}
 	
 	// Initialize default topics
@@ -1206,12 +1226,13 @@ func generateAndSaveAudio(text string) (string, error) {
 
 	requestBody, err := json.Marshal(map[string]interface{}{
 		"text":     text,
-		"model_id": "eleven_multilingual_v2",
+		"model_id": elevenlabsModelID,
 		"voice_settings": map[string]interface{}{
 			"stability":        0.5,
 			"similarity_boost": 0.75,
 			"style":            0.0,
 			"use_speaker_boost": true,
+			"speed":            elevenlabsVoiceSpeed,
 		},
 	})
 	if err != nil {
@@ -1789,12 +1810,13 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 
 	requestBody, err := json.Marshal(map[string]interface{}{
 		"text":     req.Text,
-		"model_id": "eleven_multilingual_v2",
+		"model_id": elevenlabsModelID,
 		"voice_settings": map[string]interface{}{
 			"stability":        0.5,
 			"similarity_boost": 0.75,
 			"style":            0.0,
 			"use_speaker_boost": true,
+			"speed":            elevenlabsVoiceSpeed,
 		},
 	})
 	if err != nil {

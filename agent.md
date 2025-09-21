@@ -40,6 +40,8 @@ A web-based application for learning German grammar. It features interactive wor
 - `OPENAI_URL`: API endpoint (defaults to `https://api.openai.com/v1`).
 - `MODEL_NAME`: AI model (defaults to `gpt-3.5-turbo-1106`).
 - `PORT`: Server port (defaults to `8080`).
+- `ELEVENLABS_MODEL_ID`: ElevenLabs model to use for TTS (defaults to `eleven_multilingual_v2`).
+- `ELEVENLABS_VOICE_SPEED`: ElevenLabs voice speed for TTS (defaults to `1.0`).
 
 ### API Structure:
 ```go
