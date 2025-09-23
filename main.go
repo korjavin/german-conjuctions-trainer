@@ -15,78 +15,22 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/mehanizm/airtable"
+	"german-conjunctions-trainer/pkg/llm"
+	"german-conjunctions-trainer/pkg/storage"
+
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	oauth2v2 "google.golang.org/api/oauth2/v2"
 	"golang.org/x/time/rate"
 )
 
-type GenerateRequest struct {
-	TopicID string `json:"topic_id"`
-}
-
-type Topic struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Prompt      string    `json:"prompt"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-type PromptVersion struct {
-	ID        string    `json:"id"`
-	TopicID   string    `json:"topic_id"`
-	Prompt    string    `json:"prompt"`
-	Version   int       `json:"version"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-type Exercise struct {
-	ID            string    `json:"id"`
-	AirtableID    string    `json:"airtable_id"`
-	TopicID       string    `json:"topic_id"`
-	PromptHash    string    `json:"prompt_hash"`
-	ExerciseJSON  string    `json:"exercise_json"`
-	AudioFilePath string    `json:"audio_file_path"`
-	CreatedAt     time.Time `json:"created_at"`
-}
-
-type UserExerciseView struct {
-	ID                string    `json:"id"`
-	AirtableID        string    `json:"airtable_id"`
-	UserID            string    `json:"user_id"`
-	ExerciseID        string    `json:"exercise_id"`
-	LastViewed        time.Time `json:"last_viewed"`
-	RepetitionCounter int       `json:"repetition_counter"`
-}
-
-
-type TopicRequest struct {
-	Name   string `json:"name"`
-	Prompt string `json:"prompt"`
-}
-
-type User struct {
-	ID         string `json:"id"`
-	GoogleID   string `json:"google_id"`
-	AirtableID string `json:"airtable_id"`
-}
-
-type UserStats struct {
-	UserID             string `json:"user_id"`
-	TotalExercises     int    `json:"total_exercises"`
-	TotalMistakes      int    `json:"total_mistakes"`
-	TotalHints         int    `json:"total_hints"`
-	TotalTime          int    `json:"total_time"`
-	LastTopicID        string `json:"last_topic_id"`
-	AirtableRecordID   string `json:"airtable_record_id"`
+type TTSRequest struct {
+	Text string `json:"text"`
 }
 
 type UpdateTopicRequest struct {
@@ -94,57 +38,10 @@ type UpdateTopicRequest struct {
 	Prompt string `json:"prompt"`
 }
 
-type TTSRequest struct {
-	Text string `json:"text"`
+type TopicRequest struct {
+	Name   string `json:"name"`
+	Prompt string `json:"prompt"`
 }
-
-type ResponseFormat struct {
-	Type string `json:"type"`
-}
-
-type OpenAIRequest struct {
-	Model          string          `json:"model"`
-	Messages       []Message       `json:"messages"`
-	ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
-	Temperature    float64         `json:"temperature,omitempty"`
-}
-
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type OpenAIResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
-	Error *struct {
-		Message string `json:"message"`
-		Type    string `json:"type"`
-		Code    string `json:"code"`
-	} `json:"error,omitempty"`
-}
-
-// Airtable configuration
-var (
-	airtableClient   *airtable.Client
-	airtableBaseID   string
-	topicsMutex      sync.RWMutex
-	
-	// Table names
-	topicsTableName            = "Topics"
-	versionsTableName          = "PromptVersions"
-	usersTableName             = "Users"
-	userStatsTableName         = "UserStats"
-	exercisesTableName         = "Exercises"
-	userExerciseViewsTableName = "UserExerciseViews"
-
-	// For observability
-	lastRefinedPrompt      string
-	lastRefinedPromptMutex sync.RWMutex
-)
 
 // ElevenLabs configuration
 var (
@@ -160,7 +57,6 @@ var (
 	oauthStateString  string
 	googleAdminID     string
 )
-
 
 // Rate limiting
 var (
@@ -180,719 +76,6 @@ func getClientIP(r *http.Request) string {
 	}
 	ip, _, _ = net.SplitHostPort(r.RemoteAddr)
 	return ip
-}
-
-const metaPrompt = `You are a prompt engineering assistant. Your task is to refine the following user-provided prompt to improve the variety and creativity of the AI's output for generating language exercises.
-
-**Refinement Rules:**
-1.  **Do Not Change the JSON Schema:** The core instructions for the JSON output format and the schema definition must remain untouched. The refined prompt must still produce a valid JSON object.
-2.  **Enhance Instructions:** Rephrase the instructions to encourage more diverse and less repetitive sentences. Add suggestions for using a wider range of vocabulary or sentence structures.
-3.  **Add Examples:** Include one or two new, concrete examples of the desired output format within the prompt. This helps the model better understand the task.
-4.  **Maintain Core Task:** The fundamental goal of the prompt (e.g., creating German conjunction exercises) must be preserved.
-5.  **Output:** Your final output should be ONLY the refined prompt, with no extra text, explanations, or markdown formatting around it.
-
-Here is the prompt to refine:
----
-%s
----
-`
-
-
-
-// Initialize Airtable client
-func initStorage() {
-	airtableToken := os.Getenv("AIRTABLE_TOKEN")
-	airtableBaseID = os.Getenv("AIRTABLE_BASE_ID")
-	
-	if airtableToken == "" {
-		log.Fatal("AIRTABLE_TOKEN environment variable is required")
-	}
-	if airtableBaseID == "" {
-		log.Fatal("AIRTABLE_BASE_ID environment variable is required")
-	}
-	
-	airtableClient = airtable.NewClient(airtableToken)
-	log.Printf("Airtable integration initialized with base ID: %s", airtableBaseID)
-	
-	// Verify and setup tables
-	err := setupAirtableTables()
-	if err != nil {
-		log.Printf("Warning: Could not setup Airtable tables: %v", err)
-	}
-	
-	// Check permissions
-	checkAirtablePermissions()
-}
-
-// Setup Airtable tables if they don't exist or verify their structure
-func setupAirtableTables() error {
-	log.Printf("Setting up Airtable tables...")
-	
-	// Try to create the tables using Airtable's API
-	err := createAirtableTables()
-	if err != nil {
-		log.Printf("Could not auto-create tables: %v", err)
-		return err
-	}
-	
-	return nil
-}
-
-// Create Airtable tables using the Metadata API
-func createAirtableTables() error {
-	// Note: Airtable's table creation via API requires Base Schema API access
-	// For now, we'll provide instructions for manual creation
-
-	log.Printf("Please manually create these tables in your Airtable base:")
-	log.Printf("")
-	log.Printf("📋 Table 1: 'Topics'")
-	log.Printf("   • Name: Single line text")
-	log.Printf("   • Prompt: Long text")
-	log.Printf("   • CreatedAt: Single line text (optional)")
-	log.Printf("   • UpdatedAt: Single line text (optional)")
-	log.Printf("")
-	log.Printf("📋 Table 2: 'PromptVersions'")
-	log.Printf("   • TopicID: Single line text")
-	log.Printf("   • Prompt: Long text")
-	log.Printf("   • Version: Number")
-	log.Printf("   • CreatedAt: Single line text (optional)")
-	log.Printf("")
-	log.Printf("📋 Table 3: 'Exercises'")
-	log.Printf("   • TopicID: Single line text (Link to 'Topics' table is recommended)")
-	log.Printf("   • PromptHash: Single line text")
-	log.Printf("   • ExerciseJSON: Long text")
-	log.Printf("   • AudioFilePath: Single line text")
-	log.Printf("   • CreatedAt: Created time (Airtable managed)")
-	log.Printf("")
-	log.Printf("📋 Table 4: 'UserExerciseViews'")
-	log.Printf("   • UserID: Single line text (Link to 'Users' table is recommended)")
-	log.Printf("   • ExerciseID: Single line text (Link to 'Exercises' table is recommended)")
-	log.Printf("   • LastViewed: Date and time")
-	log.Printf("   • RepetitionCounter: Number (Default to 0)")
-	log.Printf("   • NextReview: Formula (Optional, for debugging). Formula: DATEADD({LastViewed}, POWER({RepetitionCounter}, 2), 'days')")
-	log.Printf("")
-	log.Printf("💡 Tip: The timestamp fields (CreatedAt, UpdatedAt) are optional.")
-	log.Printf("💡 The app will work with just the required fields if timestamps are missing.")
-	log.Printf("")
-
-	return fmt.Errorf("manual table creation required")
-}
-
-// Check Airtable permissions for all tables
-func checkAirtablePermissions() {
-	log.Printf("Checking Airtable permissions...")
-
-	tables := []struct {
-		name        string
-		required    bool
-		description string
-	}{
-		{topicsTableName, true, "Core functionality will be severely limited."},
-		{versionsTableName, false, "Version history will be disabled."},
-		{usersTableName, false, "User authentication will be disabled."},
-		{userStatsTableName, false, "User statistics will not be saved."},
-		{exercisesTableName, true, "Core functionality of serving exercises will be disabled."},
-		{userExerciseViewsTableName, false, "SRS functionality will be disabled for authenticated users."},
-	}
-
-	for _, table := range tables {
-		checkTableAccess(table.name, table.required, table.description)
-	}
-}
-
-func checkTableAccess(tableName string, required bool, consequence string) {
-	table := airtableClient.GetTable(airtableBaseID, tableName)
-	_, err := table.GetRecords().Do() // Check without max records for compatibility
-
-	if err != nil {
-		prefix := "⚠️"
-		if required {
-			prefix = "❌"
-		}
-
-		if strings.Contains(err.Error(), "status 403") || strings.Contains(err.Error(), "INVALID_PERMISSIONS") {
-			log.Printf("%s No access to '%s' table. Check token permissions. %s", prefix, tableName, consequence)
-		} else if strings.Contains(err.Error(), "status 404") {
-			log.Printf("%s '%s' table not found. Please create it manually. %s", prefix, tableName, consequence)
-		} else {
-			log.Printf("⚠️  %s table access error: %v", tableName, err)
-		}
-	} else {
-		log.Printf("✅ %s table access: OK", tableName)
-	}
-}
-
-// Initialize with default topics
-func initializeDefaultTopics() {
-	// Check if we already have topics (to avoid duplicating on restart)
-	existingTopics, err := getAllTopics()
-	if err != nil {
-		log.Printf("Warning: Could not check existing topics: %v", err)
-		log.Printf("Attempting to create default topics anyway...")
-	} else if len(existingTopics) > 0 {
-		log.Printf("Found %d existing topics, skipping default topic initialization", len(existingTopics))
-		return
-	}
-
-	defaultTopics := []struct {
-		name   string
-		prompt string
-	}{
-		{
-			name: "Conjunctions",
-			prompt: `You are an expert German language tutor creating B1-level grammar exercises. Your task is to generate a JSON object containing unique sentences focused on German conjunctions.
-
-Please adhere to the following rules:
-1. **Sentence Structure:** Each sentence must correctly use a German conjunction. Include a mix of coordinating and subordinating conjunctions from the provided list.
-2. **Vocabulary:** Use common B1-level vocabulary.
-3. **Clarity:** The English hint must be a natural and accurate translation of the German sentence.
-Conjunction List: weil, obwohl, damit, wenn, dass, als, bevor, nachdem, ob, seit, und, oder, aber, denn, sondern.
-
-Return ONLY the JSON object, with no other text or explanations.`,
-		},
-		{
-			name: "Verb + Preposition",
-			prompt: `You are an expert German language tutor creating B1-level exercises focused on German verbs with prepositions. Your task is to generate a JSON object containing unique sentences that practice verb-preposition combinations.
-
-Please adhere to the following rules:
-1. **Sentence Structure:** Each sentence must correctly use a German verb with its required preposition.
-2. **Vocabulary:** Use common B1-level vocabulary.
-3. **Clarity:** The English hint must be a natural and accurate translation of the German sentence.
-Common verb-preposition combinations: denken an, warten auf, sich freuen über, sprechen über, bitten um, sich interessieren für, etc.
-
-Return ONLY the JSON object, with no other text or explanations.`,
-		},
-		{
-			name: "Preterite vs Perfect",
-			prompt: `You are an expert German language tutor creating B1-level exercises focused on the correct usage of Preterite (Präteritum) vs Perfect tense (Perfekt) in German. Your task is to generate a JSON object containing unique sentences that practice these tenses.
-
-Please adhere to the following rules:
-1. **Sentence Structure:** Each sentence must demonstrate the appropriate use of either Preterite or Perfect tense.
-2. **Vocabulary:** Use common B1-level vocabulary.
-3. **Clarity:** The English hint must be a natural and accurate translation of the German sentence.
-Focus on: written vs spoken contexts, completed actions, narrative vs conversational style.
-
-Return ONLY the JSON object, with no other text or explanations.`,
-		},
-	}
-
-	log.Printf("Initializing %d default topics...", len(defaultTopics))
-	for _, defaultTopic := range defaultTopics {
-		topic, err := createTopic(defaultTopic.name, defaultTopic.prompt)
-		if err != nil {
-			log.Printf("Error creating default topic '%s': %v", defaultTopic.name, err)
-		} else {
-			log.Printf("Created default topic: %s (ID: %s)", topic.Name, topic.ID)
-		}
-	}
-}
-
-// Data access functions using Airtable
-func createTopic(name, prompt string) (*Topic, error) {
-	table := airtableClient.GetTable(airtableBaseID, topicsTableName)
-	now := time.Now().Format(time.RFC3339)
-	
-	// Try with timestamp fields first, fallback to just required fields
-	fields := map[string]any{
-		"Name":   name,
-		"Prompt": prompt,
-	}
-	
-	// Try to add timestamp fields if they exist
-	records := &airtable.Records{
-		Records: []*airtable.Record{
-			{
-				Fields: map[string]any{
-					"Name":      name,
-					"Prompt":    prompt,
-					"CreatedAt": now,
-					"UpdatedAt": now,
-				},
-			},
-		},
-	}
-	
-	result, err := table.AddRecords(records)
-	if err != nil {
-		// If it failed due to unknown fields, try with minimal fields
-		if strings.Contains(err.Error(), "UNKNOWN_FIELD_NAME") {
-			log.Printf("Timestamp fields not found, creating with minimal fields")
-			records.Records[0].Fields = fields
-			result, err = table.AddRecords(records)
-		}
-		
-		if err != nil {
-			return nil, fmt.Errorf("failed to create topic in Airtable: %v", err)
-		}
-	}
-	
-	if len(result.Records) == 0 {
-		return nil, fmt.Errorf("no records returned from Airtable")
-	}
-	
-	topic := &Topic{
-		ID:        result.Records[0].ID,
-		Name:      name,
-		Prompt:    prompt,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	
-	// Create initial version
-	err = addPromptVersion(topic.ID, prompt)
-	if err != nil {
-		log.Printf("Warning: Failed to create initial version: %v", err)
-	}
-	
-	return topic, nil
-}
-
-func getAllTopics() ([]*Topic, error) {
-	table := airtableClient.GetTable(airtableBaseID, topicsTableName)
-	
-	records, err := table.GetRecords().Do()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get topics from Airtable: %v", err)
-	}
-	
-	var topics []*Topic
-	for _, record := range records.Records {
-		topic := &Topic{
-			ID: record.ID,
-		}
-		
-		if name, ok := record.Fields["Name"].(string); ok {
-			topic.Name = name
-		}
-		if prompt, ok := record.Fields["Prompt"].(string); ok {
-			topic.Prompt = prompt
-		}
-		if createdAt, ok := record.Fields["CreatedAt"].(string); ok {
-			if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
-				topic.CreatedAt = t
-			}
-		}
-		if updatedAt, ok := record.Fields["UpdatedAt"].(string); ok {
-			if t, err := time.Parse(time.RFC3339, updatedAt); err == nil {
-				topic.UpdatedAt = t
-			}
-		}
-		
-		topics = append(topics, topic)
-	}
-	
-	// Sort by creation time
-	sort.Slice(topics, func(i, j int) bool {
-		return topics[i].CreatedAt.Before(topics[j].CreatedAt)
-	})
-	
-	return topics, nil
-}
-
-func getTopic(topicID string) (*Topic, error) {
-	table := airtableClient.GetTable(airtableBaseID, topicsTableName)
-	
-	record, err := table.GetRecord(topicID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get topic from Airtable: %v", err)
-	}
-	
-	topic := &Topic{
-		ID: record.ID,
-	}
-	
-	if name, ok := record.Fields["Name"].(string); ok {
-		topic.Name = name
-	}
-	if prompt, ok := record.Fields["Prompt"].(string); ok {
-		topic.Prompt = prompt
-	}
-	if createdAt, ok := record.Fields["CreatedAt"].(string); ok {
-		if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
-			topic.CreatedAt = t
-		}
-	}
-	if updatedAt, ok := record.Fields["UpdatedAt"].(string); ok {
-		if t, err := time.Parse(time.RFC3339, updatedAt); err == nil {
-			topic.UpdatedAt = t
-		}
-	}
-	
-	return topic, nil
-}
-
-func updateTopic(topicID, name, prompt string) (*Topic, error) {
-	table := airtableClient.GetTable(airtableBaseID, topicsTableName)
-	now := time.Now().Format(time.RFC3339)
-
-	// First add the new version
-	err := addPromptVersion(topicID, prompt)
-	if err != nil {
-		log.Printf("Warning: Failed to create version: %v", err)
-	}
-
-	// Clean up old versions (keep only last 10)
-	versions, err := getVersions(topicID)
-	if err == nil && len(versions) > 10 {
-		versionsTable := airtableClient.GetTable(airtableBaseID, versionsTableName)
-		oldVersions := versions[:len(versions)-10] // Keep last 10
-		var oldVersionIDs []string
-		for _, oldVersion := range oldVersions {
-			oldVersionIDs = append(oldVersionIDs, oldVersion.ID)
-		}
-		versionsTable.DeleteRecords(oldVersionIDs)
-	}
-
-	// Prepare fields for update
-	fields := map[string]any{
-		"Prompt":    prompt,
-		"UpdatedAt": now,
-	}
-	if name != "" {
-		fields["Name"] = name
-	}
-
-	records := &airtable.Records{
-		Records: []*airtable.Record{
-			{
-				ID:     topicID,
-				Fields: fields,
-			},
-		},
-	}
-
-	_, err = table.UpdateRecords(records)
-	if err != nil {
-		if strings.Contains(err.Error(), "UNKNOWN_FIELD_NAME") {
-			log.Printf("UpdatedAt field not found, updating with minimal fields")
-			delete(fields, "UpdatedAt")
-			records.Records[0].Fields = fields
-			_, err = table.UpdateRecords(records)
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to update topic in Airtable: %v", err)
-		}
-	}
-
-	return getTopic(topicID)
-}
-
-func deleteTopic(topicID string) error {
-	// First delete all versions for this topic
-	versions, err := getVersions(topicID)
-	if err == nil && len(versions) > 0 {
-		versionsTable := airtableClient.GetTable(airtableBaseID, versionsTableName)
-		var versionIDs []string
-		for _, version := range versions {
-			versionIDs = append(versionIDs, version.ID)
-		}
-		versionsTable.DeleteRecords(versionIDs)
-	}
-	
-	// Then delete the topic
-	table := airtableClient.GetTable(airtableBaseID, topicsTableName)
-	_, err = table.DeleteRecords([]string{topicID})
-	if err != nil {
-		return fmt.Errorf("failed to delete topic from Airtable: %v", err)
-	}
-	
-	return nil
-}
-
-func getVersions(topicID string) ([]*PromptVersion, error) {
-	table := airtableClient.GetTable(airtableBaseID, versionsTableName)
-	
-	records, err := table.GetRecords().
-		WithFilterFormula(fmt.Sprintf("{TopicID} = '%s'", topicID)).
-		Do()
-	
-	if err != nil {
-		// Check for permission errors
-		if strings.Contains(err.Error(), "status 403") || strings.Contains(err.Error(), "INVALID_PERMISSIONS") {
-			log.Printf("No read access to PromptVersions table. Version history unavailable.")
-			return []*PromptVersion{}, nil // Return empty slice instead of error
-		}
-		return nil, fmt.Errorf("failed to get versions from Airtable: %v", err)
-	}
-	
-	var versions []*PromptVersion
-	for _, record := range records.Records {
-		version := &PromptVersion{
-			ID: record.ID,
-		}
-		
-		if topicIDField, ok := record.Fields["TopicID"].(string); ok {
-			version.TopicID = topicIDField
-		}
-		if prompt, ok := record.Fields["Prompt"].(string); ok {
-			version.Prompt = prompt
-		}
-		if versionNum, ok := record.Fields["Version"].(float64); ok {
-			version.Version = int(versionNum)
-		}
-		if createdAt, ok := record.Fields["CreatedAt"].(string); ok {
-			if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
-				version.CreatedAt = t
-			}
-		}
-		
-		versions = append(versions, version)
-	}
-	
-	// Sort by version number
-	sort.Slice(versions, func(i, j int) bool {
-		return versions[i].Version < versions[j].Version
-	})
-	
-	return versions, nil
-}
-
-func getVersion(versionID string) (*PromptVersion, error) {
-	table := airtableClient.GetTable(airtableBaseID, versionsTableName)
-	
-	record, err := table.GetRecord(versionID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get version from Airtable: %v", err)
-	}
-	
-	version := &PromptVersion{
-		ID: record.ID,
-	}
-	
-	if topicID, ok := record.Fields["TopicID"].(string); ok {
-		version.TopicID = topicID
-	}
-	if prompt, ok := record.Fields["Prompt"].(string); ok {
-		version.Prompt = prompt
-	}
-	if versionNum, ok := record.Fields["Version"].(float64); ok {
-		version.Version = int(versionNum)
-	}
-	if createdAt, ok := record.Fields["CreatedAt"].(string); ok {
-		if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
-			version.CreatedAt = t
-		}
-	}
-	
-	return version, nil
-}
-
-func addPromptVersion(topicID, prompt string) error {
-	// Get existing versions to determine next version number
-	versions, err := getVersions(topicID)
-	if err != nil {
-		// Check if it's a permission error
-		if strings.Contains(err.Error(), "status 403") || strings.Contains(err.Error(), "INVALID_PERMISSIONS") {
-			log.Printf("No access to PromptVersions table. Please check Airtable token permissions.")
-			log.Printf("The token needs read/write access to both 'Topics' and 'PromptVersions' tables.")
-			return nil // Don't fail the topic creation due to version permission issues
-		}
-		if !strings.Contains(err.Error(), "status 404") {
-			return err
-		}
-	}
-
-	nextVersion := 1
-	if len(versions) > 0 {
-		nextVersion = versions[len(versions)-1].Version + 1
-	}
-
-	table := airtableClient.GetTable(airtableBaseID, versionsTableName)
-	now := time.Now().Format(time.RFC3339)
-
-	// Try with timestamp field first, fallback to minimal fields
-	records := &airtable.Records{
-		Records: []*airtable.Record{
-			{
-				Fields: map[string]any{
-					"TopicID":   topicID,
-					"Prompt":    prompt,
-					"Version":   nextVersion,
-					"CreatedAt": now,
-				},
-			},
-		},
-	}
-
-	_, err = table.AddRecords(records)
-	if err != nil {
-		// Check for permission errors
-		if strings.Contains(err.Error(), "status 403") || strings.Contains(err.Error(), "INVALID_PERMISSIONS") {
-			log.Printf("No write access to PromptVersions table. Skipping version creation.")
-			return nil // Don't fail the topic creation
-		}
-
-		// If it failed due to unknown fields, try with minimal fields
-		if strings.Contains(err.Error(), "UNKNOWN_FIELD_NAME") {
-			log.Printf("CreatedAt field not found in PromptVersions, creating with minimal fields")
-			records.Records[0].Fields = map[string]any{
-				"TopicID": topicID,
-				"Prompt":  prompt,
-				"Version": nextVersion,
-			}
-			_, err = table.AddRecords(records)
-		}
-
-		if err != nil {
-			// Final check for permissions before failing
-			if strings.Contains(err.Error(), "status 403") || strings.Contains(err.Error(), "INVALID__PERMISSIONS") {
-				log.Printf("Cannot create version due to permissions. Continuing without version tracking.")
-				return nil
-			}
-			return fmt.Errorf("failed to create version in Airtable: %v", err)
-		}
-	}
-
-	return nil
-}
-
-func getPromptHash(prompt string) string {
-	hash := sha256.Sum256([]byte(prompt))
-	return hex.EncodeToString(hash[:])
-}
-
-func createExercise(topicID, promptHash, exerciseJSON, audioFilePath string) (*Exercise, error) {
-	table := airtableClient.GetTable(airtableBaseID, exercisesTableName)
-	records := &airtable.Records{
-		Records: []*airtable.Record{
-			{
-				Fields: map[string]any{
-					"TopicID":       topicID,
-					"PromptHash":    promptHash,
-					"ExerciseJSON":  exerciseJSON,
-					"AudioFilePath": audioFilePath,
-				},
-			},
-		},
-	}
-
-	result, err := table.AddRecords(records)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create exercise in Airtable: %v", err)
-	}
-
-	if len(result.Records) == 0 {
-		return nil, fmt.Errorf("no records returned from Airtable")
-	}
-
-	rec := result.Records[0]
-	exercise := &Exercise{
-		AirtableID:    rec.ID,
-		TopicID:       topicID,
-		PromptHash:    promptHash,
-		ExerciseJSON:  exerciseJSON,
-		AudioFilePath: audioFilePath,
-		CreatedAt:     time.Now(), // Approximate, actual time is on Airtable
-	}
-	return exercise, nil
-}
-
-func getExercisesForTopic(topicID, promptHash string) ([]*Exercise, error) {
-	table := airtableClient.GetTable(airtableBaseID, exercisesTableName)
-	formula := fmt.Sprintf("AND({TopicID} = '%s', {PromptHash} = '%s')", topicID, promptHash)
-
-	records, err := table.GetRecords().WithFilterFormula(formula).Do()
-	if err != nil {
-		if strings.Contains(err.Error(), "NOT_FOUND") {
-			return []*Exercise{}, nil // Return empty slice if table not found
-		}
-		return nil, fmt.Errorf("failed to get exercises from Airtable: %v", err)
-	}
-
-	var exercises []*Exercise
-	for _, record := range records.Records {
-		exercise := &Exercise{
-			AirtableID: record.ID,
-		}
-		if val, ok := record.Fields["TopicID"].(string); ok {
-			exercise.TopicID = val
-		}
-		if val, ok := record.Fields["PromptHash"].(string); ok {
-			exercise.PromptHash = val
-		}
-		if val, ok := record.Fields["ExerciseJSON"].(string); ok {
-			exercise.ExerciseJSON = val
-		}
-		if val, ok := record.Fields["AudioFilePath"].(string); ok {
-			exercise.AudioFilePath = val
-		}
-		if val, ok := record.Fields["CreatedAt"].(string); ok {
-			if t, err := time.Parse(time.RFC3339, val); err == nil {
-				exercise.CreatedAt = t
-			}
-		}
-		exercises = append(exercises, exercise)
-	}
-	return exercises, nil
-}
-
-func getUserExerciseViews(userID string) (map[string]*UserExerciseView, error) {
-	table := airtableClient.GetTable(airtableBaseID, userExerciseViewsTableName)
-	formula := fmt.Sprintf("{UserID} = '%s'", userID)
-
-	records, err := table.GetRecords().WithFilterFormula(formula).Do()
-	if err != nil {
-		if strings.Contains(err.Error(), "NOT_FOUND") {
-			return make(map[string]*UserExerciseView), nil // Return empty map if table not found
-		}
-		return nil, fmt.Errorf("failed to get user exercise views from Airtable: %v", err)
-	}
-
-	views := make(map[string]*UserExerciseView)
-	for _, record := range records.Records {
-		view := &UserExerciseView{
-			AirtableID: record.ID,
-		}
-		if val, ok := record.Fields["UserID"].(string); ok {
-			view.UserID = val
-		}
-		if val, ok := record.Fields["ExerciseID"].(string); ok {
-			view.ExerciseID = val
-		}
-		if val, ok := record.Fields["LastViewed"].(string); ok {
-			if t, err := time.Parse(time.RFC3339, val); err == nil {
-				view.LastViewed = t
-			}
-		}
-		if val, ok := record.Fields["RepetitionCounter"].(float64); ok {
-			view.RepetitionCounter = int(val)
-		}
-		views[view.ExerciseID] = view
-	}
-	return views, nil
-}
-
-func updateUserExerciseViews(viewsToUpdate []*UserExerciseView) error {
-	table := airtableClient.GetTable(airtableBaseID, userExerciseViewsTableName)
-	var recordsToCreate []*airtable.Record
-	var recordsToUpdate []*airtable.Record
-
-	for _, view := range viewsToUpdate {
-		fields := map[string]any{
-			"UserID":            view.UserID,
-			"ExerciseID":        view.ExerciseID,
-			"LastViewed":        view.LastViewed.Format(time.RFC3339),
-			"RepetitionCounter": view.RepetitionCounter,
-		}
-		if view.AirtableID == "" {
-			recordsToCreate = append(recordsToCreate, &airtable.Record{Fields: fields})
-		} else {
-			recordsToUpdate = append(recordsToUpdate, &airtable.Record{ID: view.AirtableID, Fields: fields})
-		}
-	}
-
-	if len(recordsToCreate) > 0 {
-		if _, err := table.AddRecords(&airtable.Records{Records: recordsToCreate}); err != nil {
-			return fmt.Errorf("failed to create user exercise views: %v", err)
-		}
-	}
-	if len(recordsToUpdate) > 0 {
-		if _, err := table.UpdateRecords(&airtable.Records{Records: recordsToUpdate}); err != nil {
-			return fmt.Errorf("failed to update user exercise views: %v", err)
-		}
-	}
-	return nil
 }
 
 func initOAuth() {
@@ -936,7 +119,7 @@ func init() {
 
 func main() {
 	// Initialize storage backend
-	initStorage()
+	storage.InitStorage()
 
 	// Initialize Google OAuth
 	initOAuth()
@@ -971,9 +154,9 @@ func main() {
 		}
 		log.Printf("ElevenLabs integration enabled with voice: %s, model: %s, speed: %.1f", elevenlabsVoiceName, elevenlabsModelID, elevenlabsVoiceSpeed)
 	}
-	
+
 	// Initialize default topics
-	initializeDefaultTopics()
+	storage.InitializeDefaultTopics()
 
 	// Cleanup old clients every 10 minutes
 	go func() {
@@ -1003,9 +186,8 @@ func main() {
 	http.HandleFunc("/favicon.svg", handleFavicon)
 	http.HandleFunc("/favicon-32x32.svg", handleFavicon32)
 	http.HandleFunc("/favicon.ico", handleFaviconICO) // Fallback for older browsers
-	
+
 	// API endpoints
-	http.HandleFunc("/api/generate", handleGenerate) // Will be deprecated for frontend use
 	http.HandleFunc("/api/exercises", handleExercises)
 	http.HandleFunc("/api/topics", handleTopics)
 	http.HandleFunc("/api/topics/", handleTopicByID)
@@ -1028,7 +210,7 @@ func main() {
 
 	// Audio file server
 	http.Handle("/audio_cache/", http.StripPrefix("/audio_cache/", http.FileServer(http.Dir("./audio_cache"))))
-	
+
 	// Health check endpoint
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1053,7 +235,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	
+
 	// Read the HTML file
 	filePath := getFilePath("index.html")
 	content, err := os.ReadFile(filePath)
@@ -1061,18 +243,18 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}
-	
+
 	// Replace the cache-busting parameter with current timestamp
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	htmlContent := string(content)
 	htmlContent = strings.ReplaceAll(htmlContent, "app.js?v=20250821001", fmt.Sprintf("app.js?v=%s", timestamp))
-	
+
 	// Set headers to prevent caching of the HTML file itself
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	
+
 	w.Write([]byte(htmlContent))
 }
 
@@ -1084,11 +266,11 @@ func handleJS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}
-	
+
 	// Set headers for JS file - allow caching but with versioning
 	w.Header().Set("Content-Type", "application/javascript")
 	w.Header().Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
-	
+
 	w.Write(content)
 }
 
@@ -1104,11 +286,11 @@ func handleFavicon(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Favicon not found", http.StatusNotFound)
 		return
 	}
-	
+
 	// Set headers for SVG favicon - allow caching
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
-	
+
 	w.Write(content)
 }
 
@@ -1120,84 +302,17 @@ func handleFavicon32(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Favicon not found", http.StatusNotFound)
 		return
 	}
-	
+
 	// Set headers for SVG favicon - allow caching
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
-	
+
 	w.Write(content)
 }
 
 func handleFaviconICO(w http.ResponseWriter, r *http.Request) {
 	// Redirect .ico requests to SVG favicon for better quality
 	http.Redirect(w, r, "/favicon.svg", http.StatusMovedPermanently)
-}
-
-// refinePrompt takes a prompt and uses the meta-prompt to refine it.
-func refinePrompt(originalPrompt, apiKey, openaiURL, modelName string) (string, error) {
-	log.Println("Refining prompt...")
-
-	// 1. Create the request to refine the prompt
-	refineMessages := []Message{
-		{
-			Role:    "user",
-			Content: fmt.Sprintf(metaPrompt, originalPrompt),
-		},
-	}
-
-	// For refining, we expect a text response, not a JSON object
-	temperature, err := strconv.ParseFloat(os.Getenv("OPENAI_TEMPERATURE"), 64)
-	if err != nil {
-		temperature = 0.0 // Default value if not set or invalid
-	}
-	refineReq := OpenAIRequest{
-		Model:       modelName,
-		Messages:    refineMessages,
-		Temperature: temperature,
-	}
-
-	reqBody, err := json.Marshal(refineReq)
-	if err != nil {
-		return "", fmt.Errorf("failed to create refine request body: %w", err)
-	}
-
-	// 2. Make the request to the OpenAI API
-	client := &http.Client{}
-	apiReq, err := http.NewRequest("POST", openaiURL+"/chat/completions", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return "", fmt.Errorf("failed to create API request for refining: %w", err)
-	}
-	apiReq.Header.Set("Content-Type", "application/json")
-	apiReq.Header.Set("Authorization", "Bearer "+apiKey)
-
-	resp, err := client.Do(apiReq)
-	if err != nil {
-		return "", fmt.Errorf("failed to call OpenAI API for refining: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// 3. Read and parse the response
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read API response for refining: %w", err)
-	}
-
-	var openaiResp OpenAIResponse
-	if err := json.Unmarshal(respBody, &openaiResp); err != nil {
-		return "", fmt.Errorf("failed to parse API response for refining: %w", err)
-	}
-
-	if openaiResp.Error != nil {
-		return "", fmt.Errorf("API error during refining: %s", openaiResp.Error.Message)
-	}
-
-	if len(openaiResp.Choices) == 0 || openaiResp.Choices[0].Message.Content == "" {
-		return "", fmt.Errorf("received an empty response from the refining API")
-	}
-
-	refinedPrompt := openaiResp.Choices[0].Message.Content
-	log.Println("Successfully refined prompt.")
-	return refinedPrompt, nil
 }
 
 func generateAndSaveAudio(text string) (string, error) {
@@ -1297,34 +412,34 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req GenerateRequest
+	var req llm.GenerateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	topic, err := getTopic(req.TopicID)
+	topic, err := storage.GetTopic(req.TopicID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Topic not found: %v", err), http.StatusNotFound)
 		return
 	}
 
-	promptHash := getPromptHash(topic.Prompt)
+	promptHash := storage.GetPromptHash(topic.Prompt)
 	userID := getUserIDFromRequest(r)
 
-	allExercises, err := getExercisesForTopic(req.TopicID, promptHash)
+	allExercises, err := storage.GetExercisesForTopic(req.TopicID, promptHash)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get exercises: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	var finalExercises []*Exercise
+	var finalExercises []*storage.Exercise
 	if userID == "" {
 		// Guest user logic - only serve from cache, never generate.
 		finalExercises = getRandomExercises(allExercises, 10)
 	} else {
 		// Authenticated user SRS logic
-		userViews, err := getUserExerciseViews(userID)
+		userViews, err := storage.GetUserExerciseViews(userID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
 			return
@@ -1332,7 +447,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 
 		eligibleExercises := getEligibleExercisesForSRS(allExercises, userViews)
 		if len(eligibleExercises) < 10 {
-			newlyGenerated, err := generateAndCacheExercises(topic)
+			newlyGenerated, err := llm.GenerateAndCacheExercises(topic, true)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to generate exercises: %v", err), http.StatusInternalServerError)
 				return
@@ -1344,12 +459,12 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 		finalExercises = getRandomExercises(eligibleExercises, 10)
 
 		// Update views for the selected exercises
-		var viewsToUpdate []*UserExerciseView
+		var viewsToUpdate []*storage.UserExerciseView
 		now := time.Now()
 		for _, ex := range finalExercises {
 			view, exists := userViews[ex.AirtableID]
 			if !exists {
-				view = &UserExerciseView{
+				view = &storage.UserExerciseView{
 					UserID:     userID,
 					ExerciseID: ex.AirtableID,
 				}
@@ -1358,7 +473,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 			view.RepetitionCounter++
 			viewsToUpdate = append(viewsToUpdate, view)
 		}
-		if err := updateUserExerciseViews(viewsToUpdate); err != nil {
+		if err := storage.UpdateUserExerciseViews(viewsToUpdate); err != nil {
 			log.Printf("Warning: failed to update user exercise views: %v", err)
 			// Don't block user, just log the error
 		}
@@ -1381,108 +496,8 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string][]ExerciseResponse{"exercises": responseExercises})
 }
 
-func generateAndCacheExercises(topic *Topic) ([]*Exercise, error) {
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	openaiURL := os.Getenv("OPENAI_URL")
-	if openaiURL == "" {
-		openaiURL = "https://api.openai.com/v1"
-	}
-	modelName := os.Getenv("MODEL_NAME")
-	if modelName == "" {
-		modelName = "gpt-3.5-turbo-1106"
-	}
-
-	finalPrompt, err := refinePrompt(topic.Prompt, apiKey, openaiURL, modelName)
-	if err != nil {
-		log.Printf("Error refining prompt, falling back to original: %v", err)
-		finalPrompt = topic.Prompt
-	} else {
-		lastRefinedPromptMutex.Lock()
-		lastRefinedPrompt = finalPrompt
-		lastRefinedPromptMutex.Unlock()
-	}
-
-	temperature, err := strconv.ParseFloat(os.Getenv("OPENAI_TEMPERATURE"), 64)
-	if err != nil {
-		temperature = 0.0 // Default value if not set or invalid
-	}
-
-	openaiReq := OpenAIRequest{
-		Model:          modelName,
-		Messages:       []Message{{Role: "user", Content: finalPrompt}},
-		ResponseFormat: &ResponseFormat{Type: "json_object"},
-		Temperature:    temperature,
-	}
-
-	reqBody, _ := json.Marshal(openaiReq)
-	client := &http.Client{}
-	apiReq, _ := http.NewRequest("POST", openaiURL+"/chat/completions", bytes.NewBuffer(reqBody))
-	apiReq.Header.Set("Content-Type", "application/json")
-	apiReq.Header.Set("Authorization", "Bearer "+apiKey)
-
-	resp, err := client.Do(apiReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call OpenAI API: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-	var openaiResp OpenAIResponse
-	json.Unmarshal(respBody, &openaiResp)
-
-	if openaiResp.Error != nil {
-		return nil, fmt.Errorf("API error: %s", openaiResp.Error.Message)
-	}
-
-	if len(openaiResp.Choices) == 0 || openaiResp.Choices[0].Message.Content == "" {
-		return nil, fmt.Errorf("received an empty response from OpenAI")
-	}
-
-	// The actual content is a JSON string inside the response.
-	var exerciseData struct {
-		Exercises []struct {
-			CorrectGermanSentence string `json:"correct_german_sentence"`
-			// Include other fields from the JSON so they are preserved
-			ConjunctionTopic string   `json:"conjunction_topic"`
-			EnglishHint      string   `json:"english_hint"`
-			ScrambledWords   []string `json:"scrambled_words"`
-		} `json:"exercises"`
-	}
-	if err := json.Unmarshal([]byte(openaiResp.Choices[0].Message.Content), &exerciseData); err != nil {
-		return nil, fmt.Errorf("failed to parse exercises from OpenAI response: %w", err)
-	}
-
-	promptHash := getPromptHash(topic.Prompt)
-	var newlyGenerated []*Exercise
-	for _, exData := range exerciseData.Exercises {
-		// Generate audio for the correct sentence
-		audioPath, err := generateAndSaveAudio(exData.CorrectGermanSentence)
-		if err != nil {
-			log.Printf("Warning: failed to generate audio for exercise: %v", err)
-			// Continue without audio, or skip? For now, we'll save it without audio.
-			audioPath = ""
-		}
-
-		// Re-marshal the individual exercise to store as a JSON string
-		exJSONBytes, err := json.Marshal(exData)
-		if err != nil {
-			log.Printf("Warning: failed to re-marshal exercise JSON: %v", err)
-			continue
-		}
-
-		exercise, err := createExercise(topic.ID, promptHash, string(exJSONBytes), audioPath)
-		if err != nil {
-			log.Printf("Warning: failed to cache exercise: %v", err)
-			continue
-		}
-		newlyGenerated = append(newlyGenerated, exercise)
-	}
-
-	return newlyGenerated, nil
-}
-
-func getEligibleExercisesForSRS(allExercises []*Exercise, userViews map[string]*UserExerciseView) []*Exercise {
-	var eligible []*Exercise
+func getEligibleExercisesForSRS(allExercises []*storage.Exercise, userViews map[string]*storage.UserExerciseView) []*storage.Exercise {
+	var eligible []*storage.Exercise
 	now := time.Now()
 	for _, ex := range allExercises {
 		view, seen := userViews[ex.AirtableID]
@@ -1500,7 +515,7 @@ func getEligibleExercisesForSRS(allExercises []*Exercise, userViews map[string]*
 	return eligible
 }
 
-func getRandomExercises(exercises []*Exercise, count int) []*Exercise {
+func getRandomExercises(exercises []*storage.Exercise, count int) []*storage.Exercise {
 	if len(exercises) <= count {
 		return exercises
 	}
@@ -1516,165 +531,6 @@ func getUserIDFromRequest(r *http.Request) string {
 		return "" // No cookie, so not logged in
 	}
 	return cookie.Value
-}
-
-func handleGenerate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Enable CORS
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	// Rate limiting
-	ip := getClientIP(r)
-	mu.Lock()
-	if _, found := clients[ip]; !found {
-		// Allow 1 request every 3 seconds, with a burst of 1.
-		clients[ip] = &client{limiter: rate.NewLimiter(rate.Every(3*time.Second), 1)}
-	}
-	clients[ip].lastSeen = time.Now()
-	if !clients[ip].limiter.Allow() {
-		mu.Unlock()
-		// Return a JSON error message
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusTooManyRequests)
-		json.NewEncoder(w).Encode(map[string]any{
-			"error": map[string]string{
-				"message": "You are making requests too quickly. Please wait a few seconds and try again.",
-			},
-		})
-		return
-	}
-	mu.Unlock()
-
-	// Get configuration from environment
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey == "" {
-		http.Error(w, "OpenAI API key not configured", http.StatusInternalServerError)
-		return
-	}
-
-	openaiURL := os.Getenv("OPENAI_URL")
-	if openaiURL == "" {
-		openaiURL = "https://api.openai.com/v1"
-	}
-	
-	modelName := os.Getenv("MODEL_NAME")
-	if modelName == "" {
-		modelName = "gpt-3.5-turbo-1106"
-	}
-
-	// Parse request
-	var req GenerateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Get topic and its prompt
-	topic, err := getTopic(req.TopicID)
-	if err != nil {
-		http.Error(w, "Topic not found", http.StatusNotFound)
-		return
-	}
-
-	// Refine the prompt
-	finalPrompt, err := refinePrompt(topic.Prompt, apiKey, openaiURL, modelName)
-	if err != nil {
-		// If refining fails, log the error and fall back to the original prompt
-		log.Printf("Error refining prompt, falling back to original: %v", err)
-		finalPrompt = topic.Prompt
-	} else {
-		// Store the last successfully refined prompt for observability
-		lastRefinedPromptMutex.Lock()
-		lastRefinedPrompt = finalPrompt
-		lastRefinedPromptMutex.Unlock()
-	}
-
-	temperature, err := strconv.ParseFloat(os.Getenv("OPENAI_TEMPERATURE"), 64)
-	if err != nil {
-		temperature = 0.0 // Default value if not set or invalid
-	}
-
-	// Create OpenAI request with the (potentially refined) prompt
-	openaiReq := OpenAIRequest{
-		Model: modelName,
-		Messages: []Message{
-			{
-				Role:    "user",
-				Content: finalPrompt,
-			},
-		},
-		ResponseFormat: &ResponseFormat{Type: "json_object"},
-		Temperature:    temperature,
-	}
-
-	// Marshal request
-	reqBody, err := json.Marshal(openaiReq)
-	if err != nil {
-		http.Error(w, "Failed to create request", http.StatusInternalServerError)
-		return
-	}
-
-	// Make request to OpenAI API
-	client := &http.Client{}
-	apiReq, err := http.NewRequest("POST", openaiURL+"/chat/completions", bytes.NewBuffer(reqBody))
-	if err != nil {
-		http.Error(w, "Failed to create API request", http.StatusInternalServerError)
-		return
-	}
-
-	apiReq.Header.Set("Content-Type", "application/json")
-	apiReq.Header.Set("Authorization", "Bearer "+apiKey)
-
-	resp, err := client.Do(apiReq)
-	if err != nil {
-		http.Error(w, "Failed to call OpenAI API", http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "Failed to read API response", http.StatusInternalServerError)
-		return
-	}
-
-	// Parse response to check for errors
-	var openaiResp OpenAIResponse
-	if err := json.Unmarshal(respBody, &openaiResp); err != nil {
-		http.Error(w, "Failed to parse API response", http.StatusInternalServerError)
-		return
-	}
-
-	// Check for API errors
-	if openaiResp.Error != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(resp.StatusCode)
-		errorResp := map[string]any{
-			"error": map[string]string{
-				"message": openaiResp.Error.Message,
-				"type":    openaiResp.Error.Type,
-			},
-		}
-		json.NewEncoder(w).Encode(errorResp)
-		return
-	}
-
-	// Forward successful response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(resp.StatusCode)
-	w.Write(respBody)
 }
 
 func getVoiceIDByName(voiceName string) (string, error) {
@@ -1721,60 +577,6 @@ func getVoiceIDByName(voiceName string) (string, error) {
 	}
 
 	return "", fmt.Errorf("voice '%s' not found", voiceName)
-}
-
-func updateLegacyExercisesWithAudio(text, audioPath string) {
-	// This function runs in a goroutine to update legacy exercises in Airtable
-	// Search for exercises where the German sentence matches and AudioFilePath is empty
-
-	table := airtableClient.GetTable(airtableBaseID, exercisesTableName)
-
-	// We need to search through all exercises to find matches
-	// This is not the most efficient, but Airtable doesn't have great filtering for JSON content
-	records, err := table.GetRecords().Do()
-	if err != nil {
-		log.Printf("Warning: failed to get exercises for audio update: %v", err)
-		return
-	}
-
-	var recordsToUpdate []*airtable.Record
-	for _, record := range records.Records {
-		// Skip if already has audio
-		if audioFilePath, ok := record.Fields["AudioFilePath"].(string); ok && audioFilePath != "" {
-			continue
-		}
-
-		// Check if ExerciseJSON contains the matching German sentence
-		if exerciseJSON, ok := record.Fields["ExerciseJSON"].(string); ok && exerciseJSON != "" {
-			var exercise struct {
-				CorrectGermanSentence string `json:"correct_german_sentence"`
-			}
-			if err := json.Unmarshal([]byte(exerciseJSON), &exercise); err == nil {
-				if exercise.CorrectGermanSentence == text {
-					// Found a match! Create update record with ID and new fields
-					updateRecord := &airtable.Record{
-						ID: record.ID,
-						Fields: map[string]any{
-							"AudioFilePath": audioPath,
-						},
-					}
-					recordsToUpdate = append(recordsToUpdate, updateRecord)
-					log.Printf("Found legacy exercise to update with audio: %s", text)
-				}
-			}
-		}
-	}
-
-	// Update records in batches
-	if len(recordsToUpdate) > 0 {
-		updateRecords := &airtable.Records{Records: recordsToUpdate}
-		_, err := table.UpdateRecords(updateRecords)
-		if err != nil {
-			log.Printf("Warning: failed to update legacy exercises with audio: %v", err)
-		} else {
-			log.Printf("Successfully updated %d legacy exercises with audio path: %s", len(recordsToUpdate), audioPath)
-		}
-	}
 }
 
 func handleTTS(w http.ResponseWriter, r *http.Request) {
@@ -1884,12 +686,11 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Successfully created audio file: %s", filename)
 
 	// Try to update any legacy exercises that match this text
-	go updateLegacyExercisesWithAudio(req.Text, filename)
+	go storage.UpdateLegacyExercisesWithAudio(req.Text, filename)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
 }
-
 
 func handleGetLastRefinedPrompt(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -1900,11 +701,8 @@ func handleGetLastRefinedPrompt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 
-	lastRefinedPromptMutex.RLock()
-	defer lastRefinedPromptMutex.RUnlock()
-
 	response := map[string]string{
-		"last_refined_prompt": lastRefinedPrompt,
+		"last_refined_prompt": llm.GetLastRefinedPrompt(),
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -1918,7 +716,7 @@ func handleTopics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	
+
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -1926,14 +724,14 @@ func handleTopics(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		topicsList, err := getAllTopics()
+		topicsList, err := storage.GetAllTopics()
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get topics: %v", err), http.StatusInternalServerError)
 			return
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string][]*Topic{"topics": topicsList})
+		json.NewEncoder(w).Encode(map[string][]*storage.Topic{"topics": topicsList})
 
 	case http.MethodPost:
 		adminOnly(func(w http.ResponseWriter, r *http.Request) {
@@ -1948,7 +746,7 @@ func handleTopics(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			topic, err := createTopic(req.Name, req.Prompt)
+			topic, err := storage.CreateTopic(req.Name, req.Prompt)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to create topic: %v", err), http.StatusInternalServerError)
 				return
@@ -1974,20 +772,20 @@ func handleUserStats(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		stats, err := getUserStats(userID)
+		stats, err := storage.GetUserStats(userID)
 		if err != nil {
 			http.Error(w, "Failed to get user stats", http.StatusInternalServerError)
 			return
 		}
 		json.NewEncoder(w).Encode(stats)
 	case http.MethodPost:
-		var stats UserStats
+		var stats storage.UserStats
 		if err := json.NewDecoder(r.Body).Decode(&stats); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 		stats.UserID = userID
-		if err := updateUserStats(&stats); err != nil {
+		if err := storage.UpdateUserStats(&stats); err != nil {
 			http.Error(w, "Failed to update user stats", http.StatusInternalServerError)
 			return
 		}
@@ -2018,166 +816,11 @@ func handleUserSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := updateUserSetting(userID, settings.LastTopicID); err != nil {
+	if err := storage.UpdateUserSetting(userID, settings.LastTopicID); err != nil {
 		http.Error(w, "Failed to update user settings", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-func getUserByGoogleID(googleID string) (*User, error) {
-	table := airtableClient.GetTable(airtableBaseID, usersTableName)
-	records, err := table.GetRecords().WithFilterFormula(fmt.Sprintf("{GoogleID} = '%s'", googleID)).Do()
-	if err != nil {
-		return nil, err
-	}
-
-	if len(records.Records) == 0 {
-		return nil, nil // Not found
-	}
-
-	record := records.Records[0]
-	return &User{
-		ID:         record.ID,
-		GoogleID:   record.Fields["GoogleID"].(string),
-		AirtableID: record.ID,
-	}, nil
-}
-
-func createUser(googleID string) (*User, error) {
-	table := airtableClient.GetTable(airtableBaseID, usersTableName)
-	records := &airtable.Records{
-		Records: []*airtable.Record{
-			{
-				Fields: map[string]any{
-					"GoogleID": googleID,
-				},
-			},
-		},
-	}
-	result, err := table.AddRecords(records)
-	if err != nil {
-		return nil, err
-	}
-
-	record := result.Records[0]
-	return &User{
-		ID:         record.ID,
-		GoogleID:   record.Fields["GoogleID"].(string),
-		AirtableID: record.ID,
-	}, nil
-}
-
-func getUserStats(userID string) (*UserStats, error) {
-	table := airtableClient.GetTable(airtableBaseID, userStatsTableName)
-	records, err := table.GetRecords().WithFilterFormula(fmt.Sprintf("{UserID} = '%s'", userID)).Do()
-	if err != nil {
-		return nil, err
-	}
-
-	if len(records.Records) == 0 {
-		return &UserStats{UserID: userID}, nil // Return empty stats if not found
-	}
-
-	record := records.Records[0]
-	stats := &UserStats{
-		UserID:           userID,
-		AirtableRecordID: record.ID,
-	}
-
-	if val, ok := record.Fields["TotalExercises"].(float64); ok {
-		stats.TotalExercises = int(val)
-	}
-	if val, ok := record.Fields["TotalMistakes"].(float64); ok {
-		stats.TotalMistakes = int(val)
-	}
-	if val, ok := record.Fields["TotalHints"].(float64); ok {
-		stats.TotalHints = int(val)
-	}
-	if val, ok := record.Fields["TotalTime"].(float64); ok {
-		stats.TotalTime = int(val)
-	}
-	if val, ok := record.Fields["LastTopicID"].(string); ok {
-		stats.LastTopicID = val
-	}
-
-	return stats, nil
-}
-
-func updateUserStats(stats *UserStats) error {
-	table := airtableClient.GetTable(airtableBaseID, userStatsTableName)
-	fields := map[string]any{
-		"UserID":         stats.UserID,
-		"TotalExercises": stats.TotalExercises,
-		"TotalMistakes":  stats.TotalMistakes,
-		"TotalHints":     stats.TotalHints,
-		"TotalTime":      stats.TotalTime,
-	}
-
-	if stats.AirtableRecordID != "" {
-		// Update existing record
-		records := &airtable.Records{
-			Records: []*airtable.Record{
-				{
-					ID:     stats.AirtableRecordID,
-					Fields: fields,
-				},
-			},
-		}
-		_, err := table.UpdateRecords(records)
-		return err
-	}
-
-	// Create new record
-	records := &airtable.Records{
-		Records: []*airtable.Record{
-			{
-				Fields: fields,
-			},
-		},
-	}
-	_, err := table.AddRecords(records)
-	return err
-}
-
-func updateUserSetting(userID, lastTopicID string) error {
-	stats, err := getUserStats(userID)
-	if err != nil {
-		return err
-	}
-
-	stats.LastTopicID = lastTopicID
-
-	table := airtableClient.GetTable(airtableBaseID, userStatsTableName)
-	fields := map[string]any{
-		"UserID":      userID,
-		"LastTopicID": lastTopicID,
-	}
-
-	if stats.AirtableRecordID != "" {
-		// Update existing record
-		records := &airtable.Records{
-			Records: []*airtable.Record{
-				{
-					ID:     stats.AirtableRecordID,
-					Fields: fields,
-				},
-			},
-		}
-		_, err := table.UpdateRecords(records)
-		return err
-	}
-
-	// Create new record
-	records := &airtable.Records{
-		Records: []*airtable.Record{
-			{
-				Fields: fields,
-			},
-		},
-	}
-	_, err = table.AddRecords(records)
-	return err
 }
 
 func handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
@@ -2226,14 +869,14 @@ func handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get or create user in Airtable
-	user, err := getUserByGoogleID(userinfo.Id)
+	user, err := storage.GetUserByGoogleID(userinfo.Id)
 	if err != nil {
 		log.Printf("Unable to get user by google ID: %v", err)
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
 	if user == nil {
-		user, err = createUser(userinfo.Id)
+		user, err = storage.CreateUser(userinfo.Id)
 		if err != nil {
 			log.Printf("Unable to create user: %v", err)
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
@@ -2280,7 +923,7 @@ func handleIsAdmin(w http.ResponseWriter, r *http.Request) {
 	if googleAdminID != "" {
 		userID := getUserIDFromRequest(r)
 		if userID != "" {
-			user, err := getUserByID(userID)
+			user, err := storage.GetUserByID(userID)
 			if err == nil && user != nil && user.GoogleID == googleAdminID {
 				isAdmin = true
 			}
@@ -2288,24 +931,6 @@ func handleIsAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]bool{"is_admin": isAdmin})
-}
-
-func getUserByID(userID string) (*User, error) {
-	table := airtableClient.GetTable(airtableBaseID, usersTableName)
-	record, err := table.GetRecord(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	if record == nil {
-		return nil, nil // Not found
-	}
-
-	return &User{
-		ID:         record.ID,
-		GoogleID:   record.Fields["GoogleID"].(string),
-		AirtableID: record.ID,
-	}, nil
 }
 
 func adminOnly(h http.HandlerFunc) http.HandlerFunc {
@@ -2321,7 +946,7 @@ func adminOnly(h http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		user, err := getUserByID(userID)
+		user, err := storage.GetUserByID(userID)
 		if err != nil || user == nil {
 			log.Printf("Error getting user for admin check (userID: %s): %v", userID, err)
 			http.Error(w, "Could not verify user credentials", http.StatusInternalServerError)
@@ -2344,7 +969,7 @@ func handleTopicByID(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	
+
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -2359,12 +984,12 @@ func handleTopicByID(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		topic, err := getTopic(topicID)
+		topic, err := storage.GetTopic(topicID)
 		if err != nil {
 			http.Error(w, "Topic not found", http.StatusNotFound)
 			return
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(topic)
 
@@ -2381,7 +1006,7 @@ func handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			topic, err := updateTopic(topicID, req.Name, req.Prompt)
+			topic, err := storage.UpdateTopic(topicID, req.Name, req.Prompt)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to update topic: %v", err), http.StatusInternalServerError)
 				return
@@ -2393,7 +1018,7 @@ func handleTopicByID(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodDelete:
 		adminOnly(func(w http.ResponseWriter, r *http.Request) {
-			err := deleteTopic(topicID)
+			err := storage.DeleteTopic(topicID)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to delete topic: %v", err), http.StatusInternalServerError)
 				return
@@ -2413,7 +1038,7 @@ func handleVersions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	
+
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -2425,19 +1050,19 @@ func handleVersions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Topic ID required", http.StatusBadRequest)
 		return
 	}
-	
+
 	topicID := pathParts[0]
 
 	switch r.Method {
 	case http.MethodGet:
-		versions, err := getVersions(topicID)
+		versions, err := storage.GetVersions(topicID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get versions: %v", err), http.StatusInternalServerError)
 			return
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string][]*PromptVersion{"versions": versions})
+		json.NewEncoder(w).Encode(map[string][]*storage.PromptVersion{"versions": versions})
 
 	case http.MethodPost:
 		adminOnly(func(w http.ResponseWriter, r *http.Request) {
@@ -2449,7 +1074,7 @@ func handleVersions(w http.ResponseWriter, r *http.Request) {
 
 			versionID := pathParts[2]
 
-			versionToRestore, err := getVersion(versionID)
+			versionToRestore, err := storage.GetVersion(versionID)
 			if err != nil {
 				http.Error(w, "Version not found", http.StatusNotFound)
 				return
@@ -2462,14 +1087,14 @@ func handleVersions(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Get the current topic name to preserve it
-			currentTopic, err := getTopic(topicID)
+			currentTopic, err := storage.GetTopic(topicID)
 			if err != nil {
 				http.Error(w, "Failed to get current topic", http.StatusNotFound)
 				return
 			}
 
 			// Update topic with restored prompt (this will automatically create a new version)
-			topic, err := updateTopic(topicID, currentTopic.Name, versionToRestore.Prompt)
+			topic, err := storage.UpdateTopic(topicID, currentTopic.Name, versionToRestore.Prompt)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to restore version: %v", err), http.StatusInternalServerError)
 				return

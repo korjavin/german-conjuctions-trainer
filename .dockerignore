@@ -1,7 +1,41 @@
+# Exclude version control history
 .git
-.github
 .gitignore
+
+# Exclude GitHub-specific files
+.github
+
+# Exclude documentation and markdown files
 README.md
-.dockerignore
-Dockerfile
+agent.md
+prompt.flow.md
+example.prompt.md
 *.md
+
+# Exclude docker-compose file
+docker-compose.yml
+
+# Exclude log files
+*.log
+server.log
+
+# Exclude the CLI tool from the production image
+cmd/
+
+# Exclude local development files
+.idea/
+.vscode/
+
+# Exclude go cache
+.cache/
+vendor/
+Godeps/
+bin/
+obj/
+out/
+target/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
