@@ -14,15 +14,15 @@ FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
-# Copy go mod files
-COPY go.mod go.sum ./
+# Copy all source code
+COPY . .
+
+# Download dependencies
 RUN go mod download
 COPY --from=css-builder /app/public/style.css ./public/style.css
 
-# Copy source code
-COPY main.go ./
-
 # Build the application
+# We still build from the root directory as main.go is there.
 RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 
 
@@ -41,6 +41,7 @@ WORKDIR /app
 COPY --from=builder /app/main .
 
 # Create static directory and copy frontend files
+# These files are also present in the build context.
 COPY index.html app.js privacy.html favicon.svg favicon-32x32.svg ./static/
 COPY --from=builder /app/public/ ./static/
 
