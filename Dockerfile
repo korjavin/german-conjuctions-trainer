@@ -13,6 +13,13 @@ COPY main.go ./
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 
+# Copy build script and configs
+COPY build.sh tailwind.config.js ./
+COPY src/input.css ./src/input.css
+
+# Run the build script to generate CSS
+RUN apk --no-cache add curl && chmod +x ./build.sh && ./build.sh
+
 # Final stage
 FROM alpine:latest
 
@@ -29,6 +36,7 @@ COPY --from=builder /app/main .
 
 # Create static directory and copy frontend files
 COPY index.html app.js privacy.html favicon.svg favicon-32x32.svg ./static/
+COPY --from=builder /app/public ./static/public
 
 # Make the binary executable and change ownership
 RUN chmod +x ./main && chown -R appuser:appuser /app
