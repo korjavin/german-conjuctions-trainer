@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"german-trainer/pkg/llm"
-	"german-trainer/pkg/storage"
+	"german-conjunctions-trainer/pkg/llm"
+	"german-conjunctions-trainer/pkg/storage"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"

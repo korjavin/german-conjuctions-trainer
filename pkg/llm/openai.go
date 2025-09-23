@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"german-trainer/pkg/storage"
+	"german-conjunctions-trainer/pkg/storage"
 )
 
 // --- Data Structures ---
@@ -136,17 +136,7 @@ func RefinePrompt(originalPrompt, apiKey, openaiURL, modelName string) (string, 
 }
 
 // GenerateExercises calls the LLM and returns the generated exercises without saving them.
-func GenerateExercises(topic *storage.Topic) ([]GeneratedExercise, error) {
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	openaiURL := os.Getenv("OPENAI_URL")
-	if openaiURL == "" {
-		openaiURL = "https://api.openai.com/v1"
-	}
-	modelName := os.Getenv("MODEL_NAME")
-	if modelName == "" {
-		modelName = "gpt-3.5-turbo-1106"
-	}
-
+func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string) ([]GeneratedExercise, error) {
 	finalPrompt, err := RefinePrompt(topic.Prompt, apiKey, openaiURL, modelName)
 	if err != nil {
 		log.Printf("Error refining prompt, falling back to original: %v", err)
@@ -199,7 +189,17 @@ func GenerateExercises(topic *storage.Topic) ([]GeneratedExercise, error) {
 
 // GenerateAndCacheExercises generates exercises and saves them to Airtable.
 func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool) ([]*storage.Exercise, error) {
-	generatedExercises, err := GenerateExercises(topic)
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	openaiURL := os.Getenv("OPENAI_URL")
+	if openaiURL == "" {
+		openaiURL = "https://api.openai.com/v1"
+	}
+	modelName := os.Getenv("MODEL_NAME")
+	if modelName == "" {
+		modelName = "gpt-3.5-turbo-1106"
+	}
+
+	generatedExercises, err := GenerateExercises(topic, apiKey, openaiURL, modelName)
 	if err != nil {
 		return nil, err
 	}

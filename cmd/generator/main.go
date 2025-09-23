@@ -7,16 +7,32 @@ import (
 	"os"
 	"strings"
 
-	"german-trainer/pkg/llm"
-	"german-trainer/pkg/storage"
+	"german-conjunctions-trainer/pkg/llm"
+	"german-conjunctions-trainer/pkg/storage"
 )
 
 func main() {
-	if len(os.Args) < 2 {
+	// --- Initial Validation ---
+	if len(os.Args) < 2 || strings.TrimSpace(os.Args[1]) == "" {
 		fmt.Println("Usage: go run cmd/generator/main.go \"<topic_name>\"")
+		fmt.Println("Error: Topic name is required and cannot be empty.")
 		os.Exit(1)
 	}
 	topicName := os.Args[1]
+
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		log.Fatal("Error: OPENAI_API_KEY environment variable is required.")
+	}
+
+	openaiURL := os.Getenv("OPENAI_URL")
+	if openaiURL == "" {
+		openaiURL = "https://api.openai.com/v1"
+	}
+	modelName := os.Getenv("MODEL_NAME")
+	if modelName == "" {
+		modelName = "gpt-3.5-turbo-1106"
+	}
 
 	// 1. Initialize storage
 	storage.InitStorage()
@@ -61,7 +77,7 @@ func main() {
 
 	// 4. Generate new exercises
 	log.Println("Generating new exercises... (this may take a moment)")
-	newlyGenerated, err := llm.GenerateExercises(targetTopic)
+	newlyGenerated, err := llm.GenerateExercises(targetTopic, apiKey, openaiURL, modelName)
 	if err != nil {
 		log.Fatalf("Failed to generate new exercises: %v", err)
 	}
@@ -69,6 +85,7 @@ func main() {
 
 	// 5. Filter duplicates and save unique exercises
 	var uniqueExercisesSaved int
+	var failures int
 	promptHash := storage.GetPromptHash(targetTopic.Prompt)
 
 	for _, newExData := range newlyGenerated {
@@ -76,13 +93,15 @@ func main() {
 			// This is a unique sentence, save it.
 			exJSONBytes, err := json.Marshal(newExData)
 			if err != nil {
-				log.Printf("Warning: failed to re-marshal exercise JSON: %v", err)
+				log.Printf("Error: failed to re-marshal exercise JSON: %v", err)
+				failures++
 				continue
 			}
 
 			_, err = storage.CreateExercise(targetTopic.ID, promptHash, string(exJSONBytes), "") // No audio path
 			if err != nil {
-				log.Printf("Warning: failed to cache exercise: %v", err)
+				log.Printf("Error: failed to save exercise to Airtable: %v", err)
+				failures++
 				continue
 			}
 			uniqueExercisesSaved++
@@ -92,4 +111,8 @@ func main() {
 	}
 
 	log.Printf("Successfully saved %d new unique exercises for topic '%s'.", uniqueExercisesSaved, targetTopic.Name)
+
+	if failures > 0 {
+		log.Fatalf("Encountered %d failures during the process.", failures)
+	}
 }
