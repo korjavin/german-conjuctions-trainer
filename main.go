@@ -182,6 +182,7 @@ func main() {
 
 	// Serve static files with cache headers
 	http.HandleFunc("/app.js", handleJS)
+	http.HandleFunc("/style.css", handleCSS)
 	http.HandleFunc("/privacy.html", handlePrivacy)
 	http.HandleFunc("/favicon.svg", handleFavicon)
 	http.HandleFunc("/favicon-32x32.svg", handleFavicon32)
@@ -269,6 +270,22 @@ func handleJS(w http.ResponseWriter, r *http.Request) {
 
 	// Set headers for JS file - allow caching but with versioning
 	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
+
+	w.Write(content)
+}
+
+func handleCSS(w http.ResponseWriter, r *http.Request) {
+	// Read the CSS file
+	filePath := getFilePath("style.css")
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	// Set headers for CSS file - allow caching but with versioning
+	w.Header().Set("Content-Type", "text/css")
 	w.Header().Set("Cache-Control", "public, max-age=31536000") // Cache for 1 year
 
 	w.Write(content)
