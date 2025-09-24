@@ -1,0 +1,8 @@
+node_modules/
+pnpm-lock.yaml
+*.log
+.env
+.DS_Store
+audio_cache/
+*.db
+.cache/
