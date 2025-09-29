@@ -89,6 +89,11 @@ func (s *SQLiteStorage) initSchema() error {
 		last_topic_id TEXT,
 		FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
+
+	CREATE INDEX IF NOT EXISTS idx_exercises_topic_hash ON exercises(topic_id, prompt_hash);
+	CREATE INDEX IF NOT EXISTS idx_exercises_topic ON exercises(topic_id);
+	CREATE INDEX IF NOT EXISTS idx_user_exercise_views_user ON user_exercise_views(user_id);
+	CREATE INDEX IF NOT EXISTS idx_prompt_versions_topic ON prompt_versions(topic_id);
 	`
 	_, err := s.db.Exec(schema)
 	return err

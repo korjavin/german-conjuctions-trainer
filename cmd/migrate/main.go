@@ -48,6 +48,9 @@ func main() {
 var userIDMap sync.Map
 var exerciseIDMap sync.Map
 
+// Maps Airtable topic IDs to new SQLite topic IDs
+var topicIDMap sync.Map
+
 func migrateTopicsAndVersions(airtableDB, sqliteDB storage.Storage) {
 	log.Println("Migrating topics and prompt versions...")
 
@@ -58,20 +61,19 @@ func migrateTopicsAndVersions(airtableDB, sqliteDB storage.Storage) {
 	}
 	log.Printf("Found %d topics in Airtable.", len(airtableTopics))
 
-	// 2. Iterate and migrate each topic
+	// 2. Build existing topics map for O(1) lookup
+	existingTopics, _ := sqliteDB.GetAllTopics()
+	existingTopicsMap := make(map[string]*storage.Topic)
+	for _, et := range existingTopics {
+		existingTopicsMap[et.Name] = et
+	}
+
+	// 3. Iterate and migrate each topic
 	for _, topic := range airtableTopics {
 		// Check if a topic with the same name already exists to prevent duplicates
-		// This is a simple check; a more robust solution might use a unique ID mapping.
-		existingTopics, _ := sqliteDB.GetAllTopics()
-		isDuplicate := false
-		for _, et := range existingTopics {
-			if et.Name == topic.Name {
-				log.Printf("Skipping duplicate topic: %s", topic.Name)
-				isDuplicate = true
-				break
-			}
-		}
-		if isDuplicate {
+		if existingTopic, exists := existingTopicsMap[topic.Name]; exists {
+			log.Printf("Skipping duplicate topic: %s", topic.Name)
+			topicIDMap.Store(topic.ID, existingTopic.ID) // Map old to existing new ID
 			continue
 		}
 
@@ -82,6 +84,7 @@ func migrateTopicsAndVersions(airtableDB, sqliteDB storage.Storage) {
 			continue
 		}
 		log.Printf("Migrated topic: %s", createdTopic.Name)
+		topicIDMap.Store(topic.ID, createdTopic.ID) // Map old ID to new ID
 
 		// 3. Get all versions for the topic from Airtable
 		airtableVersions, err := airtableDB.GetVersions(topic.ID)
@@ -152,13 +155,24 @@ func migrateUsersAndStats(airtableDB, sqliteDB storage.Storage) {
 			continue
 		}
 
+		// Map LastTopicID from old to new if available
+		lastTopicID := airtableStats.LastTopicID
+		if lastTopicID != "" {
+			if newTopicID, ok := topicIDMap.Load(lastTopicID); ok {
+				lastTopicID = newTopicID.(string)
+			} else {
+				log.Printf("Warning: Could not map LastTopicID %s for user %s", lastTopicID, user.ID)
+				lastTopicID = "" // Reset if mapping fails
+			}
+		}
+
 		stats := &storage.UserStats{
 			UserID:         newUserID.(string),
 			TotalExercises: airtableStats.TotalExercises,
 			TotalMistakes:  airtableStats.TotalMistakes,
 			TotalHints:     airtableStats.TotalHints,
 			TotalTime:      airtableStats.TotalTime,
-			LastTopicID:    airtableStats.LastTopicID, // This might need mapping if topic IDs change
+			LastTopicID:    lastTopicID,
 		}
 
 		if err := sqliteDB.UpdateUserStats(stats); err != nil {

@@ -35,11 +35,19 @@ func main() {
 	}
 
 	// 1. Initialize storage
-	storage.InitStorage()
+	dbPath := os.Getenv("SQLITE_PATH")
+	if dbPath == "" {
+		dbPath = "german.db"
+	}
+	var err error
+	storage.DB, err = storage.NewSQLiteStorage(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize SQLite storage: %v", err)
+	}
 
 	// 2. Find topic by name
 	log.Printf("Searching for topic: '%s'", topicName)
-	allTopics, err := storage.GetAllTopics()
+	allTopics, err := storage.DB.GetAllTopics()
 	if err != nil {
 		log.Fatalf("Failed to get topics: %v", err)
 	}
@@ -59,7 +67,7 @@ func main() {
 
 	// 3. Get existing exercises to filter duplicates
 	log.Println("Fetching existing exercises for this topic...")
-	existingExercises, err := storage.GetExercisesForTopic(targetTopic.ID, "") // Pass empty hash to get all
+	existingExercises, err := storage.DB.GetExercisesForTopic(targetTopic.ID, "") // Pass empty hash to get all
 	if err != nil {
 		log.Fatalf("Failed to get existing exercises: %v", err)
 	}
@@ -98,7 +106,7 @@ func main() {
 				continue
 			}
 
-			_, err = storage.CreateExercise(targetTopic.ID, promptHash, string(exJSONBytes), "") // No audio path
+			_, err = storage.DB.CreateExercise(targetTopic.ID, promptHash, string(exJSONBytes), "") // No audio path
 			if err != nil {
 				log.Printf("Error: failed to save exercise to Airtable: %v", err)
 				failures++

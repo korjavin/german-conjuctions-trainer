@@ -493,11 +493,11 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 		var viewsToUpdate []*storage.UserExerciseView
 		now := time.Now()
 		for _, ex := range finalExercises {
-			view, exists := userViews[ex.AirtableID]
+			view, exists := userViews[ex.ID]
 			if !exists {
 				view = &storage.UserExerciseView{
 					UserID:     userID,
-					ExerciseID: ex.AirtableID,
+					ExerciseID: ex.ID,
 				}
 			}
 			view.LastViewed = now
