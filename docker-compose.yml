@@ -16,10 +16,10 @@ services:
     restart: unless-stopped
     volumes:
       - audio_cache:/app/audio_cache
-      - database:/app
+      - database:/data
     environment:
       - STORAGE_TYPE=sqlite
-      - SQLITE_PATH=/app/german.db
+      - SQLITE_PATH=/data/german.db
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_URL=${OPENAI_URL}
       - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE}
