@@ -8,6 +8,7 @@ require github.com/mehanizm/airtable v0.3.4
 
 require (
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/securecookie v1.1.2
 	github.com/mattn/go-sqlite3 v1.14.32
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/time v0.12.0
