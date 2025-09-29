@@ -1,8 +1,6 @@
 package storage
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,60 +12,15 @@ import (
 	"github.com/mehanizm/airtable"
 )
 
-// --- Data Structures ---
+// --- Airtable Storage Implementation ---
 
-type Topic struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Prompt    string    `json:"prompt"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+// AirtableStorage implements the Storage interface for Airtable.
+type AirtableStorage struct {
+	client *airtable.Client
+	baseID string
 }
 
-type PromptVersion struct {
-	ID        string    `json:"id"`
-	TopicID   string    `json:"topic_id"`
-	Prompt    string    `json:"prompt"`
-	Version   int       `json:"version"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-type Exercise struct {
-	ID            string    `json:"id"`
-	AirtableID    string    `json:"airtable_id"`
-	TopicID       string    `json:"topic_id"`
-	PromptHash    string    `json:"prompt_hash"`
-	ExerciseJSON  string    `json:"exercise_json"`
-	AudioFilePath string    `json:"audio_file_path"`
-	CreatedAt     time.Time `json:"created_at"`
-}
-
-type UserExerciseView struct {
-	ID                string    `json:"id"`
-	AirtableID        string    `json:"airtable_id"`
-	UserID            string    `json:"user_id"`
-	ExerciseID        string    `json:"exercise_id"`
-	LastViewed        time.Time `json:"last_viewed"`
-	RepetitionCounter int       `json:"repetition_counter"`
-}
-
-type User struct {
-	ID         string `json:"id"`
-	GoogleID   string `json:"google_id"`
-	AirtableID string `json:"airtable_id"`
-}
-
-type UserStats struct {
-	UserID           string `json:"user_id"`
-	TotalExercises   int    `json:"total_exercises"`
-	TotalMistakes    int    `json:"total_mistakes"`
-	TotalHints       int    `json:"total_hints"`
-	TotalTime        int    `json:"total_time"`
-	LastTopicID      string `json:"last_topic_id"`
-	AirtableRecordID string `json:"airtable_record_id"`
-}
-
-// --- Airtable Configuration ---
+// --- Legacy Global Variables (for backward compatibility) ---
 var (
 	Client         *airtable.Client
 	BaseID         string
@@ -79,6 +32,32 @@ var (
 	ExercisesTableName         = "Exercises"
 	UserExerciseViewsTableName = "UserExerciseViews"
 )
+
+// NewAirtableStorage creates a new Airtable storage instance.
+func NewAirtableStorage() (*AirtableStorage, error) {
+	airtableToken := os.Getenv("AIRTABLE_TOKEN")
+	baseID := os.Getenv("AIRTABLE_BASE_ID")
+
+	if airtableToken == "" {
+		return nil, fmt.Errorf("AIRTABLE_TOKEN environment variable is required")
+	}
+	if baseID == "" {
+		return nil, fmt.Errorf("AIRTABLE_BASE_ID environment variable is required")
+	}
+
+	client := airtable.NewClient(airtableToken)
+	storage := &AirtableStorage{
+		client: client,
+		baseID: baseID,
+	}
+
+	// Set global variables for backward compatibility
+	Client = client
+	BaseID = baseID
+
+	log.Printf("Airtable integration initialized with base ID: %s", baseID)
+	return storage, nil
+}
 
 // InitStorage initializes the Airtable client and checks table access.
 func InitStorage() {
@@ -537,11 +516,6 @@ func AddPromptVersion(topicID, prompt string) error {
 	return nil
 }
 
-func GetPromptHash(prompt string) string {
-	hash := sha256.Sum256([]byte(prompt))
-	return hex.EncodeToString(hash[:])
-}
-
 func CreateExercise(topicID, promptHash, exerciseJSON, audioFilePath string) (*Exercise, error) {
 	table := Client.GetTable(BaseID, ExercisesTableName)
 	records := &airtable.Records{
@@ -860,6 +834,28 @@ func GetUserByID(userID string) (*User, error) {
 	}, nil
 }
 
+func GetAllUsers() ([]*User, error) {
+	table := Client.GetTable(BaseID, UsersTableName)
+	records, err := table.GetRecords().Do()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all users: %w", err)
+	}
+
+	var users []*User
+	for _, record := range records.Records {
+		googleID, ok := record.Fields["GoogleID"].(string)
+		if !ok {
+			continue
+		}
+		users = append(users, &User{
+			ID:         record.ID,
+			GoogleID:   googleID,
+			AirtableID: record.ID,
+		})
+	}
+	return users, nil
+}
+
 func UpdateLegacyExercisesWithAudio(text, audioPath string) {
 	table := Client.GetTable(BaseID, ExercisesTableName)
 
@@ -903,4 +899,92 @@ func UpdateLegacyExercisesWithAudio(text, audioPath string) {
 			log.Printf("Successfully updated %d legacy exercises with audio path: %s", len(recordsToUpdate), audioPath)
 		}
 	}
+}
+
+// --- Storage Interface Implementation ---
+// These methods allow AirtableStorage to implement the Storage interface
+// by delegating to the existing global function implementations.
+
+func (a *AirtableStorage) CreateTopic(name, prompt string) (*Topic, error) {
+	return CreateTopic(name, prompt)
+}
+
+func (a *AirtableStorage) GetAllTopics() ([]*Topic, error) {
+	return GetAllTopics()
+}
+
+func (a *AirtableStorage) GetTopic(topicID string) (*Topic, error) {
+	return GetTopic(topicID)
+}
+
+func (a *AirtableStorage) UpdateTopic(topicID, name, prompt string) (*Topic, error) {
+	return UpdateTopic(topicID, name, prompt)
+}
+
+func (a *AirtableStorage) DeleteTopic(topicID string) error {
+	return DeleteTopic(topicID)
+}
+
+func (a *AirtableStorage) GetVersions(topicID string) ([]*PromptVersion, error) {
+	return GetVersions(topicID)
+}
+
+func (a *AirtableStorage) GetVersion(versionID string) (*PromptVersion, error) {
+	return GetVersion(versionID)
+}
+
+func (a *AirtableStorage) AddPromptVersion(topicID, prompt string) error {
+	return AddPromptVersion(topicID, prompt)
+}
+
+func (a *AirtableStorage) CreateExercise(topicID, promptHash, exerciseJSON, audioFilePath string) (*Exercise, error) {
+	return CreateExercise(topicID, promptHash, exerciseJSON, audioFilePath)
+}
+
+func (a *AirtableStorage) GetExercisesForTopic(topicID, promptHash string) ([]*Exercise, error) {
+	return GetExercisesForTopic(topicID, promptHash)
+}
+
+func (a *AirtableStorage) UpdateLegacyExercisesWithAudio(text, audioPath string) {
+	UpdateLegacyExercisesWithAudio(text, audioPath)
+}
+
+func (a *AirtableStorage) GetUserExerciseViews(userID string) (map[string]*UserExerciseView, error) {
+	return GetUserExerciseViews(userID)
+}
+
+func (a *AirtableStorage) UpdateUserExerciseViews(viewsToUpdate []*UserExerciseView) error {
+	return UpdateUserExerciseViews(viewsToUpdate)
+}
+
+func (a *AirtableStorage) GetUserByGoogleID(googleID string) (*User, error) {
+	return GetUserByGoogleID(googleID)
+}
+
+func (a *AirtableStorage) CreateUser(googleID string) (*User, error) {
+	return CreateUser(googleID)
+}
+
+func (a *AirtableStorage) GetUserByID(userID string) (*User, error) {
+	return GetUserByID(userID)
+}
+
+func (a *AirtableStorage) GetAllUsers() ([]*User, error) {
+	return GetAllUsers()
+}
+
+func (a *AirtableStorage) GetUserStats(userID string) (*UserStats, error) {
+	return GetUserStats(userID)
+}
+
+func (a *AirtableStorage) UpdateUserStats(stats *UserStats) error {
+	return UpdateUserStats(stats)
+}
+
+func (a *AirtableStorage) UpdateUserSetting(userID, lastTopicID string) error {
+	return UpdateUserSetting(userID, lastTopicID)
+}
+
+func (a *AirtableStorage) InitializeDefaultTopics() {
+	InitializeDefaultTopics()
 }

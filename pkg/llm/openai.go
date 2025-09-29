@@ -220,7 +220,7 @@ func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool) ([]*sto
 			continue
 		}
 
-		exercise, err := storage.CreateExercise(topic.ID, promptHash, string(exJSONBytes), audioPath)
+		exercise, err := storage.DB.CreateExercise(topic.ID, promptHash, string(exJSONBytes), audioPath)
 		if err != nil {
 			log.Printf("Warning: failed to cache exercise: %v", err)
 			continue

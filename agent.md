@@ -4,39 +4,42 @@
 A web-based application for learning German grammar. It features interactive word-scramble exercises, customizable topics, and a unique prompt refinement system to ensure high-quality, varied content. The application now includes exercise caching and a Spaced Repetition System (SRS) for authenticated users to optimize learning. It also tracks user performance and provides session statistics.
 
 ## Architecture
-- **Backend**: Go HTTP server featuring an on-demand, AI-powered exercise generation system with prompt refinement. It handles exercise caching, SRS logic, and Airtable integration for data persistence.
+- **Backend**: Go HTTP server featuring an on-demand, AI-powered exercise generation system with prompt refinement. It handles exercise caching, SRS logic, and data persistence via a local SQLite database.
 - **Frontend**: Vanilla JavaScript with Tailwind CSS, providing a responsive UI for exercises and topics management.
-- **Storage**: Airtable for storing grammar topics, their version history, cached exercises, and user SRS data.
+- **Storage**: SQLite for storing grammar topics, their version history, cached exercises, and user SRS data.
 - **Deployment**: Docker container with environment-based configuration for easy deployment.
 
 ## File Structure
 ```
 .
-├── main.go              # Go backend server with API and Airtable integration
+├── main.go              # Go backend server with API and SQLite integration
+├── cmd/migrate/main.go  # Data migration tool from Airtable to SQLite
 ├── index.html           # Main application UI
 ├── app.js               # Frontend JavaScript for interactivity and topics management
 ├── agent.md             # Context file for AI development
 ├── Dockerfile           # Container definition for production
 ├── docker-compose.yml   # Docker Compose for local development
 ├── go.mod               # Go module dependencies
-├── example.prompt.md    # Example prompt for exercise generation
+├── german.db            # SQLite database file
 └── .github/workflows/   # CI/CD pipelines for Docker builds
 ```
 
 ## Backend (main.go)
 ### Key Components:
-- **Exercise Caching**: The system caches all generated exercises in an Airtable table to reduce latency and API costs.
+- **Exercise Caching**: The system caches all generated exercises in a local SQLite database to reduce latency and API costs.
 - **Spaced Repetition System (SRS)**: For authenticated users, the backend calculates which exercises are due for review based on their viewing history.
 - **On-Demand Generation**: The `generateAndCacheExercises` function is triggered only when the cache is insufficient for a user's request. It uses a `metaPrompt` to refine the topic prompt before calling the OpenAI API.
 - **API Endpoint `/api/exercises`**: The primary endpoint for the frontend. It orchestrates fetching from cache, applying SRS logic, and triggering generation.
 - **Static File Serving**: Custom handlers serve `index.html` with dynamic cache-busting and `app.js` with long-term caching.
 - **Rate Limiting**: IP-based rate limiting (1 request every 3 seconds) to prevent abuse.
-- **Airtable Integration**: Manages CRUD operations for topics, versions, exercises, and user view data.
+- **SQLite Database**: Manages all CRUD operations for topics, versions, exercises, and user data.
 
 ### Environment Variables:
 - `OPENAI_API_KEY`: Required for AI exercise generation.
-- `AIRTABLE_TOKEN`: Required for Airtable integration.
-- `AIRTABLE_BASE_ID`: Required for Airtable base identification.
+- `STORAGE_TYPE`: (Optional) `sqlite` (default) or `airtable`.
+- `SQLITE_PATH`: (Optional) Path to the SQLite database file. Defaults to `german.db`.
+- `AIRTABLE_TOKEN`: Required only if `STORAGE_TYPE` is `airtable`.
+- `AIRTABLE_BASE_ID`: Required only if `STORAGE_TYPE` is `airtable`.
 - `OPENAI_URL`: API endpoint (defaults to `https://api.openai.com/v1`).
 - `MODEL_NAME`: AI model (defaults to `gpt-3.5-turbo-1106`).
 - `PORT`: Server port (defaults to `8080`).
@@ -49,11 +52,6 @@ A web-based application for learning German grammar. It features interactive wor
 POST /api/exercises
 { "topic_id": "string" }
 // -> Returns a JSON object with an array of exercises, either from cache or newly generated.
-
-// Exercise Generation (Backend-only)
-POST /api/generate
-// -> This endpoint is still available but should not be called directly from the frontend.
-// -> It is used for on-demand generation initiated by the /api/exercises endpoint.
 
 // Topics Management
 GET    /api/topics      // Get all topics
@@ -70,45 +68,52 @@ POST /api/versions/{topicId}/restore/{versionId} // Restore a specific version
 GET /api/last-refined-prompt // Get the most recently used refined prompt
 ```
 
-## Airtable Integration
+## Database Schema (SQLite)
 
-### Database Schema:
-**Topics Table:**
-- ID (Airtable record ID) 
-- Name (Single line text)
-- Prompt (Long text)
-- CreatedAt (Single line text - RFC3339)
-- UpdatedAt (Single line text - RFC3339)
+### `topics`
+- `id` (TEXT, PK): UUID for the topic.
+- `name` (TEXT): The name of the topic.
+- `prompt` (TEXT): The prompt used for generation.
+- `created_at` (DATETIME): Timestamp of creation.
+- `updated_at` (DATETIME): Timestamp of last update.
 
-**PromptVersions Table:**
-- ID (Airtable record ID)
-- TopicID (Single line text - foreign key)
-- Prompt (Long text)
-- Version (Number - sequential)
-- CreatedAt (Single line text - RFC3339)
+### `prompt_versions`
+- `id` (TEXT, PK): UUID for the version.
+- `topic_id` (TEXT, FK): Foreign key to the `topics` table.
+- `prompt` (TEXT): The prompt content for this version.
+- `version` (INTEGER): Sequential version number.
+- `created_at` (DATETIME): Timestamp of creation.
 
-**Exercises Table:**
-- ID (Airtable record ID)
-- TopicID (Single line text, Linked to Topics)
-- PromptHash (Single line text)
-- ExerciseJSON (Long text)
-- CreatedAt (Created time)
+### `exercises`
+- `id` (TEXT, PK): UUID for the exercise.
+- `topic_id` (TEXT, FK): Foreign key to the `topics` table.
+- `prompt_hash` (TEXT): SHA256 hash of the prompt that generated the exercise.
+- `exercise_json` (TEXT): The full JSON of the exercise.
+- `audio_file_path` (TEXT): Path to the cached TTS audio file.
+- `created_at` (DATETIME): Timestamp of creation.
 
-**UserExerciseViews Table:**
-- ID (Airtable record ID)
-- UserID (Single line text, Linked to Users)
-- ExerciseID (Single line text, Linked to Exercises)
-- LastViewed (Date and time)
-- RepetitionCounter (Number)
-- NextReview (Formula)
+### `users`
+- `id` (TEXT, PK): UUID for the user.
+- `google_id` (TEXT, UNIQUE): The user's unique Google ID.
+
+### `user_exercise_views`
+- `id` (TEXT, PK): UUID for the view record.
+- `user_id` (TEXT, FK): Foreign key to the `users` table.
+- `exercise_id` (TEXT, FK): Foreign key to the `exercises` table.
+- `last_viewed` (DATETIME): Timestamp of the last time the user viewed the exercise.
+- `repetition_counter` (INTEGER): Counter for the Spaced Repetition System.
+
+### `user_stats`
+- `user_id` (TEXT, PK, FK): Foreign key to the `users` table.
+- `total_exercises`, `total_mistakes`, `total_hints`, `total_time` (INTEGER): User statistics.
+- `last_topic_id` (TEXT): The last topic the user was working on.
 
 ### Key Features:
-- **Persistent Storage**: All topics, versions, exercises, and user data stored in Airtable.
+- **Persistent Storage**: All topics, versions, exercises, and user data stored in a local SQLite database file (`german.db`).
 - **Exercise Caching**: Serves as the cache for all generated exercises.
 - **SRS Tracking**: Stores user-specific exercise view history to enable SRS.
-- **Version Management**: Automatic versioning for topic prompts (last 10 versions kept).
-- **Permission Handling**: Graceful fallback if tables are missing or permissions are incorrect.
-- **Default Topics**: Auto-creation on first startup.
+- **Version Management**: Automatic versioning for topic prompts.
+- **Default Topics**: Auto-creation on first startup if the database is empty.
 
 ## Frontend (app.js)
 ### Application State:
