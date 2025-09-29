@@ -474,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
         new Chart(ctx, {
             type: 'pie',
             data: {
-                labels: ['Mistakes', 'Solved with Hints', 'Solved Alone'],
+                labels: ['Mistakes', 'Hints Only', 'Correct'],
                 datasets: [{
                     data: [mistakesCount, solvedWithHintsOnlyCount, solvedAloneCount],
                     backgroundColor: [
