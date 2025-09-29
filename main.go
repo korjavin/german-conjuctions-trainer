@@ -848,6 +848,7 @@ func handleUserSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := storage.DB.UpdateUserSetting(userID, settings.LastTopicID); err != nil {
+		log.Printf("Error updating user settings for user %s: %v", userID, err)
 		http.Error(w, "Failed to update user settings", http.StatusInternalServerError)
 		return
 	}
