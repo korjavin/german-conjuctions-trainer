@@ -23,11 +23,18 @@ import (
 	"german-conjunctions-trainer/pkg/llm"
 	"german-conjunctions-trainer/pkg/storage"
 
+	"github.com/gorilla/securecookie"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	oauth2v2 "google.golang.org/api/oauth2/v2"
 	"golang.org/x/time/rate"
 )
+
+// contextKey defines a type for context keys to avoid collisions.
+type contextKey string
+
+const userContextKey = contextKey("userID")
+const cookieName = "user-session"
 
 type TTSRequest struct {
 	Text string `json:"text"`
@@ -56,6 +63,7 @@ var (
 	googleOauthConfig *oauth2.Config
 	oauthStateString  string
 	googleAdminID     string
+	sc                *securecookie.SecureCookie
 )
 
 // Rate limiting
@@ -110,6 +118,23 @@ func initOAuth() {
 	}
 }
 
+func initSecureCookie() {
+	hashKey := os.Getenv("COOKIE_HASH_KEY")
+	blockKey := os.Getenv("COOKIE_BLOCK_KEY")
+
+	if hashKey == "" || blockKey == "" {
+		log.Println("Warning: COOKIE_HASH_KEY or COOKIE_BLOCK_KEY not set. Generating random keys for this session.")
+		log.Println("For production, these should be set to persistent, randomly generated values.")
+		sc = securecookie.New(securecookie.GenerateRandomKey(64), securecookie.GenerateRandomKey(32))
+	} else {
+		// Ensure keys are the correct length for AES-256
+		if len(blockKey) != 32 {
+			log.Fatalf("Error: COOKIE_BLOCK_KEY must be 32 bytes long for AES-256. Got %d bytes.", len(blockKey))
+		}
+		sc = securecookie.New([]byte(hashKey), []byte(blockKey))
+	}
+}
+
 func init() {
 	// Ensure the audio cache directory exists
 	if err := os.MkdirAll("audio_cache", os.ModePerm); err != nil {
@@ -137,6 +162,9 @@ func main() {
 
 	// Initialize Google OAuth
 	initOAuth()
+
+	// Initialize Secure Cookie
+	initSecureCookie()
 
 	// Initialize ElevenLabs
 	elevenlabsAPIKey = os.Getenv("ELEVENLABS_API_KEY")
@@ -216,10 +244,10 @@ func main() {
 	http.HandleFunc("/auth/logout", handleLogout)
 	http.HandleFunc("/api/auth/is_admin", handleIsAdmin)
 
-	// User stats and settings endpoints
-	http.HandleFunc("/api/user/stats", handleUserStats)
-	http.HandleFunc("/api/user/settings", handleUserSettings)
-	http.HandleFunc("/api/user/exercisestats", handleUserExerciseStats)
+	// User stats and settings endpoints (protected by withAuth middleware)
+	http.HandleFunc("/api/user/stats", withAuth(handleUserStats))
+	http.HandleFunc("/api/user/settings", withAuth(handleUserSettings))
+	http.HandleFunc("/api/user/exercisestats", withAuth(handleUserExerciseStats))
 
 	// TTS endpoint
 	http.HandleFunc("/api/tts", handleTTS)
@@ -558,11 +586,32 @@ func getRandomExercises(exercises []*storage.Exercise, count int) []*storage.Exe
 }
 
 func getUserIDFromRequest(r *http.Request) string {
-	cookie, err := r.Cookie("user_id")
-	if err != nil {
-		return "" // No cookie, so not logged in
+	if userID, ok := r.Context().Value(userContextKey).(string); ok {
+		return userID
 	}
-	return cookie.Value
+	return ""
+}
+
+// withAuth is a middleware that checks for a valid user session cookie.
+func withAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie(cookieName)
+		if err != nil {
+			http.Error(w, "Unauthorized: No session cookie provided.", http.StatusUnauthorized)
+			return
+		}
+
+		var userID string
+		if err = sc.Decode(cookieName, cookie.Value, &userID); err != nil {
+			log.Printf("Invalid cookie received: %v", err)
+			http.Error(w, "Unauthorized: Invalid session cookie.", http.StatusUnauthorized)
+			return
+		}
+
+		// Add user ID to the request context
+		ctx := context.WithValue(r.Context(), userContextKey, userID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
 }
 
 func getVoiceIDByName(voiceName string) (string, error) {
@@ -795,12 +844,7 @@ func handleTopics(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleUserStats(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("user_id")
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	userID := cookie.Value
+	userID := getUserIDFromRequest(r)
 
 	switch r.Method {
 	case http.MethodGet:
@@ -828,12 +872,7 @@ func handleUserStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleUserSettings(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("user_id")
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	userID := cookie.Value
+	userID := getUserIDFromRequest(r)
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -917,10 +956,18 @@ func handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	encoded, err := sc.Encode(cookieName, user.ID)
+	if err != nil {
+		log.Printf("Failed to encode cookie: %v", err)
+		http.Error(w, "Failed to set session cookie", http.StatusInternalServerError)
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
-		Name:     "user_id",
-		Value:    user.ID,
+		Name:     cookieName,
+		Value:    encoded,
 		HttpOnly: true,
+		Secure:   r.URL.Scheme == "https", // Use secure cookies in production
 		Path:     "/",
 		Expires:  time.Now().Add(30 * 24 * time.Hour), // 30 days
 	})
@@ -929,22 +976,28 @@ func handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAuthStatus(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("user_id")
+	cookie, err := r.Cookie(cookieName)
 	if err != nil {
 		json.NewEncoder(w).Encode(map[string]any{"logged_in": false})
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]any{"logged_in": true, "user_id": cookie.Value})
+	var userID string
+	if err = sc.Decode(cookieName, cookie.Value, &userID); err != nil {
+		json.NewEncoder(w).Encode(map[string]any{"logged_in": false})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{"logged_in": true, "user_id": userID})
 }
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "user_id",
+		Name:     cookieName,
 		Value:    "",
 		HttpOnly: true,
 		Path:     "/",
-		Expires:  time.Unix(0, 0),
+		Expires:  time.Unix(0, 0), // Expire immediately
 	})
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
@@ -1000,24 +1053,13 @@ func adminOnly(h http.HandlerFunc) http.HandlerFunc {
 // handleUserExerciseStats handles requests for user's exercise statistics.
 func handleUserExerciseStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	cookie, err := r.Cookie("user_id")
-	if err != nil {
-		http.Error(w, "Unauthorized: You must be logged in to view stats.", http.StatusUnauthorized)
-		return
-	}
-	userID := cookie.Value
 
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	userID := getUserIDFromRequest(r)
 
 	stats, err := storage.DB.GetUserExerciseStats(userID)
 	if err != nil {
