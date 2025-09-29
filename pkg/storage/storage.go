@@ -1,0 +1,103 @@
+package storage
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"time"
+)
+
+// --- Data Structures ---
+
+type Topic struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Prompt    string    `json:"prompt"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type PromptVersion struct {
+	ID        string    `json:"id"`
+	TopicID   string    `json:"topic_id"`
+	Prompt    string    `json:"prompt"`
+	Version   int       `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Exercise struct {
+	ID            string    `json:"id"`
+	AirtableID    string    `json:"airtable_id"` // Will be deprecated
+	TopicID       string    `json:"topic_id"`
+	PromptHash    string    `json:"prompt_hash"`
+	ExerciseJSON  string    `json:"exercise_json"`
+	AudioFilePath string    `json:"audio_file_path"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+type UserExerciseView struct {
+	ID                string    `json:"id"`
+	AirtableID        string    `json:"airtable_id"` // Will be deprecated
+	UserID            string    `json:"user_id"`
+	ExerciseID        string    `json:"exercise_id"`
+	LastViewed        time.Time `json:"last_viewed"`
+	RepetitionCounter int       `json:"repetition_counter"`
+}
+
+type User struct {
+	ID         string `json:"id"`
+	GoogleID   string `json:"google_id"`
+	AirtableID string `json:"airtable_id"` // Will be deprecated
+}
+
+type UserStats struct {
+	UserID           string `json:"user_id"`
+	TotalExercises   int    `json:"total_exercises"`
+	TotalMistakes    int    `json:"total_mistakes"`
+	TotalHints       int    `json:"total_hints"`
+	TotalTime        int    `json:"total_time"`
+	LastTopicID      string `json:"last_topic_id"`
+	AirtableRecordID string `json:"airtable_record_id"` // Will be deprecated
+}
+
+// Storage defines the interface for database operations.
+type Storage interface {
+	// Topics
+	CreateTopic(name, prompt string) (*Topic, error)
+	GetAllTopics() ([]*Topic, error)
+	GetTopic(topicID string) (*Topic, error)
+	UpdateTopic(topicID, name, prompt string) (*Topic, error)
+	DeleteTopic(topicID string) error
+
+	// Versions
+	GetVersions(topicID string) ([]*PromptVersion, error)
+	GetVersion(versionID string) (*PromptVersion, error)
+	AddPromptVersion(topicID, prompt string) error
+
+	// Exercises
+	CreateExercise(topicID, promptHash, exerciseJSON, audioFilePath string) (*Exercise, error)
+	GetExercisesForTopic(topicID, promptHash string) ([]*Exercise, error)
+	UpdateLegacyExercisesWithAudio(text, audioPath string)
+
+	// User Data
+	GetUserExerciseViews(userID string) (map[string]*UserExerciseView, error)
+	UpdateUserExerciseViews(viewsToUpdate []*UserExerciseView) error
+	GetUserByGoogleID(googleID string) (*User, error)
+	CreateUser(googleID string) (*User, error)
+	GetUserByID(userID string) (*User, error)
+	GetAllUsers() ([]*User, error)
+	GetUserStats(userID string) (*UserStats, error)
+	UpdateUserStats(stats *UserStats) error
+	UpdateUserSetting(userID, lastTopicID string) error
+
+	// Initialization
+	InitializeDefaultTopics()
+}
+
+// DB is the global database connection
+var DB Storage
+
+// GetPromptHash generates a SHA256 hash for a given prompt string.
+func GetPromptHash(prompt string) string {
+	hash := sha256.Sum256([]byte(prompt))
+	return hex.EncodeToString(hash[:])
+}

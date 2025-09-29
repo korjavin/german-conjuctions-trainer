@@ -16,13 +16,14 @@ services:
     restart: unless-stopped
     volumes:
       - audio_cache:/app/audio_cache
+      - database:/app
     environment:
+      - STORAGE_TYPE=sqlite
+      - SQLITE_PATH=/app/german.db
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_URL=${OPENAI_URL}
       - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE}
       - MODEL_NAME=${MODEL}
-      - AIRTABLE_TOKEN=${AIRTABLE_TOKEN}
-      - AIRTABLE_BASE_ID=${AIRTABLE_BASE_ID}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URL=${GOOGLE_REDIRECT_URL}
@@ -34,6 +35,7 @@ services:
 
 volumes:
   audio_cache:
+  database:
 
 networks:
   vaultwarden_default:

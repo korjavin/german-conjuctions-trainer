@@ -1,8 +1,12 @@
-node_modules/
-pnpm-lock.yaml
+# Binaries
+migrate_tool
+app
+*.exe
+*.so
+*.dll
+
+# Log files
 *.log
-.env
-.DS_Store
-audio_cache/
+
+# DB files
 *.db
-.cache/

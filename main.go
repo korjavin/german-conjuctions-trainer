@@ -119,7 +119,21 @@ func init() {
 
 func main() {
 	// Initialize storage backend
-	storage.InitStorage()
+	storageType := os.Getenv("STORAGE_TYPE")
+	if storageType == "" {
+		storageType = "sqlite" // Default to sqlite
+	}
+
+	// Initialize storage backend
+	dbPath := os.Getenv("SQLITE_PATH")
+	if dbPath == "" {
+		dbPath = "german.db"
+	}
+	var err error
+	storage.DB, err = storage.NewSQLiteStorage(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize SQLite storage: %v", err)
+	}
 
 	// Initialize Google OAuth
 	initOAuth()
@@ -156,7 +170,7 @@ func main() {
 	}
 
 	// Initialize default topics
-	storage.InitializeDefaultTopics()
+	storage.DB.InitializeDefaultTopics()
 
 	// Cleanup old clients every 10 minutes
 	go func() {
@@ -435,7 +449,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	topic, err := storage.GetTopic(req.TopicID)
+	topic, err := storage.DB.GetTopic(req.TopicID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Topic not found: %v", err), http.StatusNotFound)
 		return
@@ -444,7 +458,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 	promptHash := storage.GetPromptHash(topic.Prompt)
 	userID := getUserIDFromRequest(r)
 
-	allExercises, err := storage.GetExercisesForTopic(req.TopicID, promptHash)
+	allExercises, err := storage.DB.GetExercisesForTopic(req.TopicID, promptHash)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get exercises: %v", err), http.StatusInternalServerError)
 		return
@@ -456,7 +470,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 		finalExercises = getRandomExercises(allExercises, 10)
 	} else {
 		// Authenticated user SRS logic
-		userViews, err := storage.GetUserExerciseViews(userID)
+		userViews, err := storage.DB.GetUserExerciseViews(userID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
 			return
@@ -490,7 +504,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 			view.RepetitionCounter++
 			viewsToUpdate = append(viewsToUpdate, view)
 		}
-		if err := storage.UpdateUserExerciseViews(viewsToUpdate); err != nil {
+		if err := storage.DB.UpdateUserExerciseViews(viewsToUpdate); err != nil {
 			log.Printf("Warning: failed to update user exercise views: %v", err)
 			// Don't block user, just log the error
 		}
@@ -703,7 +717,7 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Successfully created audio file: %s", filename)
 
 	// Try to update any legacy exercises that match this text
-	go storage.UpdateLegacyExercisesWithAudio(req.Text, filename)
+	go storage.DB.UpdateLegacyExercisesWithAudio(req.Text, filename)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
@@ -741,7 +755,7 @@ func handleTopics(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		topicsList, err := storage.GetAllTopics()
+		topicsList, err := storage.DB.GetAllTopics()
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get topics: %v", err), http.StatusInternalServerError)
 			return
@@ -763,7 +777,7 @@ func handleTopics(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			topic, err := storage.CreateTopic(req.Name, req.Prompt)
+			topic, err := storage.DB.CreateTopic(req.Name, req.Prompt)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to create topic: %v", err), http.StatusInternalServerError)
 				return
@@ -789,7 +803,7 @@ func handleUserStats(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		stats, err := storage.GetUserStats(userID)
+		stats, err := storage.DB.GetUserStats(userID)
 		if err != nil {
 			http.Error(w, "Failed to get user stats", http.StatusInternalServerError)
 			return
@@ -802,7 +816,7 @@ func handleUserStats(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		stats.UserID = userID
-		if err := storage.UpdateUserStats(&stats); err != nil {
+		if err := storage.DB.UpdateUserStats(&stats); err != nil {
 			http.Error(w, "Failed to update user stats", http.StatusInternalServerError)
 			return
 		}
@@ -833,7 +847,7 @@ func handleUserSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := storage.UpdateUserSetting(userID, settings.LastTopicID); err != nil {
+	if err := storage.DB.UpdateUserSetting(userID, settings.LastTopicID); err != nil {
 		http.Error(w, "Failed to update user settings", http.StatusInternalServerError)
 		return
 	}
@@ -886,14 +900,14 @@ func handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get or create user in Airtable
-	user, err := storage.GetUserByGoogleID(userinfo.Id)
+	user, err := storage.DB.GetUserByGoogleID(userinfo.Id)
 	if err != nil {
 		log.Printf("Unable to get user by google ID: %v", err)
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
 	if user == nil {
-		user, err = storage.CreateUser(userinfo.Id)
+		user, err = storage.DB.CreateUser(userinfo.Id)
 		if err != nil {
 			log.Printf("Unable to create user: %v", err)
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
@@ -940,7 +954,7 @@ func handleIsAdmin(w http.ResponseWriter, r *http.Request) {
 	if googleAdminID != "" {
 		userID := getUserIDFromRequest(r)
 		if userID != "" {
-			user, err := storage.GetUserByID(userID)
+			user, err := storage.DB.GetUserByID(userID)
 			if err == nil && user != nil && user.GoogleID == googleAdminID {
 				isAdmin = true
 			}
@@ -963,7 +977,7 @@ func adminOnly(h http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		user, err := storage.GetUserByID(userID)
+		user, err := storage.DB.GetUserByID(userID)
 		if err != nil || user == nil {
 			log.Printf("Error getting user for admin check (userID: %s): %v", userID, err)
 			http.Error(w, "Could not verify user credentials", http.StatusInternalServerError)
@@ -1001,7 +1015,7 @@ func handleTopicByID(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		topic, err := storage.GetTopic(topicID)
+		topic, err := storage.DB.GetTopic(topicID)
 		if err != nil {
 			http.Error(w, "Topic not found", http.StatusNotFound)
 			return
@@ -1023,7 +1037,7 @@ func handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			topic, err := storage.UpdateTopic(topicID, req.Name, req.Prompt)
+			topic, err := storage.DB.UpdateTopic(topicID, req.Name, req.Prompt)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to update topic: %v", err), http.StatusInternalServerError)
 				return
@@ -1035,7 +1049,7 @@ func handleTopicByID(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodDelete:
 		adminOnly(func(w http.ResponseWriter, r *http.Request) {
-			err := storage.DeleteTopic(topicID)
+			err := storage.DB.DeleteTopic(topicID)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to delete topic: %v", err), http.StatusInternalServerError)
 				return
@@ -1072,7 +1086,7 @@ func handleVersions(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		versions, err := storage.GetVersions(topicID)
+		versions, err := storage.DB.GetVersions(topicID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get versions: %v", err), http.StatusInternalServerError)
 			return
@@ -1091,7 +1105,7 @@ func handleVersions(w http.ResponseWriter, r *http.Request) {
 
 			versionID := pathParts[2]
 
-			versionToRestore, err := storage.GetVersion(versionID)
+			versionToRestore, err := storage.DB.GetVersion(versionID)
 			if err != nil {
 				http.Error(w, "Version not found", http.StatusNotFound)
 				return
@@ -1104,14 +1118,14 @@ func handleVersions(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Get the current topic name to preserve it
-			currentTopic, err := storage.GetTopic(topicID)
+			currentTopic, err := storage.DB.GetTopic(topicID)
 			if err != nil {
 				http.Error(w, "Failed to get current topic", http.StatusNotFound)
 				return
 			}
 
 			// Update topic with restored prompt (this will automatically create a new version)
-			topic, err := storage.UpdateTopic(topicID, currentTopic.Name, versionToRestore.Prompt)
+			topic, err := storage.DB.UpdateTopic(topicID, currentTopic.Name, versionToRestore.Prompt)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to restore version: %v", err), http.StatusInternalServerError)
 				return
