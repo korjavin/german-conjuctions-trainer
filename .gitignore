@@ -1,26 +1,32 @@
-# Binaries
-migrate_tool
-app
+# Binaries for programs and plugins
 *.exe
-*.so
+*.exe~
 *.dll
+*.so
+*.dylib
 
-# Node modules
-node_modules/
-pnpm-lock.yaml
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when run with the
+# -o option
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+# Environment variables
+.env
 
 # Log files
 *.log
+log/
+logs/
 
-# Environment and secrets
-.env
-
-# OS files
-.DS_Store
-
-# Cache directories
-audio_cache/
-.cache/
-
-# DB files
-*.db
+# Build artifacts
+/german-grammar-trainer
+/audio_cache
+/german.db*

@@ -41,6 +41,7 @@
                 </div>
                 <div class="flex items-center space-x-4">
                     <button id="login-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">Login with Google</button>
+                    <button id="stats-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold hidden">Stats</button>
                     <button id="logout-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold hidden">Logout</button>
                     <button id="settings-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">Settings</button>
                 </div>
@@ -215,6 +216,26 @@
                 <button id="last-refined-prompt-close-btn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
             </div>
             <pre id="last-refined-prompt-content" class="bg-gray-100 p-4 rounded-md text-sm whitespace-pre-wrap font-mono"></pre>
+        </div>
+    </div>
+
+    <!-- User Stats Modal -->
+    <div id="stats-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="card rounded-lg p-8 w-full max-w-md">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">Your Progress</h2>
+                <button id="stats-close-btn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center p-4 bg-blue-100 rounded-lg">
+                    <span class="font-semibold text-blue-800">Ready to Repeat</span>
+                    <span id="stats-ready-to-repeat" class="text-2xl font-bold text-blue-800">0</span>
+                </div>
+                <div class="flex justify-between items-center p-4 bg-green-100 rounded-lg">
+                    <span class="font-semibold text-green-800">Trained (Strengthening)</span>
+                    <span id="stats-trained" class="text-2xl font-bold text-green-800">0</span>
+                </div>
+            </div>
         </div>
     </div>
 

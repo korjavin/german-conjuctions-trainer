@@ -7,6 +7,9 @@ toolchain go1.24.3
 require github.com/mehanizm/airtable v0.3.4
 
 require (
+	github.com/google/uuid v1.6.0
+	github.com/gorilla/securecookie v1.1.2
+	github.com/mattn/go-sqlite3 v1.14.32
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/time v0.12.0
 	google.golang.org/api v0.248.0
@@ -20,10 +23,8 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
-	github.com/mattn/go-sqlite3 v1.14.32 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
 	go.opentelemetry.io/otel v1.36.0 // indirect

@@ -84,6 +84,8 @@ docker run -p 8080:8080 \
 | `GOOGLE_CLIENT_ID` | No | - | Your Google OAuth 2.0 Client ID |
 | `GOOGLE_CLIENT_SECRET` | No | - | Your Google OAuth 2.0 Client Secret |
 | `GOOGLE_REDIRECT_URL` | No | - | Your Google OAuth 2.0 Redirect URL |
+| `COOKIE_HASH_KEY` | No | Randomly generated | A 64-byte key for HMAC authentication of cookies. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
+| `COOKIE_BLOCK_KEY` | No | Randomly generated | A 32-byte key for AES-256 encryption of cookie data. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
 
 ## Airtable Setup
 
