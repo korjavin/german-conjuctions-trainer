@@ -12,6 +12,9 @@ RUN npx tailwindcss -i ./src/input.css -o ./public/style.css
 # Build stage
 FROM golang:1.23-alpine AS builder
 
+# Install build dependencies for CGO (sqlite requires gcc)
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+
 WORKDIR /app
 
 # Copy all source code
@@ -21,15 +24,14 @@ COPY . .
 RUN go mod download
 COPY --from=css-builder /app/public/style.css ./public/style.css
 
-# Build the application
-# We still build from the root directory as main.go is there.
-RUN CGO_ENABLED=0 GOOS=linux go build -o main .
+# Build the application with CGO enabled for SQLite support
+RUN CGO_ENABLED=1 GOOS=linux go build -o main .
 
 
 # Final stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates sqlite-libs
 
 # Create a non-root user
 RUN adduser -D -s /bin/sh appuser
