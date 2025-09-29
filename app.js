@@ -1066,6 +1066,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    loginBtn.addEventListener('click', () => {
+        window.location.href = '/auth/google/login';
+    });
+
     statsBtn.addEventListener('click', showUserExerciseStats);
 
     statsCloseBtn.addEventListener('click', () => {
