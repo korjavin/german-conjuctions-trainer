@@ -562,3 +562,32 @@ func (s *SQLiteStorage) UpdateUserSetting(userID, lastTopicID string) error {
 	_, err := s.db.Exec(query, userID, lastTopicID)
 	return err
 }
+
+// GetUserExerciseStats calculates and returns the exercise statistics for a user.
+func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats, error) {
+	var totalViews int
+	row := s.db.QueryRow("SELECT COUNT(*) FROM user_exercise_views WHERE user_id = ?", userID)
+	if err := row.Scan(&totalViews); err != nil {
+		return nil, err
+	}
+
+	// This logic mirrors the SRS logic from the main handler.
+	// It calculates the number of days since the last view and compares it to the repetition counter squared.
+	query := `
+		SELECT COUNT(*)
+		FROM user_exercise_views
+		WHERE user_id = ? AND (julianday('now') - julianday(last_viewed)) >= (repetition_counter * repetition_counter)
+	`
+	var readyToRepeatCount int
+	row = s.db.QueryRow(query, userID)
+	if err := row.Scan(&readyToRepeatCount); err != nil {
+		return nil, err
+	}
+
+	stats := &UserExerciseStats{
+		ReadyToRepeatCount: readyToRepeatCount,
+		TrainedCount:       totalViews - readyToRepeatCount,
+	}
+
+	return stats, nil
+}

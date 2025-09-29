@@ -219,6 +219,7 @@ func main() {
 	// User stats and settings endpoints
 	http.HandleFunc("/api/user/stats", handleUserStats)
 	http.HandleFunc("/api/user/settings", handleUserSettings)
+	http.HandleFunc("/api/user/exercisestats", handleUserExerciseStats)
 
 	// TTS endpoint
 	http.HandleFunc("/api/tts", handleTTS)
@@ -996,9 +997,44 @@ func adminOnly(h http.HandlerFunc) http.HandlerFunc {
 }
 
 // Handle individual topic operations
+// handleUserExerciseStats handles requests for user's exercise statistics.
+func handleUserExerciseStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	cookie, err := r.Cookie("user_id")
+	if err != nil {
+		http.Error(w, "Unauthorized: You must be logged in to view stats.", http.StatusUnauthorized)
+		return
+	}
+	userID := cookie.Value
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	stats, err := storage.DB.GetUserExerciseStats(userID)
+	if err != nil {
+		log.Printf("Error getting user exercise stats for user %s: %v", userID, err)
+		http.Error(w, "Failed to get user exercise stats", http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		log.Printf("Error encoding user exercise stats for user %s: %v", userID, err)
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
 func handleTopicByID(w http.ResponseWriter, r *http.Request) {
 	// Enable CORS
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 

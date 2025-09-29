@@ -58,9 +58,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
+    const statsBtn = document.getElementById('stats-btn');
     const replayAudioBtn = document.getElementById('replay-audio-btn');
     const nextExerciseBtn = document.getElementById('next-exercise-btn');
     const exerciseControls = document.getElementById('exercise-controls');
+
+    // Stats Modal Elements
+    const statsModal = document.getElementById('stats-modal');
+    const statsCloseBtn = document.getElementById('stats-close-btn');
+    const statsReadyToRepeatEl = document.getElementById('stats-ready-to-repeat');
+    const statsTrainedEl = document.getElementById('stats-trained');
 
     // --- Application State ---
     let state = {
@@ -1059,8 +1066,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    loginBtn.addEventListener('click', () => {
-        window.location.href = '/auth/google/login';
+    statsBtn.addEventListener('click', showUserExerciseStats);
+
+    statsCloseBtn.addEventListener('click', () => {
+        statsModal.classList.add('hidden');
     });
 
     logoutBtn.addEventListener('click', () => {
@@ -1111,15 +1120,44 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isLoggedIn) {
             loginBtn.classList.add('hidden');
             logoutBtn.classList.remove('hidden');
+            statsBtn.classList.remove('hidden');
         } else {
             loginBtn.classList.remove('hidden');
             logoutBtn.classList.add('hidden');
+            statsBtn.classList.add('hidden');
         }
 
         if (state.isAdmin) {
             settingsBtn.classList.remove('hidden');
         } else {
             settingsBtn.classList.add('hidden');
+        }
+    }
+
+    async function showUserExerciseStats() {
+        if (!state.isLoggedIn) {
+            alert("Please log in to see your stats.");
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/user/exercisestats');
+            if (!response.ok) {
+                if (response.status === 401) {
+                    alert("Your session has expired. Please log in again.");
+                    return;
+                }
+                throw new Error('Failed to fetch exercise stats');
+            }
+
+            const stats = await response.json();
+            statsReadyToRepeatEl.textContent = stats.ready_to_repeat;
+            statsTrainedEl.textContent = stats.trained;
+            statsModal.classList.remove('hidden');
+
+        } catch (error) {
+            console.error('Error fetching exercise stats:', error);
+            alert('Could not load your progress stats. Please try again later.');
         }
     }
 

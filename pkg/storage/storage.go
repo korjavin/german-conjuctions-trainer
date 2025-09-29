@@ -59,6 +59,12 @@ type UserStats struct {
 	AirtableRecordID string `json:"airtable_record_id"` // Will be deprecated
 }
 
+// UserExerciseStats holds the counts of exercises in different states for a user.
+type UserExerciseStats struct {
+	TrainedCount       int `json:"trained"`
+	ReadyToRepeatCount int `json:"ready_to_repeat"`
+}
+
 // Storage defines the interface for database operations.
 type Storage interface {
 	// Topics
@@ -88,6 +94,7 @@ type Storage interface {
 	GetUserStats(userID string) (*UserStats, error)
 	UpdateUserStats(stats *UserStats) error
 	UpdateUserSetting(userID, lastTopicID string) error
+	GetUserExerciseStats(userID string) (*UserExerciseStats, error)
 
 	// Initialization
 	InitializeDefaultTopics()
