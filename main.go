@@ -248,6 +248,7 @@ func main() {
 	http.HandleFunc("/api/user/stats", withAuth(handleUserStats))
 	http.HandleFunc("/api/user/settings", withAuth(handleUserSettings))
 	http.HandleFunc("/api/user/exercisestats", withAuth(handleUserExerciseStats))
+	http.HandleFunc("/api/user/exercise/complete", withAuth(handleCompleteExercise))
 
 	// TTS endpoint
 	http.HandleFunc("/api/tts", handleTTS)
@@ -517,36 +518,18 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 		}
 
 		finalExercises = getRandomExercises(eligibleExercises, 10)
-
-		// Update views for the selected exercises
-		var viewsToUpdate []*storage.UserExerciseView
-		now := time.Now()
-		for _, ex := range finalExercises {
-			view, exists := userViews[ex.ID]
-			if !exists {
-				view = &storage.UserExerciseView{
-					UserID:     userID,
-					ExerciseID: ex.ID,
-				}
-			}
-			view.LastViewed = now
-			view.RepetitionCounter++
-			viewsToUpdate = append(viewsToUpdate, view)
-		}
-		if err := storage.DB.UpdateUserExerciseViews(viewsToUpdate); err != nil {
-			log.Printf("Warning: failed to update user exercise views: %v", err)
-			// Don't block user, just log the error
-		}
 	}
 
 	// Prepare response
 	type ExerciseResponse struct {
+		ID            string          `json:"id"`
 		ExerciseJSON  json.RawMessage `json:"exercise_json"`
 		AudioFilePath string          `json:"audio_file_path"`
 	}
 	var responseExercises []ExerciseResponse
 	for _, ex := range finalExercises {
 		responseExercises = append(responseExercises, ExerciseResponse{
+			ID:            ex.ID,
 			ExerciseJSON:  []byte(ex.ExerciseJSON),
 			AudioFilePath: ex.AudioFilePath,
 		})
@@ -1072,6 +1055,45 @@ func handleUserExerciseStats(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error encoding user exercise stats for user %s: %v", userID, err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
+}
+
+type CompleteExerciseRequest struct {
+	ExerciseID string `json:"exercise_id"`
+}
+
+// handleCompleteExercise marks an exercise as completed for a user.
+func handleCompleteExercise(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserIDFromRequest(r)
+	if userID == "" {
+		// This should technically be caught by withAuth, but as a safeguard:
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req CompleteExerciseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.ExerciseID == "" {
+		http.Error(w, "Exercise ID is required", http.StatusBadRequest)
+		return
+	}
+
+	err := storage.DB.CompleteUserExercise(userID, req.ExerciseID)
+	if err != nil {
+		log.Printf("Error completing exercise for user %s, exercise %s: %v", userID, req.ExerciseID, err)
+		http.Error(w, "Failed to update exercise progress", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
 func handleTopicByID(w http.ResponseWriter, r *http.Request) {

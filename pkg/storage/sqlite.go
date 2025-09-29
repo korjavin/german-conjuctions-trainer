@@ -591,3 +591,17 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 
 	return stats, nil
 }
+
+// CompleteUserExercise updates the user's view of an exercise upon completion.
+// It sets the last_viewed time and increments the repetition counter.
+func (s *SQLiteStorage) CompleteUserExercise(userID, exerciseID string) error {
+	query := `
+		INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter)
+		VALUES(?, ?, ?, ?, 1)
+		ON CONFLICT(user_id, exercise_id) DO UPDATE SET
+		last_viewed = excluded.last_viewed,
+		repetition_counter = repetition_counter + 1;
+	`
+	_, err := s.db.Exec(query, uuid.NewString(), userID, exerciseID, time.Now().UTC())
+	return err
+}

@@ -332,6 +332,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Show exercise controls and hide hint button
             exerciseControls.classList.remove('hidden');
             hintBtn.classList.add('hidden');
+
+            // If logged in, report completion to the backend for SRS update
+            if (state.isLoggedIn && exercise.id) {
+                completeExercise(exercise.id);
+            }
         } else {
             state.mistakes++;
             updateStats();
@@ -761,6 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (data.exercises && data.exercises.length > 0) {
                 state.exercises = data.exercises.map(ex => ({
+                    id: ex.id,
                     ...ex.exercise_json,
                     audio_file_path: ex.audio_file_path
                 }));
@@ -1193,6 +1199,24 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (error) {
             console.error('Error saving user settings:', error);
+        }
+    }
+
+    // Reports a completed exercise to the backend for SRS tracking.
+    async function completeExercise(exerciseId) {
+        try {
+            const response = await fetch('/api/user/exercise/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ exercise_id: exerciseId })
+            });
+
+            if (!response.ok) {
+                console.error('Failed to report exercise completion:', response.statusText);
+            }
+        } catch (error) {
+            // This is a background task, so we don't alert the user, just log it.
+            console.error('Error reporting exercise completion:', error);
         }
     }
 
