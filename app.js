@@ -438,10 +438,10 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="flex flex-col sm:flex-row gap-4 justify-center">
                 <button id="new-session-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold text-lg">
-                    Start New Session
+                    New Practice Session
                 </button>
                 <button id="same-exercises-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold text-lg">
-                    Practice Same Exercises
+                    Retry These Exercises
                 </button>
                 ${state.isLoggedIn ? '<button id="view-progress-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold text-lg">View Your Progress</button>' : ''}
             </div>
@@ -536,7 +536,9 @@ document.addEventListener('DOMContentLoaded', () => {
         generateBtn.disabled = false;
 
         updateStats();
-        renderExercise(); // Show empty state
+
+        // Automatically fetch new exercises
+        fetchExercises();
     }
 
     function resetForSameExercises() {
