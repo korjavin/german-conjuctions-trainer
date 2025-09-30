@@ -508,6 +508,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
 			return
 		}
+		log.Printf("[EXERCISES] Found %d user exercise views for user %s", len(userViews), userID)
 
 		eligibleExercises := getEligibleExercisesForSRS(allExercises, userViews)
 		if len(eligibleExercises) < 10 {
@@ -570,18 +571,22 @@ func getEligibleExercisesForSRS(allExercises []*storage.Exercise, userViews map[
 	var eligible []*storage.Exercise
 	now := time.Now()
 	for _, ex := range allExercises {
-		view, seen := userViews[ex.AirtableID]
+		view, seen := userViews[ex.ID]
 		if !seen {
+			log.Printf("[SRS_ELIGIBILITY] Exercise %s never seen before - ELIGIBLE", ex.ID)
 			eligible = append(eligible, ex)
 			continue
 		}
 		// SRS logic: next review date is (counter^2) days after last view
 		daysSinceView := now.Sub(view.LastViewed).Hours() / 24
 		nextReviewInDays := float64(view.RepetitionCounter * view.RepetitionCounter)
+		log.Printf("[SRS_ELIGIBILITY] Exercise %s: counter=%d, days_since_view=%.2f, next_review_in=%.0f days, eligible=%v",
+			ex.ID, view.RepetitionCounter, daysSinceView, nextReviewInDays, daysSinceView >= nextReviewInDays)
 		if daysSinceView >= nextReviewInDays {
 			eligible = append(eligible, ex)
 		}
 	}
+	log.Printf("[SRS_ELIGIBILITY] Total exercises checked: %d, eligible: %d", len(allExercises), len(eligible))
 	return eligible
 }
 
