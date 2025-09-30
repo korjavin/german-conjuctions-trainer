@@ -988,3 +988,16 @@ func (a *AirtableStorage) UpdateUserSetting(userID, lastTopicID string) error {
 func (a *AirtableStorage) InitializeDefaultTopics() {
 	InitializeDefaultTopics()
 }
+
+func (a *AirtableStorage) GetUserExerciseStats(userID string) (*UserExerciseStats, error) {
+	// Airtable doesn't support this feature - return empty stats
+	return &UserExerciseStats{
+		TrainedCount:       0,
+		ReadyToRepeatCount: 0,
+	}, nil
+}
+
+func (a *AirtableStorage) CompleteUserExercise(userID, exerciseID string) error {
+	// Airtable doesn't support this feature - no-op
+	return nil
+}

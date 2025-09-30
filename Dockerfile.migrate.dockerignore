@@ -1,0 +1,34 @@
+# Exclude version control history
+.git
+.gitignore
+
+# Exclude GitHub-specific files
+.github
+
+# Exclude documentation
+*.md
+
+# Exclude docker-compose file
+docker-compose.yml
+
+# Exclude log files
+*.log
+
+# Exclude local development files
+.idea/
+.vscode/
+
+# Exclude caches
+.cache/
+vendor/
+bin/
+obj/
+out/
+target/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Don't exclude cmd/ - we need it for migration tool!
