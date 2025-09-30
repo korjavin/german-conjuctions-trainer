@@ -524,18 +524,24 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 		for _, ex := range finalExercises {
 			view, exists := userViews[ex.ID]
 			if !exists {
+				log.Printf("[SRS] User %s viewing exercise %s for the first time", userID, ex.ID)
 				view = &storage.UserExerciseView{
 					UserID:     userID,
 					ExerciseID: ex.ID,
 				}
+			} else {
+				log.Printf("[SRS] User %s viewing exercise %s again (counter was: %d)", userID, ex.ID, view.RepetitionCounter)
 			}
 			view.LastViewed = now
 			view.RepetitionCounter++
 			viewsToUpdate = append(viewsToUpdate, view)
+			log.Printf("[SRS] Updated: exercise %s, counter=%d, last_viewed=%s", ex.ID, view.RepetitionCounter, now.Format(time.RFC3339))
 		}
 		if err := storage.DB.UpdateUserExerciseViews(viewsToUpdate); err != nil {
-			log.Printf("Warning: failed to update user exercise views: %v", err)
+			log.Printf("ERROR: failed to update user exercise views: %v", err)
 			// Don't block user, just log the error
+		} else {
+			log.Printf("[SRS] Successfully updated %d exercise views for user %s", len(viewsToUpdate), userID)
 		}
 	}
 
@@ -1060,16 +1066,19 @@ func handleUserExerciseStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := getUserIDFromRequest(r)
+	log.Printf("[STATS] Getting exercise stats for user %s", userID)
 
 	stats, err := storage.DB.GetUserExerciseStats(userID)
 	if err != nil {
-		log.Printf("Error getting user exercise stats for user %s: %v", userID, err)
+		log.Printf("ERROR: getting user exercise stats for user %s: %v", userID, err)
 		http.Error(w, "Failed to get user exercise stats", http.StatusInternalServerError)
 		return
 	}
 
+	log.Printf("[STATS] User %s stats: ready_to_repeat=%d, trained=%d", userID, stats.ReadyToRepeatCount, stats.TrainedCount)
+
 	if err := json.NewEncoder(w).Encode(stats); err != nil {
-		log.Printf("Error encoding user exercise stats for user %s: %v", userID, err)
+		log.Printf("ERROR: encoding user exercise stats for user %s: %v", userID, err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }

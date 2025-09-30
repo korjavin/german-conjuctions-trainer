@@ -570,6 +570,7 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 	if err := row.Scan(&totalViews); err != nil {
 		return nil, err
 	}
+	log.Printf("[STATS_CALC] User %s has %d total exercise views", userID, totalViews)
 
 	// This logic mirrors the SRS logic from the main handler.
 	// It calculates the number of days since the last view and compares it to the repetition counter squared.
@@ -583,11 +584,13 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 	if err := row.Scan(&readyToRepeatCount); err != nil {
 		return nil, err
 	}
+	log.Printf("[STATS_CALC] User %s has %d exercises ready to repeat (formula passed)", userID, readyToRepeatCount)
 
 	stats := &UserExerciseStats{
 		ReadyToRepeatCount: readyToRepeatCount,
 		TrainedCount:       totalViews - readyToRepeatCount,
 	}
 
+	log.Printf("[STATS_CALC] Final stats for user %s: ready=%d, trained=%d", userID, stats.ReadyToRepeatCount, stats.TrainedCount)
 	return stats, nil
 }
