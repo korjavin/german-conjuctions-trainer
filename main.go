@@ -231,7 +231,7 @@ func main() {
 	http.HandleFunc("/favicon.ico", handleFaviconICO) // Fallback for older browsers
 
 	// API endpoints
-	http.HandleFunc("/api/exercises", handleExercises)
+	http.HandleFunc("/api/exercises", withOptionalAuth(handleExercises))
 	http.HandleFunc("/api/topics", handleTopics)
 	http.HandleFunc("/api/topics/", handleTopicByID)
 	http.HandleFunc("/api/versions/", handleVersions)
@@ -486,19 +486,23 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 
 	promptHash := storage.GetPromptHash(topic.Prompt)
 	userID := getUserIDFromRequest(r)
+	log.Printf("[EXERCISES] Fetching exercises for topic %s, userID='%s'", req.TopicID, userID)
 
 	allExercises, err := storage.DB.GetExercisesForTopic(req.TopicID, promptHash)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get exercises: %v", err), http.StatusInternalServerError)
 		return
 	}
+	log.Printf("[EXERCISES] Found %d exercises in cache for topic %s", len(allExercises), req.TopicID)
 
 	var finalExercises []*storage.Exercise
 	if userID == "" {
 		// Guest user logic - only serve from cache, never generate.
+		log.Printf("[EXERCISES] Guest user mode - serving random exercises from cache")
 		finalExercises = getRandomExercises(allExercises, 10)
 	} else {
 		// Authenticated user SRS logic
+		log.Printf("[EXERCISES] Authenticated user %s - applying SRS logic", userID)
 		userViews, err := storage.DB.GetUserExerciseViews(userID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
@@ -596,6 +600,33 @@ func getUserIDFromRequest(r *http.Request) string {
 		return userID
 	}
 	return ""
+}
+
+// withOptionalAuth is a middleware that extracts user ID from cookie if present,
+// but allows the request to proceed even if no authentication is provided.
+func withOptionalAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie(cookieName)
+		if err != nil {
+			// No cookie, proceed as guest user
+			log.Printf("[AUTH] No session cookie found, proceeding as guest")
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		var userID string
+		if err = sc.Decode(cookieName, cookie.Value, &userID); err != nil {
+			// Invalid cookie, proceed as guest user
+			log.Printf("[AUTH] Invalid cookie received: %v, proceeding as guest", err)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Valid cookie - add user ID to context
+		log.Printf("[AUTH] Valid session found for user %s", userID)
+		ctx := context.WithValue(r.Context(), userContextKey, userID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
 }
 
 // withAuth is a middleware that checks for a valid user session cookie.

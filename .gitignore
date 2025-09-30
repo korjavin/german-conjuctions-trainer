@@ -30,3 +30,5 @@ logs/
 /german-grammar-trainer
 /audio_cache
 /german.db*
+node_modules
+pnpm-lock.yaml
