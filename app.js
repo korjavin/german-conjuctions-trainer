@@ -443,6 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button id="same-exercises-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold text-lg">
                     Practice Same Exercises
                 </button>
+                ${state.isLoggedIn ? '<button id="view-progress-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold text-lg">View Your Progress</button>' : ''}
             </div>
         `;
 
@@ -453,6 +454,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add event listeners for the buttons
         document.getElementById('new-session-btn').addEventListener('click', resetForNewSession);
         document.getElementById('same-exercises-btn').addEventListener('click', resetForSameExercises);
+
+        if (state.isLoggedIn) {
+            const viewProgressBtn = document.getElementById('view-progress-btn');
+            if (viewProgressBtn) {
+                viewProgressBtn.addEventListener('click', showUserExerciseStats);
+            }
+        }
 
         // --- Chart.js Implementation ---
         const mistakesCount = state.exercisesWithMistakes.size;
