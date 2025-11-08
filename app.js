@@ -25,7 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const emptyStateContainer = document.getElementById('empty-state-container');
 
     const statsMistakesEl = document.getElementById('stats-mistakes');
-    const statsHintsEl = document.getElementById('stats-hints');
 
     // Topics management elements
     const topicsList = document.getElementById('topics-list');
@@ -205,7 +204,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateStats() {
         statsMistakesEl.textContent = `${state.mistakes}`;
-        statsHintsEl.textContent = `${state.hintsUsed}`;
     }
 
     // --- Exercise Rendering and Logic ---
