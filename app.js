@@ -1455,16 +1455,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function init() {
         checkAuthStatus();
         loadTopics();
-        
+
         // Start with sample exercises for testing
         state.exercises = sampleExercises.exercises;
+        state.exerciseIds = []; // Sample exercises don't have IDs
         state.currentExerciseIndex = 0;
         state.mistakes = 0;
         state.hintsUsed = 0;
         state.sessionTime = 0;
         state.isSessionComplete = false;
+        state.exercisesWithMistakes = new Set();
+        state.exercisesWithHints = new Set();
+        state.exercisePerformance = new Map(); // Empty for sample exercises
         state.startTime = Date.now();
-        
+
         updateStats();
         renderExercise();
     }
