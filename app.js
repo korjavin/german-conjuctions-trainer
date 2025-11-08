@@ -24,8 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressPercentage = document.getElementById('progress-percentage');
     const emptyStateContainer = document.getElementById('empty-state-container');
 
-    const statsMistakesEl = document.getElementById('stats-mistakes');
-
     // Topics management elements
     const topicsList = document.getElementById('topics-list');
     const addTopicBtn = document.getElementById('add-topic-btn');
@@ -203,7 +201,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStats() {
-        statsMistakesEl.textContent = `${state.mistakes}`;
+        // Stats are now tracked per-exercise and displayed in the history modal
+        // This function is kept for compatibility but no longer updates header display
     }
 
     // --- Exercise Rendering and Logic ---
