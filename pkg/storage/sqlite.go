@@ -649,7 +649,7 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 }
 
 // GetUserExerciseHistory returns the practice history for all exercises a user has attempted
-func (s *SQLiteStorage) GetUserExerciseHistory(userID string) ([]*ExerciseHistoryItem, error) {
+func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error) {
 	query := `
 		SELECT
 			uev.exercise_id,
@@ -666,10 +666,19 @@ func (s *SQLiteStorage) GetUserExerciseHistory(userID string) ([]*ExerciseHistor
 		JOIN exercises e ON uev.exercise_id = e.id
 		JOIN topics t ON e.topic_id = t.id
 		WHERE uev.user_id = ?
-		ORDER BY uev.last_viewed DESC
 	`
 
-	rows, err := s.db.Query(query, userID)
+	args := []interface{}{userID}
+
+	// Add topic filter if specified
+	if topicID != "" {
+		query += " AND e.topic_id = ?"
+		args = append(args, topicID)
+	}
+
+	query += " ORDER BY uev.last_viewed DESC"
+
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

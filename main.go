@@ -658,14 +658,17 @@ func handleExerciseHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	history, err := storage.DB.GetUserExerciseHistory(userID)
+	// Get optional topic_id parameter
+	topicID := r.URL.Query().Get("topic_id")
+
+	history, err := storage.DB.GetUserExerciseHistory(userID, topicID)
 	if err != nil {
 		log.Printf("ERROR: failed to get exercise history for user %s: %v", userID, err)
 		http.Error(w, fmt.Sprintf("Failed to get exercise history: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[HISTORY] Retrieved %d exercise history items for user %s", len(history), userID)
+	log.Printf("[HISTORY] Retrieved %d exercise history items for user %s (topic: %s)", len(history), userID, topicID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

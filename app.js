@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const statsBtn = document.getElementById('stats-btn');
+    const historyBtn = document.getElementById('history-btn');
     const replayAudioBtn = document.getElementById('replay-audio-btn');
     const nextExerciseBtn = document.getElementById('next-exercise-btn');
     const exerciseControls = document.getElementById('exercise-controls');
@@ -68,6 +69,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const statsCloseBtn = document.getElementById('stats-close-btn');
     const statsReadyToRepeatEl = document.getElementById('stats-ready-to-repeat');
     const statsTrainedEl = document.getElementById('stats-trained');
+
+    // History Modal Elements
+    const historyModal = document.getElementById('history-modal');
+    const historyCloseBtn = document.getElementById('history-close-btn');
+    const historyTopicName = document.getElementById('history-topic-name');
+    const historyLoading = document.getElementById('history-loading');
+    const historyEmpty = document.getElementById('history-empty');
+    const historyContent = document.getElementById('history-content');
+    const historyPagination = document.getElementById('history-pagination');
+    const historyPrevBtn = document.getElementById('history-prev-btn');
+    const historyNextBtn = document.getElementById('history-next-btn');
+    const historyPageInfo = document.getElementById('history-page-info');
 
     // --- Application State ---
     let state = {
@@ -93,7 +106,10 @@ document.addEventListener('DOMContentLoaded', () => {
         timerInterval: null,
         isLoggedIn: false,
         userId: null,
-        isAdmin: false
+        isAdmin: false,
+        historyData: [],
+        historyPage: 1,
+        historyItemsPerPage: 10
     };
 
     // --- Sample Data ---
@@ -1114,6 +1130,27 @@ document.addEventListener('DOMContentLoaded', () => {
         statsModal.classList.add('hidden');
     });
 
+    historyBtn.addEventListener('click', showExerciseHistory);
+
+    historyCloseBtn.addEventListener('click', () => {
+        historyModal.classList.add('hidden');
+    });
+
+    historyPrevBtn.addEventListener('click', () => {
+        if (state.historyPage > 1) {
+            state.historyPage--;
+            renderHistoryPage();
+        }
+    });
+
+    historyNextBtn.addEventListener('click', () => {
+        const totalPages = Math.ceil(state.historyData.length / state.historyItemsPerPage);
+        if (state.historyPage < totalPages) {
+            state.historyPage++;
+            renderHistoryPage();
+        }
+    });
+
     logoutBtn.addEventListener('click', () => {
         window.location.href = '/auth/logout';
     });
@@ -1163,10 +1200,12 @@ document.addEventListener('DOMContentLoaded', () => {
             loginBtn.classList.add('hidden');
             logoutBtn.classList.remove('hidden');
             statsBtn.classList.remove('hidden');
+            historyBtn.classList.remove('hidden');
         } else {
             loginBtn.classList.remove('hidden');
             logoutBtn.classList.add('hidden');
             statsBtn.classList.add('hidden');
+            historyBtn.classList.add('hidden');
         }
 
         if (state.isAdmin) {
@@ -1201,6 +1240,144 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching exercise stats:', error);
             alert('Could not load your progress stats. Please try again later.');
         }
+    }
+
+    async function showExerciseHistory() {
+        if (!state.isLoggedIn) {
+            alert("Please log in to view your exercise history.");
+            return;
+        }
+
+        // Show modal and loading state
+        historyModal.classList.remove('hidden');
+        historyLoading.classList.remove('hidden');
+        historyEmpty.classList.add('hidden');
+        historyContent.classList.add('hidden');
+        historyPagination.classList.add('hidden');
+
+        try {
+            // Build URL with optional topic filter
+            let url = '/api/exercises/history';
+            if (state.currentTopicId) {
+                url += `?topic_id=${state.currentTopicId}`;
+                const topic = state.topics.find(t => t.id === state.currentTopicId);
+                historyTopicName.textContent = topic ? topic.name : 'Selected Topic';
+            } else {
+                historyTopicName.textContent = 'All Topics';
+            }
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                if (response.status === 401) {
+                    alert("Your session has expired. Please log in again.");
+                    historyModal.classList.add('hidden');
+                    return;
+                }
+                throw new Error('Failed to fetch exercise history');
+            }
+
+            const data = await response.json();
+            state.historyData = data.history || [];
+            state.historyPage = 1;
+
+            historyLoading.classList.add('hidden');
+
+            if (state.historyData.length === 0) {
+                historyEmpty.classList.remove('hidden');
+            } else {
+                historyContent.classList.remove('hidden');
+                renderHistoryPage();
+            }
+
+        } catch (error) {
+            console.error('Error fetching exercise history:', error);
+            historyLoading.classList.add('hidden');
+            alert('Could not load exercise history. Please try again later.');
+        }
+    }
+
+    function renderHistoryPage() {
+        const start = (state.historyPage - 1) * state.historyItemsPerPage;
+        const end = start + state.historyItemsPerPage;
+        const pageData = state.historyData.slice(start, end);
+        const totalPages = Math.ceil(state.historyData.length / state.historyItemsPerPage);
+
+        // Render items
+        historyContent.innerHTML = '';
+        pageData.forEach(item => {
+            const itemEl = createHistoryItem(item);
+            historyContent.appendChild(itemEl);
+        });
+
+        // Update pagination
+        if (totalPages > 1) {
+            historyPagination.classList.remove('hidden');
+            historyPageInfo.textContent = `Page ${state.historyPage} of ${totalPages}`;
+            historyPrevBtn.disabled = state.historyPage === 1;
+            historyNextBtn.disabled = state.historyPage === totalPages;
+        } else {
+            historyPagination.classList.add('hidden');
+        }
+    }
+
+    function createHistoryItem(item) {
+        const div = document.createElement('div');
+        div.className = 'border rounded-lg p-4 bg-white hover:shadow-md transition-shadow';
+
+        // Calculate time info
+        const lastViewed = new Date(item.last_viewed);
+        const daysAgo = Math.floor((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60 * 24));
+        const timeText = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`;
+
+        // Determine status badge
+        let statusBadge = '';
+        if (item.ready_to_repeat) {
+            statusBadge = '<span class="inline-block px-3 py-1 text-sm font-semibold text-white bg-green-500 rounded-full">Ready to Practice</span>';
+        } else {
+            const daysUntilReady = Math.ceil(item.next_review_days - ((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60 * 24)));
+            if (daysUntilReady > 0) {
+                statusBadge = `<span class="inline-block px-3 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full">Ready in ${daysUntilReady}d</span>`;
+            }
+        }
+
+        // Success rate calculation
+        const successRate = item.total_attempts > 0
+            ? Math.round((item.successful_attempts / item.total_attempts) * 100)
+            : 0;
+
+        div.innerHTML = `
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-gray-800">${escapeHtml(item.german_sentence)}</h3>
+                    <p class="text-sm text-gray-600 mt-1">${escapeHtml(item.english_hint)}</p>
+                </div>
+                <div class="ml-4">
+                    ${statusBadge}
+                </div>
+            </div>
+            <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
+                <div class="flex space-x-4 text-sm text-gray-600">
+                    <span class="font-medium">${item.topic_name}</span>
+                    <span>•</span>
+                    <span>${timeText}</span>
+                </div>
+                <div class="flex space-x-4 text-sm">
+                    <span class="text-green-600" title="Successful attempts">✓ ${item.successful_attempts}</span>
+                    <span class="text-red-600" title="Failed attempts">✗ ${item.failed_attempts}</span>
+                    <span class="text-blue-600" title="Hints used">💡 ${item.hints_used}</span>
+                    <span class="text-gray-600" title="Total attempts">Σ ${item.total_attempts}</span>
+                    <span class="font-semibold ${successRate >= 75 ? 'text-green-600' : successRate >= 50 ? 'text-yellow-600' : 'text-red-600'}" title="Success rate">${successRate}%</span>
+                </div>
+            </div>
+        `;
+
+        return div;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     async function saveUserStats() {

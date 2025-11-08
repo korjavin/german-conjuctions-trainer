@@ -117,7 +117,7 @@ type Storage interface {
 	UpdateUserStats(stats *UserStats) error
 	UpdateUserSetting(userID, lastTopicID string) error
 	GetUserExerciseStats(userID string) (*UserExerciseStats, error)
-	GetUserExerciseHistory(userID string) ([]*ExerciseHistoryItem, error)
+	GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error)
 
 	// Initialization
 	InitializeDefaultTopics()
