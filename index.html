@@ -42,6 +42,7 @@
                 <div class="flex items-center space-x-4">
                     <button id="login-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">Login with Google</button>
                     <button id="stats-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold hidden">Stats</button>
+                    <button id="history-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold hidden">History</button>
                     <button id="logout-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold hidden">Logout</button>
                     <button id="settings-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">Settings</button>
                 </div>
@@ -246,6 +247,42 @@
                     <span class="font-semibold text-green-800">Trained (Strengthening)</span>
                     <span id="stats-trained" class="text-2xl font-bold text-green-800">0</span>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exercise History Modal -->
+    <div id="history-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden overflow-y-auto">
+        <div class="card rounded-lg p-8 w-full max-w-6xl max-h-screen overflow-y-auto m-4">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">Practice History</h2>
+                    <p id="history-topic-name" class="text-sm text-gray-600 mt-1">All Topics</p>
+                </div>
+                <button id="history-close-btn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+
+            <div id="history-loading" class="text-center py-8 hidden">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+                <p class="mt-4 text-gray-600">Loading history...</p>
+            </div>
+
+            <div id="history-empty" class="text-center py-8 hidden">
+                <p class="text-gray-600">No practice history yet. Complete some exercises to see your progress!</p>
+            </div>
+
+            <div id="history-content" class="space-y-3">
+                <!-- History items will be dynamically inserted here -->
+            </div>
+
+            <div id="history-pagination" class="flex justify-center items-center space-x-4 mt-6 hidden">
+                <button id="history-prev-btn" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Previous
+                </button>
+                <span id="history-page-info" class="text-gray-600">Page 1</span>
+                <button id="history-next-btn" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Next
+                </button>
             </div>
         </div>
     </div>

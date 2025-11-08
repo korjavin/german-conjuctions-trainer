@@ -232,6 +232,8 @@ func main() {
 
 	// API endpoints
 	http.HandleFunc("/api/exercises", withOptionalAuth(handleExercises))
+	http.HandleFunc("/api/exercises/complete", withAuth(handleExercisesComplete))
+	http.HandleFunc("/api/exercises/history", withAuth(handleExerciseHistory))
 	http.HandleFunc("/api/topics", withOptionalAuth(handleTopics))
 	http.HandleFunc("/api/topics/", withOptionalAuth(handleTopicByID))
 	http.HandleFunc("/api/versions/", withOptionalAuth(handleVersions))
@@ -523,41 +525,22 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 
 		finalExercises = getRandomExercises(eligibleExercises, 10)
 
-		// Update views for the selected exercises
-		var viewsToUpdate []*storage.UserExerciseView
-		now := time.Now()
-		for _, ex := range finalExercises {
-			view, exists := userViews[ex.ID]
-			if !exists {
-				log.Printf("[SRS] User %s viewing exercise %s for the first time", userID, ex.ID)
-				view = &storage.UserExerciseView{
-					UserID:     userID,
-					ExerciseID: ex.ID,
-				}
-			} else {
-				log.Printf("[SRS] User %s viewing exercise %s again (counter was: %d)", userID, ex.ID, view.RepetitionCounter)
-			}
-			view.LastViewed = now
-			view.RepetitionCounter++
-			viewsToUpdate = append(viewsToUpdate, view)
-			log.Printf("[SRS] Updated: exercise %s, counter=%d, last_viewed=%s", ex.ID, view.RepetitionCounter, now.Format(time.RFC3339))
-		}
-		if err := storage.DB.UpdateUserExerciseViews(viewsToUpdate); err != nil {
-			log.Printf("ERROR: failed to update user exercise views: %v", err)
-			// Don't block user, just log the error
-		} else {
-			log.Printf("[SRS] Successfully updated %d exercise views for user %s", len(viewsToUpdate), userID)
-		}
+		// Note: We no longer auto-increment the repetition counter here.
+		// Instead, the counter will be updated when the user completes the exercise
+		// via the /api/exercises/complete endpoint based on their performance.
+		log.Printf("[SRS] Selected %d exercises for user %s", len(finalExercises), userID)
 	}
 
 	// Prepare response
 	type ExerciseResponse struct {
+		ID            string          `json:"id"`
 		ExerciseJSON  json.RawMessage `json:"exercise_json"`
 		AudioFilePath string          `json:"audio_file_path"`
 	}
 	var responseExercises []ExerciseResponse
 	for _, ex := range finalExercises {
 		responseExercises = append(responseExercises, ExerciseResponse{
+			ID:            ex.ID,
 			ExerciseJSON:  []byte(ex.ExerciseJSON),
 			AudioFilePath: ex.AudioFilePath,
 		})
@@ -565,6 +548,140 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string][]ExerciseResponse{"exercises": responseExercises})
+}
+
+// handleExercisesComplete records the completion of exercises with performance data
+func handleExercisesComplete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserIDFromRequest(r)
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	type ExerciseCompletion struct {
+		ExerciseID string `json:"exercise_id"`
+		HintsUsed  int    `json:"hints_used"`
+		Mistakes   int    `json:"mistakes"`
+	}
+
+	type CompletionRequest struct {
+		Completions []ExerciseCompletion `json:"completions"`
+	}
+
+	var req CompletionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[COMPLETION] User %s completing %d exercises", userID, len(req.Completions))
+
+	// Get existing user views
+	userViews, err := storage.DB.GetUserExerciseViews(userID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	now := time.Now()
+	var viewsToUpdate []*storage.UserExerciseView
+
+	for _, completion := range req.Completions {
+		view, exists := userViews[completion.ExerciseID]
+		if !exists {
+			// Create new view if it doesn't exist
+			view = &storage.UserExerciseView{
+				UserID:     userID,
+				ExerciseID: completion.ExerciseID,
+			}
+		}
+
+		// Update statistics
+		view.LastViewed = now
+		view.TotalAttempts++
+		view.HintsUsed += completion.HintsUsed
+		view.MistakesMade += completion.Mistakes
+
+		// Determine if this was a perfect attempt
+		isPerfect := completion.HintsUsed == 0 && completion.Mistakes == 0
+
+		if isPerfect {
+			// Perfect attempt: increment counter and successful attempts
+			view.RepetitionCounter++
+			view.SuccessfulAttempts++
+			log.Printf("[COMPLETION] Exercise %s: PERFECT - counter: %d -> %d",
+				completion.ExerciseID, view.RepetitionCounter-1, view.RepetitionCounter)
+		} else if completion.Mistakes > 0 {
+			// Failed attempt: decrement counter (minimum 0) and increment failed attempts
+			oldCounter := view.RepetitionCounter
+			view.RepetitionCounter = max(0, view.RepetitionCounter-1)
+			view.FailedAttempts++
+			log.Printf("[COMPLETION] Exercise %s: FAILED (%d mistakes) - counter: %d -> %d",
+				completion.ExerciseID, completion.Mistakes, oldCounter, view.RepetitionCounter)
+		} else {
+			// Used hints but no mistakes: keep counter same
+			log.Printf("[COMPLETION] Exercise %s: HINTS USED (%d) - counter stays at %d",
+				completion.ExerciseID, completion.HintsUsed, view.RepetitionCounter)
+		}
+
+		viewsToUpdate = append(viewsToUpdate, view)
+	}
+
+	// Update all views in the database
+	if err := storage.DB.UpdateUserExerciseViews(viewsToUpdate); err != nil {
+		log.Printf("ERROR: failed to update user exercise views: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to update views: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[COMPLETION] Successfully updated %d exercise completions for user %s", len(viewsToUpdate), userID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// handleExerciseHistory returns the practice history for all exercises a user has attempted
+func handleExerciseHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserIDFromRequest(r)
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get optional topic_id parameter
+	topicID := r.URL.Query().Get("topic_id")
+
+	history, err := storage.DB.GetUserExerciseHistory(userID, topicID)
+	if err != nil {
+		log.Printf("ERROR: failed to get exercise history for user %s: %v", userID, err)
+		http.Error(w, fmt.Sprintf("Failed to get exercise history: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[HISTORY] Retrieved %d exercise history items for user %s (topic: %s)", len(history), userID, topicID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"history": history,
+	})
+}
+
+// max returns the maximum of two integers
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func getEligibleExercisesForSRS(allExercises []*storage.Exercise, userViews map[string]*storage.UserExerciseView) []*storage.Exercise {
