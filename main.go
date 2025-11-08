@@ -242,7 +242,7 @@ func main() {
 	http.HandleFunc("/auth/google/callback", handleGoogleCallback)
 	http.HandleFunc("/api/auth/status", handleAuthStatus)
 	http.HandleFunc("/auth/logout", handleLogout)
-	http.HandleFunc("/api/auth/is_admin", handleIsAdmin)
+	http.HandleFunc("/api/auth/is_admin", withOptionalAuth(handleIsAdmin))
 
 	// User stats and settings endpoints (protected by withAuth middleware)
 	http.HandleFunc("/api/user/stats", withAuth(handleUserStats))
