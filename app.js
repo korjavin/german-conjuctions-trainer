@@ -74,6 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyModal = document.getElementById('history-modal');
     const historyCloseBtn = document.getElementById('history-close-btn');
     const historyTopicName = document.getElementById('history-topic-name');
+    const historySummary = document.getElementById('history-summary');
+    const historyTotalCount = document.getElementById('history-total-count');
+    const historyReadyCount = document.getElementById('history-ready-count');
+    const historySuccessRate = document.getElementById('history-success-rate');
+    const historyTotalAttempts = document.getElementById('history-total-attempts');
     const historyLoading = document.getElementById('history-loading');
     const historyEmpty = document.getElementById('history-empty');
     const historyContent = document.getElementById('history-content');
@@ -425,43 +430,49 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isLoggedIn) {
             saveUserStats();
         }
-        
-        const accuracy = state.exercises.length > 0 ? 
-            Math.round(((state.exercises.length - state.mistakes) / state.exercises.length) * 100) : 0;
-        const avgTimePerExercise = state.exercises.length > 0 ? 
+
+        // Calculate session statistics
+        const mistakesCount = state.exercisesWithMistakes.size;
+        let solvedWithHintsOnlyCount = 0;
+        let solvedAloneCount = 0;
+
+        for (let i = 0; i < state.exercises.length; i++) {
+            const hadMistake = state.exercisesWithMistakes.has(i);
+            const hadHint = state.exercisesWithHints.has(i);
+
+            if (!hadMistake && !hadHint) {
+                solvedAloneCount++;
+            } else if (!hadMistake && hadHint) {
+                solvedWithHintsOnlyCount++;
+            }
+        }
+
+        const avgTimePerExercise = state.exercises.length > 0 ?
             (state.sessionTime / state.exercises.length).toFixed(1) : 0;
 
         // Create statistics display
         const statsContainer = document.createElement('div');
         statsContainer.id = 'statistics-container';
         statsContainer.className = 'card rounded-lg p-8 text-center';
-        
+
         statsContainer.innerHTML = `
             <h2 class="text-3xl font-bold text-gray-800 mb-6">Session Complete! 🎉</h2>
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-[#A58D78]">${state.exercises.length}</div>
-                    <div class="text-gray-600">Exercises Completed</div>
+                    <div class="text-2xl font-bold text-[#22C55E]">${solvedAloneCount}</div>
+                    <div class="text-gray-600">Perfect</div>
                 </div>
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-[#A58D78]">${state.mistakes}</div>
-                    <div class="text-gray-600">Total Mistakes</div>
+                    <div class="text-2xl font-bold text-[#3B82F6]">${solvedWithHintsOnlyCount}</div>
+                    <div class="text-gray-600">With Hints</div>
                 </div>
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-[#A58D78]">${state.hintsUsed}</div>
-                    <div class="text-gray-600">Hints Used</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-[#A58D78]">${accuracy}%</div>
-                    <div class="text-gray-600">Accuracy</div>
+                    <div class="text-2xl font-bold text-[#EF4444]">${mistakesCount}</div>
+                    <div class="text-gray-600">With Mistakes</div>
                 </div>
                 <div class="text-center">
                     <div class="text-2xl font-bold text-[#A58D78]">${state.sessionTime}s</div>
                     <div class="text-gray-600">Total Time</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-[#A58D78]">${avgTimePerExercise}s</div>
-                    <div class="text-gray-600">Avg per Exercise</div>
                 </div>
             </div>
             <div class="mb-8">
@@ -497,32 +508,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- Chart.js Implementation ---
-        const mistakesCount = state.exercisesWithMistakes.size;
-        let solvedWithHintsOnlyCount = 0;
-        let solvedAloneCount = 0;
-
-        for (let i = 0; i < state.exercises.length; i++) {
-            const hadMistake = state.exercisesWithMistakes.has(i);
-            const hadHint = state.exercisesWithHints.has(i);
-
-            if (!hadMistake && !hadHint) {
-                solvedAloneCount++;
-            } else if (!hadMistake && hadHint) {
-                solvedWithHintsOnlyCount++;
-            }
-        }
-
         const ctx = document.getElementById('session-chart').getContext('2d');
         new Chart(ctx, {
             type: 'pie',
             data: {
-                labels: ['Mistakes', 'Hints Only', 'Correct'],
+                labels: ['Perfect', 'With Hints', 'With Mistakes'],
                 datasets: [{
-                    data: [mistakesCount, solvedWithHintsOnlyCount, solvedAloneCount],
+                    data: [solvedAloneCount, solvedWithHintsOnlyCount, mistakesCount],
                     backgroundColor: [
-                        '#EF4444', // Red for mistakes
-                        '#3B82F6', // Blue for hints
-                        '#22C55E'  // Green for solved alone
+                        '#22C55E',  // Green for perfect
+                        '#3B82F6',  // Blue for hints
+                        '#EF4444'   // Red for mistakes
                     ],
                     hoverOffset: 4
                 }]
@@ -1284,7 +1280,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (state.historyData.length === 0) {
                 historyEmpty.classList.remove('hidden');
+                historySummary.classList.add('hidden');
             } else {
+                // Calculate summary statistics
+                const readyCount = state.historyData.filter(item => item.ready_to_repeat).length;
+                const totalAttempts = state.historyData.reduce((sum, item) => sum + item.total_attempts, 0);
+                const totalSuccessful = state.historyData.reduce((sum, item) => sum + item.successful_attempts, 0);
+                const successRate = totalAttempts > 0 ? Math.round((totalSuccessful / totalAttempts) * 100) : 0;
+
+                // Update summary display
+                historyTotalCount.textContent = state.historyData.length;
+                historyReadyCount.textContent = readyCount;
+                historySuccessRate.textContent = successRate + '%';
+                historyTotalAttempts.textContent = totalAttempts;
+
+                historySummary.classList.remove('hidden');
                 historyContent.classList.remove('hidden');
                 renderHistoryPage();
             }
@@ -1292,6 +1302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error fetching exercise history:', error);
             historyLoading.classList.add('hidden');
+            historySummary.classList.add('hidden');
             alert('Could not load exercise history. Please try again later.');
         }
     }

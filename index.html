@@ -29,14 +29,7 @@
                             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                         </svg>
                         <span id="stats-mistakes" class="text-lg font-semibold text-white">0</span>
-                        <span class="text-sm text-white/80">Mistakes</span>
-                    </div>
-                    <div class="flex items-center space-x-2 bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
-                        <svg class="w-5 h-5 text-blue-300" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path>
-                        </svg>
-                        <span id="stats-hints" class="text-lg font-semibold text-white">0</span>
-                        <span class="text-sm text-white/80">Hints</span>
+                        <span class="text-sm text-white/80">Mistakes (Session)</span>
                     </div>
                 </div>
                 <div class="flex items-center space-x-4">
@@ -260,6 +253,25 @@
                     <p id="history-topic-name" class="text-sm text-gray-600 mt-1">All Topics</p>
                 </div>
                 <button id="history-close-btn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+
+            <div id="history-summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 hidden">
+                <div class="bg-blue-100 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-blue-800" id="history-total-count">0</div>
+                    <div class="text-sm text-blue-600">Total Practiced</div>
+                </div>
+                <div class="bg-green-100 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-green-800" id="history-ready-count">0</div>
+                    <div class="text-sm text-green-600">Ready to Practice</div>
+                </div>
+                <div class="bg-purple-100 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-purple-800" id="history-success-rate">0%</div>
+                    <div class="text-sm text-purple-600">Success Rate</div>
+                </div>
+                <div class="bg-orange-100 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-orange-800" id="history-total-attempts">0</div>
+                    <div class="text-sm text-orange-600">Total Attempts</div>
+                </div>
             </div>
 
             <div id="history-loading" class="text-center py-8 hidden">
