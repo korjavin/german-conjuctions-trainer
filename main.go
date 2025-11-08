@@ -232,9 +232,9 @@ func main() {
 
 	// API endpoints
 	http.HandleFunc("/api/exercises", withOptionalAuth(handleExercises))
-	http.HandleFunc("/api/topics", handleTopics)
-	http.HandleFunc("/api/topics/", handleTopicByID)
-	http.HandleFunc("/api/versions/", handleVersions)
+	http.HandleFunc("/api/topics", withOptionalAuth(handleTopics))
+	http.HandleFunc("/api/topics/", withOptionalAuth(handleTopicByID))
+	http.HandleFunc("/api/versions/", withOptionalAuth(handleVersions))
 	http.HandleFunc("/api/last-refined-prompt", handleGetLastRefinedPrompt)
 
 	// Auth endpoints
