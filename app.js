@@ -76,13 +76,15 @@ document.addEventListener('DOMContentLoaded', () => {
         currentTopicId: '',
         topics: [],
         exercises: [],
+        exerciseIds: [], // Store exercise IDs corresponding to exercises
         currentExerciseIndex: 0,
         userSentence: [],
         isLocked: false,
         mistakes: 0,
         hintsUsed: 0,
-        exercisesWithMistakes: new Set(), // Track exercises with mistakes
-        exercisesWithHints: new Set(), // Track exercises with hints
+        exercisesWithMistakes: new Set(), // Track exercises with mistakes (by index)
+        exercisesWithHints: new Set(), // Track exercises with hints (by index)
+        exercisePerformance: new Map(), // Track per-exercise performance: exerciseId -> {hints, mistakes}
         startTime: null,
         sessionTime: 0,
         isSessionComplete: false,
@@ -310,6 +312,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Incorrect word
             state.mistakes++;
             state.exercisesWithMistakes.add(state.currentExerciseIndex);
+
+            // Track per-exercise mistake
+            const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+            if (exerciseId && state.exercisePerformance.has(exerciseId)) {
+                const perf = state.exercisePerformance.get(exerciseId);
+                perf.mistakes++;
+            }
+
             updateStats();
 
             button.classList.add('incorrect-answer-feedback');
@@ -372,6 +382,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     button.classList.add('hint-word');
                     state.hintsUsed++;
                     state.exercisesWithHints.add(state.currentExerciseIndex);
+
+                    // Track per-exercise hint
+                    const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+                    if (exerciseId && state.exercisePerformance.has(exerciseId)) {
+                        const perf = state.exercisePerformance.get(exerciseId);
+                        perf.hints++;
+                    }
+
                     updateStats();
 
                     setTimeout(() => {
@@ -774,11 +792,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     ...ex.exercise_json,
                     audio_file_path: ex.audio_file_path
                 }));
+                state.exerciseIds = data.exercises.map(ex => ex.id);
                 state.currentExerciseIndex = 0;
                 state.mistakes = 0;
                 state.hintsUsed = 0;
                 state.sessionTime = 0;
                 state.isSessionComplete = false;
+                state.exercisesWithMistakes = new Set();
+                state.exercisesWithHints = new Set();
+                state.exercisePerformance = new Map();
+
+                // Initialize performance tracking for each exercise
+                state.exerciseIds.forEach(id => {
+                    state.exercisePerformance.set(id, { hints: 0, mistakes: 0 });
+                });
+
                 state.startTime = Date.now();
                 updateStats();
                 renderExercise();
@@ -1177,6 +1205,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveUserStats() {
         try {
+            // Save aggregate stats
             await fetch('/api/user/stats', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1187,8 +1216,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     total_time: state.sessionTime,
                 })
             });
+
+            // Save per-exercise completion data
+            await saveExerciseCompletions();
         } catch (error) {
             console.error('Error saving user stats:', error);
+        }
+    }
+
+    async function saveExerciseCompletions() {
+        try {
+            // Build completions array from exercisePerformance map
+            const completions = [];
+            state.exercisePerformance.forEach((perf, exerciseId) => {
+                completions.push({
+                    exercise_id: exerciseId,
+                    hints_used: perf.hints,
+                    mistakes: perf.mistakes
+                });
+            });
+
+            if (completions.length > 0) {
+                await fetch('/api/exercises/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ completions })
+                });
+                console.log('Saved completion data for', completions.length, 'exercises');
+            }
+        } catch (error) {
+            console.error('Error saving exercise completions:', error);
         }
     }
 
