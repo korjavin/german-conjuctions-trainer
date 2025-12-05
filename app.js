@@ -6,12 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const topicSearch = document.getElementById('topic-search');
     const topicDropdown = document.getElementById('topic-dropdown');
 
-    // Mobile topic menu elements
-    const topicMenuBtn = document.getElementById('topic-menu-btn');
-    const topicMenuClose = document.getElementById('topic-menu-close');
-    const topicSelectionSection = document.getElementById('topic-selection-section');
-    const topicMenuOverlay = document.getElementById('topic-menu-overlay');
-
     const generateBtn = document.getElementById('generate-btn');
     const hintBtn = document.getElementById('hint-btn');
     const loadingSpinner = document.getElementById('loading-spinner');
@@ -978,25 +972,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Mobile Topic Menu Functions ---
-    function openTopicMenu() {
-        topicSelectionSection.classList.remove('-translate-x-full');
-        topicMenuOverlay.classList.remove('hidden');
-        document.body.style.overflow = 'hidden'; // Prevent background scrolling
-    }
-
-    function closeTopicMenu() {
-        topicSelectionSection.classList.add('-translate-x-full');
-        topicMenuOverlay.classList.add('hidden');
-        document.body.style.overflow = ''; // Restore scrolling
-    }
-
     // --- Event Listeners ---
-    // Mobile topic menu
-    topicMenuBtn.addEventListener('click', openTopicMenu);
-    topicMenuClose.addEventListener('click', closeTopicMenu);
-    topicMenuOverlay.addEventListener('click', closeTopicMenu);
-
     settingsBtn.addEventListener('click', () => {
         loadTopics(); // Refresh topics when opening settings
         settingsModal.classList.remove('hidden');
@@ -1058,7 +1034,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     generateBtn.addEventListener('click', () => {
-        closeTopicMenu(); // Close mobile menu when starting practice
         fetchExercises();
     });
     hintBtn.addEventListener('click', handleHintClick);
