@@ -6,6 +6,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const topicSearch = document.getElementById('topic-search');
     const topicDropdown = document.getElementById('topic-dropdown');
 
+    // Mobile topic menu elements
+    const topicMenuBtn = document.getElementById('topic-menu-btn');
+    const topicMenuClose = document.getElementById('topic-menu-close');
+    const topicSelectionSection = document.getElementById('topic-selection-section');
+    const topicMenuOverlay = document.getElementById('topic-menu-overlay');
+
     const generateBtn = document.getElementById('generate-btn');
     const hintBtn = document.getElementById('hint-btn');
     const loadingSpinner = document.getElementById('loading-spinner');
@@ -24,10 +30,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressPercentage = document.getElementById('progress-percentage');
     const emptyStateContainer = document.getElementById('empty-state-container');
 
-    const statsMistakesEl = document.getElementById('stats-mistakes');
-
     // Topics management elements
     const topicsList = document.getElementById('topics-list');
+    const topicSort = document.getElementById('topic-sort');
     const addTopicBtn = document.getElementById('add-topic-btn');
     const addTopicForm = document.getElementById('add-topic-form');
     const newTopicName = document.getElementById('new-topic-name');
@@ -92,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lastAudioText: '',
         currentTopicId: '',
         topics: [],
+        topicSortOrder: localStorage.getItem('topicSortOrder') || 'name-asc', // Default to name ascending
         exercises: [],
         exerciseIds: [], // Store exercise IDs corresponding to exercises
         currentExerciseIndex: 0,
@@ -191,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addPunctuationIfNeeded(exercise, userSentence) {
         const correctWordArray = exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [];
-        
+
         while (userSentence.length < correctWordArray.length) {
             const nextToken = correctWordArray[userSentence.length];
             if (isPunctuation(nextToken)) {
@@ -200,10 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             }
         }
-    }
-
-    function updateStats() {
-        statsMistakesEl.textContent = `${state.mistakes}`;
     }
 
     // --- Exercise Rendering and Logic ---
@@ -339,8 +341,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 perf.mistakes++;
             }
 
-            updateStats();
-
             button.classList.add('incorrect-answer-feedback');
             setTimeout(() => {
                 button.classList.remove('incorrect-answer-feedback');
@@ -363,8 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hintBtn.classList.add('hidden');
         } else {
             state.mistakes++;
-            updateStats();
-            
+
             // Show incorrect feedback
             const wrongWords = scrambledWordsContainer.querySelectorAll('.btn-word.hidden');
             wrongWords.forEach(btn => {
@@ -408,8 +407,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         const perf = state.exercisePerformance.get(exerciseId);
                         perf.hints++;
                     }
-
-                    updateStats();
 
                     setTimeout(() => {
                         button.classList.remove('hint-word');
@@ -563,8 +560,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Re-enable the generate button
         generateBtn.disabled = false;
 
-        updateStats();
-
         // Automatically fetch new exercises
         fetchExercises();
     }
@@ -595,7 +590,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Re-enable the generate button
         generateBtn.disabled = false;
 
-        updateStats();
         renderExercise();
     }
 
@@ -656,10 +650,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function sortTopics(topics, sortOrder) {
+        const sorted = [...topics]; // Create a copy to avoid mutating original
+
+        switch (sortOrder) {
+            case 'name-asc':
+                sorted.sort((a, b) => a.name.localeCompare(b.name));
+                break;
+            case 'name-desc':
+                sorted.sort((a, b) => b.name.localeCompare(a.name));
+                break;
+            case 'date-newest':
+                sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                break;
+            case 'date-oldest':
+                sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                break;
+        }
+
+        return sorted;
+    }
+
     function renderTopicsList() {
         topicsList.innerHTML = '';
-        
-        state.topics.forEach(topic => {
+
+        // Apply sorting
+        const sortedTopics = sortTopics(state.topics, state.topicSortOrder);
+
+        sortedTopics.forEach(topic => {
             const topicDiv = document.createElement('div');
             topicDiv.className = 'flex justify-between items-center p-3 border rounded-md bg-gray-50';
             
@@ -818,7 +836,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 state.startTime = Date.now();
-                updateStats();
                 renderExercise();
             } else {
                 // This can happen if generation fails or cache is empty and generation is disabled
@@ -961,7 +978,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- Mobile Topic Menu Functions ---
+    function openTopicMenu() {
+        topicSelectionSection.classList.remove('-translate-x-full');
+        topicMenuOverlay.classList.remove('hidden');
+        document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    }
+
+    function closeTopicMenu() {
+        topicSelectionSection.classList.add('-translate-x-full');
+        topicMenuOverlay.classList.add('hidden');
+        document.body.style.overflow = ''; // Restore scrolling
+    }
+
     // --- Event Listeners ---
+    // Mobile topic menu
+    topicMenuBtn.addEventListener('click', openTopicMenu);
+    topicMenuClose.addEventListener('click', closeTopicMenu);
+    topicMenuOverlay.addEventListener('click', closeTopicMenu);
+
     settingsBtn.addEventListener('click', () => {
         loadTopics(); // Refresh topics when opening settings
         settingsModal.classList.remove('hidden');
@@ -972,6 +1007,14 @@ document.addEventListener('DOMContentLoaded', () => {
         hideAddTopicForm();
         hidePromptEditor();
         versionHistory.classList.add('hidden');
+    });
+
+    // Topic sorting
+    topicSort.value = state.topicSortOrder; // Set initial value
+    topicSort.addEventListener('change', (e) => {
+        state.topicSortOrder = e.target.value;
+        localStorage.setItem('topicSortOrder', state.topicSortOrder);
+        renderTopicsList();
     });
 
     addTopicBtn.addEventListener('click', showAddTopicForm);
@@ -1014,7 +1057,10 @@ document.addEventListener('DOMContentLoaded', () => {
         promptEditor.classList.remove('hidden');
     });
 
-    generateBtn.addEventListener('click', fetchExercises);
+    generateBtn.addEventListener('click', () => {
+        closeTopicMenu(); // Close mobile menu when starting practice
+        fetchExercises();
+    });
     hintBtn.addEventListener('click', handleHintClick);
     replayAudioBtn.addEventListener('click', handleReplayAudio);
     nextExerciseBtn.addEventListener('click', handleNextExercise);
@@ -1467,7 +1513,6 @@ document.addEventListener('DOMContentLoaded', () => {
         state.exercisePerformance = new Map(); // Empty for sample exercises
         state.startTime = Date.now();
 
-        updateStats();
         renderExercise();
     }
 

@@ -18,69 +18,89 @@
 <body class="antialiased flex flex-col min-h-screen">
 
     <header class="bg-white/10 backdrop-blur-lg border-b border-white/20 shadow-lg">
-        <nav class="container mx-auto px-6 py-6 flex justify-between items-center">
+        <nav class="container mx-auto px-3 py-3 lg:px-6 lg:py-6 flex justify-between items-center">
             <div class="flex items-center space-x-6">
-                <h1 class="text-3xl font-bold text-white drop-shadow-lg">German Grammar Trainer</h1>
+                <button id="topic-menu-btn" class="lg:hidden text-white hover:bg-white/20 p-2 rounded-lg transition-colors" aria-label="Open topic menu">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+                <h1 class="text-2xl lg:text-3xl font-bold text-white drop-shadow-lg">German Grammar Trainer</h1>
             </div>
-            <div class="flex items-center space-x-8">
-                <div class="flex items-center space-x-6">
-                    <div class="flex items-center space-x-2 bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
-                        <svg class="w-5 h-5 text-red-300" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                        </svg>
-                        <span id="stats-mistakes" class="text-lg font-semibold text-white">0</span>
-                        <span class="text-sm text-white/80">Mistakes (Session)</span>
-                    </div>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <button id="login-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">Login with Google</button>
-                    <button id="stats-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold hidden">Stats</button>
-                    <button id="history-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold hidden">History</button>
-                    <button id="logout-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold hidden">Logout</button>
-                    <button id="settings-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">Settings</button>
-                </div>
+            <div class="flex items-center space-x-2 lg:space-x-4">
+                <button id="login-btn" class="btn-primary px-3 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-xs lg:text-base">
+                    <span class="hidden sm:inline">Login with Google</span>
+                    <span class="sm:hidden">Login</span>
+                </button>
+                <button id="stats-btn" class="btn-primary px-3 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-xs lg:text-base hidden">
+                    <span class="hidden sm:inline">Stats</span>
+                    <span class="sm:hidden">📊</span>
+                </button>
+                <button id="history-btn" class="btn-primary px-3 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-xs lg:text-base hidden">
+                    <span class="hidden sm:inline">History</span>
+                    <span class="sm:hidden">📜</span>
+                </button>
+                <button id="logout-btn" class="btn-primary px-3 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-xs lg:text-base hidden">
+                    <span class="hidden sm:inline">Logout</span>
+                    <span class="sm:hidden">👋</span>
+                </button>
+                <button id="settings-btn" class="btn-primary px-3 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-xs lg:text-base">
+                    <span class="hidden sm:inline">Settings</span>
+                    <span class="sm:hidden">⚙️</span>
+                </button>
             </div>
         </nav>
     </header>
 
-    <div id="topic-selection-section" class="bg-white/10 backdrop-blur-lg border-b border-white/20 py-12">
+    <!-- Topic Selection - Mobile Sidebar / Desktop Top Bar -->
+    <div id="topic-selection-section" class="fixed lg:static top-0 left-0 h-full lg:h-auto w-80 lg:w-full bg-white/10 backdrop-blur-lg border-b lg:border-b border-r lg:border-r-0 border-white/20 py-6 lg:py-12 transition-transform duration-300 -translate-x-full lg:translate-x-0 z-40">
+        <!-- Mobile Close Button -->
+        <button id="topic-menu-close" class="lg:hidden absolute top-4 right-4 text-white hover:bg-white/20 p-2 rounded-lg transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+
         <div class="container mx-auto px-6">
             <div class="max-w-4xl mx-auto">
-                <div class="text-center mb-8">
-                    <h2 class="text-3xl font-bold text-white mb-3 drop-shadow-lg">Choose Your Topic</h2>
-                    <p class="text-white text-lg drop-shadow">Select what you'd like to practice today</p>
+                <div class="text-center lg:text-center mb-6 lg:mb-8">
+                    <h2 class="text-2xl lg:text-3xl font-bold text-white mb-2 lg:mb-3 drop-shadow-lg">Choose Your Topic</h2>
+                    <p class="text-white text-base lg:text-lg drop-shadow hidden lg:block">Select what you'd like to practice today</p>
                 </div>
                 <div class="max-w-2xl mx-auto space-y-6">
                     <div id="topic-selector-container" class="relative">
-                        <label for="topic-search" class="block text-white font-semibold mb-3 text-base drop-shadow text-center">Practice Topic</label>
+                        <label for="topic-search" class="block text-white font-semibold mb-3 text-sm lg:text-base drop-shadow text-center lg:text-center">Practice Topic</label>
                         <div class="relative">
-                            <input type="text" id="topic-search" class="w-full p-4 border-2 border-white/40 rounded-xl shadow-xl focus:ring-4 focus:ring-white/30 focus:border-white/60 focus:outline-none text-lg bg-white/95 backdrop-blur-sm" placeholder="Search or select a topic...">
+                            <input type="text" id="topic-search" class="w-full p-3 lg:p-4 border-2 border-white/40 rounded-xl shadow-xl focus:ring-4 focus:ring-white/30 focus:border-white/60 focus:outline-none text-base lg:text-lg bg-white/95 backdrop-blur-sm" placeholder="Search or select a topic...">
                             <svg class="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </div>
                     </div>
                     <div class="text-center">
-                        <button id="generate-btn" class="btn-primary px-12 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-xl transition-all hover:scale-105">Start Practice Session →</button>
+                        <button id="generate-btn" class="btn-primary px-8 lg:px-12 py-3 lg:py-4 rounded-xl font-bold text-base lg:text-lg shadow-2xl hover:shadow-xl transition-all hover:scale-105 w-full lg:w-auto">Start Practice Session →</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <main class="container mx-auto px-6 py-12">
+    <!-- Mobile Overlay -->
+    <div id="topic-menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden lg:hidden"></div>
+
+    <main class="container mx-auto px-3 py-6 lg:px-6 lg:py-12">
         <div id="app" class="max-w-3xl mx-auto">
 
             <!-- Exercise Display -->
-            <div id="exercise-container" class="card rounded-lg p-6 md:p-8 mb-8">
-                <div class="flex justify-between items-center mb-6">
-                    <div id="exercise-counter" class="text-lg font-semibold text-gray-700 bg-white/50 backdrop-blur-sm rounded-lg px-4 py-2"></div>
-                    <div id="progress-bar-container" class="flex-1 mx-6">
-                        <div class="bg-gray-200/50 rounded-full h-3 overflow-hidden">
+            <div id="exercise-container" class="card rounded-lg p-4 lg:p-8 mb-8">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-4 lg:mb-6 gap-3">
+                    <div id="exercise-counter" class="text-sm lg:text-lg font-semibold text-gray-700 bg-white/50 backdrop-blur-sm rounded-lg px-3 py-1 lg:px-4 lg:py-2 w-full sm:w-auto text-center"></div>
+                    <div id="progress-bar-container" class="flex-1 w-full sm:mx-6">
+                        <div class="bg-gray-200/50 rounded-full h-2 lg:h-3 overflow-hidden">
                             <div id="progress-bar" class="bg-gradient-to-r from-green-400 to-blue-500 h-full rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
                         </div>
                     </div>
-                    <div class="text-sm font-medium text-gray-600 bg-white/50 backdrop-blur-sm rounded-lg px-3 py-1">
+                    <div class="text-xs lg:text-sm font-medium text-gray-600 bg-white/50 backdrop-blur-sm rounded-lg px-2 py-1 lg:px-3 lg:py-1">
                         <span id="progress-percentage">0%</span>
                     </div>
                 </div>
@@ -103,17 +123,17 @@
                 </div>
 
                 <div id="exercise-content">
-                    <p class="text-lg text-gray-600 mb-2">English Hint:</p>
-                    <p id="english-hint" class="text-2xl font-semibold text-gray-800 mb-6">Loading exercise...</p>
+                    <p class="text-sm lg:text-lg text-gray-600 mb-2">English Hint:</p>
+                    <p id="english-hint" class="text-lg lg:text-2xl font-semibold text-gray-800 mb-4 lg:mb-6">Loading exercise...</p>
 
-                    <div id="answer-area" class="bg-gradient-to-r from-blue-50/50 to-purple-50/50 backdrop-blur-sm rounded-xl p-6 mb-8 min-h-[80px] border-2 border-blue-200/50 flex items-center justify-center transition-all duration-300">
-                        <p id="answer-prompt" class="text-gray-600 font-medium text-lg">Click the words below to form the sentence.</p>
-                        <div id="constructed-sentence" class="flex flex-wrap gap-3"></div>
+                    <div id="answer-area" class="bg-gradient-to-r from-blue-50/50 to-purple-50/50 backdrop-blur-sm rounded-xl p-4 lg:p-6 mb-6 lg:mb-8 min-h-[60px] lg:min-h-[80px] border-2 border-blue-200/50 flex items-center justify-center transition-all duration-300">
+                        <p id="answer-prompt" class="text-gray-600 font-medium text-sm lg:text-lg">Click the words below to form the sentence.</p>
+                        <div id="constructed-sentence" class="flex flex-wrap gap-2 lg:gap-3"></div>
                     </div>
 
-                    <div class="flex justify-between items-center mb-6">
-                        <p class="text-xl font-semibold text-gray-700">Scrambled Words:</p>
-                        <button id="hint-btn" class="btn-primary px-6 py-3 rounded-xl font-bold text-sm flex items-center space-x-2">
+                    <div class="flex justify-between items-center mb-4 lg:mb-6">
+                        <p class="text-base lg:text-xl font-semibold text-gray-700">Scrambled Words:</p>
+                        <button id="hint-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-3 rounded-xl font-bold text-xs lg:text-sm flex items-center space-x-2">
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path>
                             </svg>
@@ -125,13 +145,13 @@
                     </div>
 
                     <!-- Control buttons (shown after correct answer) -->
-                    <div id="exercise-controls" class="flex flex-wrap gap-3 justify-center mt-4 hidden">
-                        <button id="replay-audio-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">🔊 Replay Audio</button>
-                        <button id="next-exercise-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">Next Exercise →</button>
+                    <div id="exercise-controls" class="flex flex-wrap gap-2 lg:gap-3 justify-center mt-4 hidden">
+                        <button id="replay-audio-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-sm lg:text-base">🔊 Replay Audio</button>
+                        <button id="next-exercise-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-sm lg:text-base">Next Exercise →</button>
                     </div>
 
-                    <div id="feedback-area" class="mt-6 text-center min-h-[24px]">
-                        <p id="correct-sentence-display" class="text-lg correct-answer-feedback font-semibold"></p>
+                    <div id="feedback-area" class="mt-4 lg:mt-6 text-center min-h-[24px]">
+                        <p id="correct-sentence-display" class="text-base lg:text-lg correct-answer-feedback font-semibold"></p>
                     </div>
                 </div>
             </div>
@@ -159,7 +179,18 @@
             <div class="mb-6">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold text-gray-800">All Topics</h3>
-                    <button id="add-topic-btn" class="btn-primary px-4 py-2 rounded-md text-sm">Add New Topic</button>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <label for="topic-sort" class="text-sm text-gray-600">Sort by:</label>
+                            <select id="topic-sort" class="border rounded-md px-3 py-1 text-sm">
+                                <option value="name-asc">Name (A-Z)</option>
+                                <option value="name-desc">Name (Z-A)</option>
+                                <option value="date-newest">Newest First</option>
+                                <option value="date-oldest">Oldest First</option>
+                            </select>
+                        </div>
+                        <button id="add-topic-btn" class="btn-primary px-4 py-2 rounded-md text-sm">Add New Topic</button>
+                    </div>
                 </div>
                 <div id="topics-list" class="space-y-4 max-h-60 overflow-y-auto">
                     <!-- Topics will be loaded here -->
