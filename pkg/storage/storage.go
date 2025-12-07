@@ -46,6 +46,7 @@ type UserExerciseView struct {
 	FailedAttempts     int       `json:"failed_attempts"`      // Attempts with mistakes
 	HintsUsed          int       `json:"hints_used"`           // Total hints used
 	MistakesMade       int       `json:"mistakes_made"`        // Total mistakes made
+	IsFavorite         bool      `json:"is_favorite"`          // User marked as favorite
 }
 
 type User struct {
@@ -85,6 +86,7 @@ type ExerciseHistoryItem struct {
 	MistakesMade       int       `json:"mistakes_made"`
 	NextReviewDays     float64   `json:"next_review_days"`
 	ReadyToRepeat      bool      `json:"ready_to_repeat"`
+	IsFavorite         bool      `json:"is_favorite"`
 }
 
 // Storage defines the interface for database operations.
@@ -118,6 +120,7 @@ type Storage interface {
 	UpdateUserSetting(userID, lastTopicID string) error
 	GetUserExerciseStats(userID string) (*UserExerciseStats, error)
 	GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error)
+	ToggleFavorite(userID, exerciseID string) (bool, error)
 
 	// Initialization
 	InitializeDefaultTopics()

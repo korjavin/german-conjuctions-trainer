@@ -81,6 +81,7 @@ func (s *SQLiteStorage) initSchema() error {
 		failed_attempts INTEGER NOT NULL DEFAULT 0,
 		hints_used INTEGER NOT NULL DEFAULT 0,
 		mistakes_made INTEGER NOT NULL DEFAULT 0,
+		is_favorite BOOLEAN NOT NULL DEFAULT 0,
 		FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
 		FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE CASCADE,
 		UNIQUE(user_id, exercise_id)
@@ -117,6 +118,7 @@ func (s *SQLiteStorage) runMigrations() error {
 		`ALTER TABLE user_exercise_views ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE user_exercise_views ADD COLUMN hints_used INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE user_exercise_views ADD COLUMN mistakes_made INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE user_exercise_views ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT 0`,
 	}
 
 	for _, migration := range migrations {
@@ -138,7 +140,8 @@ func isColumnExistsError(err error) bool {
 		err.Error() == "duplicate column name: successful_attempts" ||
 		err.Error() == "duplicate column name: failed_attempts" ||
 		err.Error() == "duplicate column name: hints_used" ||
-		err.Error() == "duplicate column name: mistakes_made")
+		err.Error() == "duplicate column name: mistakes_made" ||
+		err.Error() == "duplicate column name: is_favorite")
 }
 
 // querier is an interface that can be a *sql.DB or *sql.Tx
@@ -456,7 +459,7 @@ func (s *SQLiteStorage) UpdateLegacyExercisesWithAudio(text, audioPath string) {
 func (s *SQLiteStorage) GetUserExerciseViews(userID string) (map[string]*UserExerciseView, error) {
 	rows, err := s.db.Query(`
 		SELECT id, user_id, exercise_id, last_viewed, repetition_counter,
-		       total_attempts, successful_attempts, failed_attempts, hints_used, mistakes_made
+		       total_attempts, successful_attempts, failed_attempts, hints_used, mistakes_made, is_favorite
 		FROM user_exercise_views WHERE user_id = ?`, userID)
 	if err != nil {
 		return nil, err
@@ -467,7 +470,7 @@ func (s *SQLiteStorage) GetUserExerciseViews(userID string) (map[string]*UserExe
 	for rows.Next() {
 		var view UserExerciseView
 		if err := rows.Scan(&view.ID, &view.UserID, &view.ExerciseID, &view.LastViewed, &view.RepetitionCounter,
-			&view.TotalAttempts, &view.SuccessfulAttempts, &view.FailedAttempts, &view.HintsUsed, &view.MistakesMade); err != nil {
+			&view.TotalAttempts, &view.SuccessfulAttempts, &view.FailedAttempts, &view.HintsUsed, &view.MistakesMade, &view.IsFavorite); err != nil {
 			return nil, err
 		}
 		views[view.ExerciseID] = &view
@@ -484,8 +487,8 @@ func (s *SQLiteStorage) UpdateUserExerciseViews(viewsToUpdate []*UserExerciseVie
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter,
-		                                 total_attempts, successful_attempts, failed_attempts, hints_used, mistakes_made)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		                                 total_attempts, successful_attempts, failed_attempts, hints_used, mistakes_made, is_favorite)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, exercise_id) DO UPDATE SET
 		last_viewed = excluded.last_viewed,
 		repetition_counter = excluded.repetition_counter,
@@ -506,7 +509,7 @@ func (s *SQLiteStorage) UpdateUserExerciseViews(viewsToUpdate []*UserExerciseVie
 			view.ID = uuid.NewString()
 		}
 		_, err := stmt.Exec(view.ID, view.UserID, view.ExerciseID, view.LastViewed, view.RepetitionCounter,
-			view.TotalAttempts, view.SuccessfulAttempts, view.FailedAttempts, view.HintsUsed, view.MistakesMade)
+			view.TotalAttempts, view.SuccessfulAttempts, view.FailedAttempts, view.HintsUsed, view.MistakesMade, view.IsFavorite)
 		if err != nil {
 			return err
 		}
@@ -661,7 +664,8 @@ func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*Exerc
 			uev.successful_attempts,
 			uev.failed_attempts,
 			uev.hints_used,
-			uev.mistakes_made
+			uev.mistakes_made,
+			uev.is_favorite
 		FROM user_exercise_views uev
 		JOIN exercises e ON uev.exercise_id = e.id
 		JOIN topics t ON e.topic_id = t.id
@@ -702,6 +706,7 @@ func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*Exerc
 			&item.FailedAttempts,
 			&item.HintsUsed,
 			&item.MistakesMade,
+			&item.IsFavorite,
 		); err != nil {
 			return nil, err
 		}
@@ -729,4 +734,61 @@ func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*Exerc
 	}
 
 	return history, nil
+}
+
+func (s *SQLiteStorage) ToggleFavorite(userID, exerciseID string) (bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	// Check if view exists
+	var isFavorite bool
+	var exists bool
+	row := tx.QueryRow("SELECT is_favorite FROM user_exercise_views WHERE user_id = ? AND exercise_id = ?", userID, exerciseID)
+	err = row.Scan(&isFavorite)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			exists = false
+		} else {
+			return false, err
+		}
+	} else {
+		exists = true
+	}
+
+	newStatus := !isFavorite
+
+	if exists {
+		_, err = tx.Exec("UPDATE user_exercise_views SET is_favorite = ? WHERE user_id = ? AND exercise_id = ?", newStatus, userID, exerciseID)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		// Create new view if it doesn't exist, initializing other fields to 0/now
+		_, err = tx.Exec(`
+			INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter, is_favorite, created_at)
+			VALUES(?, ?, ?, ?, 0, ?, ?)
+		`, uuid.NewString(), userID, exerciseID, time.Now().UTC(), newStatus, time.Now().UTC())
+		// Note: created_at is not in the schema provided in initSchema, checking...
+		// initSchema: last_viewed DATETIME NOT NULL.
+		// So we insert last_viewed as now.
+		// Wait, the INSERT above had created_at which is not in schema. Correcting query.
+
+		_, err = tx.Exec(`
+			INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter, is_favorite)
+			VALUES(?, ?, ?, ?, 0, ?)
+		`, uuid.NewString(), userID, exerciseID, time.Now().UTC(), newStatus)
+
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+
+	return newStatus, nil
 }

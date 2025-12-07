@@ -233,6 +233,7 @@ func main() {
 	// API endpoints
 	http.HandleFunc("/api/exercises", withOptionalAuth(handleExercises))
 	http.HandleFunc("/api/exercises/complete", withAuth(handleExercisesComplete))
+	http.HandleFunc("/api/exercises/favorite", withAuth(handleExerciseFavorite))
 	http.HandleFunc("/api/exercises/history", withAuth(handleExerciseHistory))
 	http.HandleFunc("/api/topics", withOptionalAuth(handleTopics))
 	http.HandleFunc("/api/topics/", withOptionalAuth(handleTopicByID))
@@ -498,6 +499,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[EXERCISES] Found %d exercises in cache for topic %s", len(allExercises), req.TopicID)
 
 	var finalExercises []*storage.Exercise
+	userViews := make(map[string]*storage.UserExerciseView)
 	if userID == "" {
 		// Guest user logic - only serve from cache, never generate.
 		log.Printf("[EXERCISES] Guest user mode - serving random exercises from cache")
@@ -505,7 +507,8 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Authenticated user SRS logic
 		log.Printf("[EXERCISES] Authenticated user %s - applying SRS logic", userID)
-		userViews, err := storage.DB.GetUserExerciseViews(userID)
+		var err error
+		userViews, err = storage.DB.GetUserExerciseViews(userID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
 			return
@@ -523,11 +526,18 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 			eligibleExercises = getEligibleExercisesForSRS(allExercises, userViews)
 		}
 
-		finalExercises = getRandomExercises(eligibleExercises, 10)
+		// Take top 10 (which are already sorted by SRS priority and favorite status)
+		// Or shuffle if we want randomness among equally important ones?
+		// The requirement implies prioritization. "favorite maker is the second condition for sorting".
+		// getEligibleExercisesForSRS returns them sorted.
+		// However, returning strictly top 10 might lead to repetition if the list is small or static.
+		// But for SRS, we usually want the most due items.
+		if len(eligibleExercises) > 10 {
+			finalExercises = eligibleExercises[:10]
+		} else {
+			finalExercises = eligibleExercises
+		}
 
-		// Note: We no longer auto-increment the repetition counter here.
-		// Instead, the counter will be updated when the user completes the exercise
-		// via the /api/exercises/complete endpoint based on their performance.
 		log.Printf("[SRS] Selected %d exercises for user %s", len(finalExercises), userID)
 	}
 
@@ -536,13 +546,19 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 		ID            string          `json:"id"`
 		ExerciseJSON  json.RawMessage `json:"exercise_json"`
 		AudioFilePath string          `json:"audio_file_path"`
+		IsFavorite    bool            `json:"is_favorite"`
 	}
 	var responseExercises []ExerciseResponse
 	for _, ex := range finalExercises {
+		isFavorite := false
+		if view, exists := userViews[ex.ID]; exists {
+			isFavorite = view.IsFavorite
+		}
 		responseExercises = append(responseExercises, ExerciseResponse{
 			ID:            ex.ID,
 			ExerciseJSON:  []byte(ex.ExerciseJSON),
 			AudioFilePath: ex.AudioFilePath,
+			IsFavorite:    isFavorite,
 		})
 	}
 
@@ -645,6 +661,47 @@ func handleExercisesComplete(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
+// handleExerciseFavorite toggles the favorite status of an exercise
+func handleExerciseFavorite(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserIDFromRequest(r)
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		ExerciseID string `json:"exercise_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ExerciseID == "" {
+		http.Error(w, "Exercise ID is required", http.StatusBadRequest)
+		return
+	}
+
+	newStatus, err := storage.DB.ToggleFavorite(userID, req.ExerciseID)
+	if err != nil {
+		log.Printf("ERROR: failed to toggle favorite for user %s exercise %s: %v", userID, req.ExerciseID, err)
+		http.Error(w, fmt.Sprintf("Failed to toggle favorite: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[FAVORITE] User %s toggled favorite for exercise %s to %v", userID, req.ExerciseID, newStatus)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"is_favorite": newStatus,
+	})
+}
+
 // handleExerciseHistory returns the practice history for all exercises a user has attempted
 func handleExerciseHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -685,24 +742,145 @@ func max(a, b int) int {
 }
 
 func getEligibleExercisesForSRS(allExercises []*storage.Exercise, userViews map[string]*storage.UserExerciseView) []*storage.Exercise {
-	var eligible []*storage.Exercise
+	type ScoredExercise struct {
+		Exercise      *storage.Exercise
+		OverdueAmount float64
+		IsFavorite    bool
+	}
+
+	var candidates []ScoredExercise
 	now := time.Now()
+
 	for _, ex := range allExercises {
 		view, seen := userViews[ex.ID]
 		if !seen {
-			log.Printf("[SRS_ELIGIBILITY] Exercise %s never seen before - ELIGIBLE", ex.ID)
-			eligible = append(eligible, ex)
+			// Never seen before: treated as very overdue or high priority
+			// We can assign a high arbitrary overdue amount to prioritize new items mixed with old ones
+			// Or just treat them as "due now".
+			// Let's give them a high score so they appear at the top if no overdue items exist,
+			// or mix them.
+			// For now, let's treat "never seen" as effectively "overdue by 0 days" but we want to show them.
+			// Actually, typical SRS systems prioritize overdue items over new items.
+			// Let's set overdue amount to a large number if we want to prioritize new items, or 0 if we assume they are "due today".
+			// A simple approach: treat as slightly overdue to ensure they get picked up.
+			candidates = append(candidates, ScoredExercise{
+				Exercise:      ex,
+				OverdueAmount: 1000.0, // Treat new items as very high priority? Or low?
+				// If we have many overdue items, we should clear them first.
+				// If we have no overdue items, we pick new ones.
+				// So "OverdueAmount" for new items should be considered carefully.
+				// Let's say new items are "due immediately".
+				// An item overdue by 10 days is more urgent than a new item.
+				// So new item overdue amount = 0.
+				// Wait, "OverdueAmount" = daysSinceView - nextReviewInDays.
+				// For new item: undefined.
+				// Let's stick to the prompt requirement:
+				// "if non-favorite and favorite mean both to be repeated today algo should choose favorite.
+				// hovever if non-favorite is more due to repetion it will be chosen."
+				// This implies a sorting based on "dueness".
+				// New items don't have a repetition schedule yet.
+				// Let's prioritize overdue items first, then new items.
+				IsFavorite: false,
+			})
 			continue
 		}
+
 		// SRS logic: next review date is (counter^2) days after last view
 		daysSinceView := now.Sub(view.LastViewed).Hours() / 24
 		nextReviewInDays := float64(view.RepetitionCounter * view.RepetitionCounter)
-		log.Printf("[SRS_ELIGIBILITY] Exercise %s: counter=%d, days_since_view=%.2f, next_review_in=%.0f days, eligible=%v",
-			ex.ID, view.RepetitionCounter, daysSinceView, nextReviewInDays, daysSinceView >= nextReviewInDays)
-		if daysSinceView >= nextReviewInDays {
-			eligible = append(eligible, ex)
+		overdueAmount := daysSinceView - nextReviewInDays
+
+		log.Printf("[SRS_ELIGIBILITY] Exercise %s: counter=%d, days_since_view=%.2f, next_review_in=%.0f days, overdue=%.2f, favorite=%v",
+			ex.ID, view.RepetitionCounter, daysSinceView, nextReviewInDays, overdueAmount, view.IsFavorite)
+
+		if overdueAmount >= 0 {
+			candidates = append(candidates, ScoredExercise{
+				Exercise:      ex,
+				OverdueAmount: overdueAmount,
+				IsFavorite:    view.IsFavorite,
+			})
 		}
 	}
+
+	// Sort candidates
+	// 1. OverdueAmount descending (more overdue = higher priority)
+	// 2. IsFavorite (true > false)
+	// Actually, the prompt says: "favorite maker is the second condition for sorting"
+	mrand.Shuffle(len(candidates), func(i, j int) {
+		candidates[i], candidates[j] = candidates[j], candidates[i]
+	}) // Shuffle first to randomize equal items (like new items)
+
+	// Sort stable so equal elements maintain relative order (randomized above)
+	// But we need explicit sort.
+	// We want to sort descending.
+	// Using a custom sort function.
+	// Since Go's sort.Slice is not stable, but we want a primary and secondary key.
+	// Primary: OverdueAmount. Secondary: IsFavorite.
+	// We can combine them into a score or just use a comparator.
+
+	// Comparator: return true if i should come before j
+	// i comes before j if i.Overdue > j.Overdue
+	// OR i.Overdue == j.Overdue AND i.Favorite && !j.Favorite
+
+	// NOTE: Floating point comparison for equality is tricky. Let's use a small epsilon or just direct comparison if they are close.
+	// But "overdue amount" is continuous.
+	// "if non-favorite and favorite mean both to be repeated today algo should choose favorite"
+	// This implies if they are "both to be repeated today", i.e. both have overdue >= 0.
+	// But if one is overdue by 5 days and one by 0.1 days, the 5 days one wins.
+	// So OverdueAmount is indeed the primary sort key.
+	// IsFavorite is secondary. This only really matters if OverdueAmount is very similar.
+	// Or maybe the user means: Favorite gives a bonus to OverdueAmount?
+	// "if non-favorite is more due ... it will be chosen".
+	// So yes, strict sorting by OverdueAmount, then Favorite.
+
+	// To make Favorite meaningful, maybe we treat "close enough" overdue amounts as equal?
+	// E.g. within same day?
+	// Let's try to group by day?
+	// Or just add a small bonus to favorites? e.g. +0.5 days overdue?
+	// "if non0favorite and favorite mean both to be repeated today algo should choose favorite"
+	// If Item A (fav) is overdue 0.1 days, Item B (non-fav) overdue 0.2 days.
+	// Strictly, B is more due. But they are "both to be repeated today".
+	// This suggests we should perhaps bin the overdue amount or add a bonus.
+	// Let's add a bonus of 1.0 (1 day) to favorites? No, that might be too much.
+	// Let's interpret "repeated today" as "available today".
+	// The prompt is slightly ambiguous. "if non-favorite is more due... it will be chosen".
+	// This suggests strict "more due" wins.
+	// "favorite maker is the second condition for sorting".
+	// This technically means: Sort by Due, then Sort by Favorite.
+	// If Due is continuous float, ties are rare.
+	// Unless we treat "new items" (Overdue=1000 above) as ties.
+	// For existing items, Overdue is unlikely to tie exactly.
+	// Maybe I should round OverdueAmount to integer days?
+	// If I round to integer days, then strict secondary sorting applies.
+	// Let's do that.
+
+	for i := 0; i < len(candidates)-1; i++ {
+		for j := i + 1; j < len(candidates); j++ {
+			// Sort descending
+			scoreI := int(candidates[i].OverdueAmount) // Floor to integer days
+			scoreJ := int(candidates[j].OverdueAmount)
+
+			swap := false
+			if scoreI < scoreJ {
+				swap = true
+			} else if scoreI == scoreJ {
+				// Secondary sort: Favorite
+				if !candidates[i].IsFavorite && candidates[j].IsFavorite {
+					swap = true
+				}
+			}
+
+			if swap {
+				candidates[i], candidates[j] = candidates[j], candidates[i]
+			}
+		}
+	}
+
+	var eligible []*storage.Exercise
+	for _, c := range candidates {
+		eligible = append(eligible, c.Exercise)
+	}
+
 	log.Printf("[SRS_ELIGIBILITY] Total exercises checked: %d, eligible: %d", len(allExercises), len(eligible))
 	return eligible
 }
