@@ -60,6 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyBtn = document.getElementById('history-btn');
     const replayAudioBtn = document.getElementById('replay-audio-btn');
     const nextExerciseBtn = document.getElementById('next-exercise-btn');
+    const toggleFavoriteBtn = document.getElementById('toggle-favorite-btn');
+    const favoriteBtnText = document.getElementById('favorite-btn-text');
     const exerciseControls = document.getElementById('exercise-controls');
 
     // Stats Modal Elements
@@ -229,6 +231,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         exerciseCounter.textContent = `${state.currentExerciseIndex + 1} / ${state.exercises.length}`;
         
+        // Update favorite button state
+        updateFavoriteButtonState(exercise.is_favorite);
+
         // Update progress bar
         const progress = ((state.currentExerciseIndex + 1) / state.exercises.length) * 100;
         if (progressBar) {
@@ -605,6 +610,61 @@ document.addEventListener('DOMContentLoaded', () => {
         playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
     }
 
+    async function handleToggleFavorite() {
+        if (!state.isLoggedIn) return;
+
+        const exercise = state.exercises[state.currentExerciseIndex];
+        const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+
+        // Optimistic UI update
+        const newStatus = !exercise.is_favorite;
+        exercise.is_favorite = newStatus;
+        updateFavoriteButtonState(newStatus);
+
+        try {
+            const response = await fetch('/api/exercises/favorite', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    exercise_id: exerciseId
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to toggle favorite');
+            }
+
+            const data = await response.json();
+            // Ensure state matches server response
+            exercise.is_favorite = data.is_favorite;
+            updateFavoriteButtonState(exercise.is_favorite);
+
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+            // Revert on error
+            exercise.is_favorite = !newStatus;
+            updateFavoriteButtonState(exercise.is_favorite);
+            alert('Failed to update favorite status.');
+        }
+    }
+
+    function updateFavoriteButtonState(isFavorite) {
+        const svg = toggleFavoriteBtn.querySelector('svg');
+        if (isFavorite) {
+            favoriteBtnText.textContent = 'Remove from Favorites';
+            toggleFavoriteBtn.classList.remove('btn-secondary');
+            toggleFavoriteBtn.classList.add('btn-primary', 'bg-yellow-500', 'hover:bg-yellow-600', 'border-yellow-600');
+            svg.setAttribute('fill', 'currentColor');
+        } else {
+            favoriteBtnText.textContent = 'Add to Favorites';
+            toggleFavoriteBtn.classList.remove('btn-primary', 'bg-yellow-500', 'hover:bg-yellow-600', 'border-yellow-600');
+            toggleFavoriteBtn.classList.add('btn-secondary');
+            svg.setAttribute('fill', 'none');
+        }
+    }
+
     function handleNextExercise() {
         if (state.currentExerciseIndex < state.exercises.length - 1) {
             state.currentExerciseIndex++;
@@ -812,7 +872,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.exercises && data.exercises.length > 0) {
                 state.exercises = data.exercises.map(ex => ({
                     ...ex.exercise_json,
-                    audio_file_path: ex.audio_file_path
+                    id: ex.id,
+                    audio_file_path: ex.audio_file_path,
+                    is_favorite: ex.is_favorite || false
                 }));
                 state.exerciseIds = data.exercises.map(ex => ex.id);
                 state.currentExerciseIndex = 0;
@@ -1038,6 +1100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     hintBtn.addEventListener('click', handleHintClick);
     replayAudioBtn.addEventListener('click', handleReplayAudio);
+    toggleFavoriteBtn.addEventListener('click', handleToggleFavorite);
     nextExerciseBtn.addEventListener('click', handleNextExercise);
     document.addEventListener('keydown', handleKeyPress);
 
@@ -1375,10 +1438,21 @@ document.addEventListener('DOMContentLoaded', () => {
             ? Math.round((item.successful_attempts / item.total_attempts) * 100)
             : 0;
 
+        // Favorite icon
+        const favoriteIcon = item.is_favorite ?
+            `<span class="text-yellow-500 mr-2" title="Favorite">
+                <svg class="w-5 h-5 inline" fill="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                </svg>
+            </span>` : '';
+
         div.innerHTML = `
             <div class="flex justify-between items-start mb-2">
                 <div class="flex-1">
-                    <h3 class="text-lg font-semibold text-gray-800">${escapeHtml(item.german_sentence)}</h3>
+                    <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                        ${favoriteIcon}
+                        ${escapeHtml(item.german_sentence)}
+                    </h3>
                     <p class="text-sm text-gray-600 mt-1">${escapeHtml(item.english_hint)}</p>
                 </div>
                 <div class="ml-4">
