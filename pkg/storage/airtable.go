@@ -15,6 +15,9 @@ import (
 // --- Airtable Storage Implementation ---
 
 // AirtableStorage implements the Storage interface for Airtable.
+//
+// Deprecated: AirtableStorage is legacy and will be removed in future versions.
+// Use SQLiteStorage instead.
 type AirtableStorage struct {
 	client *airtable.Client
 	baseID string
@@ -34,7 +37,10 @@ var (
 )
 
 // NewAirtableStorage creates a new Airtable storage instance.
+//
+// Deprecated: AirtableStorage is legacy and will be removed in future versions.
 func NewAirtableStorage() (*AirtableStorage, error) {
+	log.Println("WARNING: AirtableStorage is deprecated and will be removed in future versions. Please migrate to SQLite.")
 	airtableToken := os.Getenv("AIRTABLE_TOKEN")
 	baseID := os.Getenv("AIRTABLE_BASE_ID")
 

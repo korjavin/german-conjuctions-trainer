@@ -21,7 +21,8 @@ An interactive German language learning application that helps B1-level students
 - **Topics Management**: Create, edit, and delete grammar topics.
 - **Prompt Customization**: Tailor exercise generation prompts for each topic.
 - **Version History**: Track and restore the last 10 versions of a prompt.
-- **Airtable Integration**: Persistently stores topics, versions, exercises, and user progress.
+- **Persistent Storage**: Uses SQLite for fast and reliable data storage.
+- **Legacy Airtable Integration**: Support for Airtable (Deprecated).
 - **Optional Google Login**: Allows users to log in with their Google account to enable the SRS feature and save settings.
 
 ## Optional Google Login
@@ -50,8 +51,6 @@ docker run -p 8080:8080 \
   -e OPENAI_API_KEY=your_openai_api_key_here \
   -e OPENAI_URL=https://api.openai.com/v1 \
   -e MODEL_NAME=gpt-3.5-turbo-1106 \
-  -e AIRTABLE_TOKEN=your_airtable_token \
-  -e AIRTABLE_BASE_ID=your_base_id \
   ghcr.io/YOUR_USERNAME/german-conjuctions-trainer:latest
 ```
 
@@ -66,8 +65,6 @@ docker run -p 8080:8080 \
   -e OPENAI_API_KEY=your_openai_api_key_here \
   -e OPENAI_URL=https://api.openai.com/v1 \
   -e MODEL_NAME=gpt-4 \
-  -e AIRTABLE_TOKEN=your_airtable_token \
-  -e AIRTABLE_BASE_ID=your_base_id \
   german-conjunctions-trainer
 ```
 
@@ -76,10 +73,9 @@ docker run -p 8080:8080 \
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OPENAI_API_KEY` | Yes | - | Your OpenAI API key or compatible API key |
-| `AIRTABLE_TOKEN` | Yes | - | Your Airtable Personal Access Token |
-| `AIRTABLE_BASE_ID` | Yes | - | Your Airtable Base ID |
 | `OPENAI_URL` | No | `https://api.openai.com/v1` | API endpoint URL |
 | `MODEL_NAME` | No | `gpt-3.5-turbo-1106` | Model name to use |
+| `SQLITE_PATH` | No | `german.db` | Path to the SQLite database file |
 | `PORT` | No | `8080` | Port for the web server |
 | `GOOGLE_CLIENT_ID` | No | - | Your Google OAuth 2.0 Client ID |
 | `GOOGLE_CLIENT_SECRET` | No | - | Your Google OAuth 2.0 Client Secret |
@@ -87,70 +83,16 @@ docker run -p 8080:8080 \
 | `COOKIE_HASH_KEY` | No | Randomly generated | A 64-byte key for HMAC authentication of cookies. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
 | `COOKIE_BLOCK_KEY` | No | Randomly generated | A 32-byte key for AES-256 encryption of cookie data. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
 
-## Airtable Setup
+## Airtable Setup (Deprecated)
 
-The application uses Airtable for persistent storage of topics and prompt versions. You need to:
+**Note:** Airtable storage is deprecated and will be removed in future versions. Use SQLite (default) instead.
 
-### 1. Create an Airtable Base
+To use Airtable (legacy), set `STORAGE_TYPE=airtable` and configure the following:
 
-Create a new base in Airtable and note the Base ID from the URL.
-
-### 2. Create Required Tables
-
-Create these two tables in your Airtable base:
-
-**Table 1: "Topics"**
-- `Name` - Single line text (required)
-- `Prompt` - Long text (required) 
-- `CreatedAt` - Single line text (optional)
-- `UpdatedAt` - Single line text (optional)
-
-**Table 2: "PromptVersions"**
-- `TopicID` - Single line text (required)
-- `Prompt` - Long text (required)
-- `Version` - Number (required)
-- `CreatedAt` - Single line text (optional)
-
-**Table 3: "Exercises"**
-- `TopicID` - Single line text (Link to `Topics` recommended)
-- `PromptHash` - Single line text
-- `ExerciseJSON` - Long text
-- `CreatedAt` - Created time
-
-**Table 4: "Users"**
-- `GoogleID` - Single line text (required)
-
-**Table 5: "UserStats"**
-- `UserID` - Single line text (required)
-- `TotalExercises` - Number (required)
-- `TotalMistakes` - Number (required)
-- `TotalHints` - Number (required)
-- `TotalTime` - Number (required)
-- `LastTopicID` - Single line text (optional)
-
-**Table 6: "UserExerciseViews"**
-- `UserID` - Single line text (Link to `Users` recommended)
-- `ExerciseID` - Single line text (Link to `Exercises` recommended)
-- `LastViewed` - Date and time
-- `RepetitionCounter` - Number (Default to 0)
-- `NextReview` - Formula (Optional, for debugging). Formula: `DATEADD({LastViewed}, POWER({RepetitionCounter}, 2), 'days')`
-
-### 3. Generate Personal Access Token
-
-1. Go to [Airtable Developer Hub](https://airtable.com/create/tokens)
-2. Create a new Personal Access Token
-3. Grant the following permissions:
-   - `data.records:read` (for both tables)
-   - `data.records:write` (for both tables)
-4. Select your specific base
-
-### 4. Environment Variables
-
-Set the required environment variables:
-```bash
-export AIRTABLE_TOKEN="patXXXXXXXXXXXXXX"
-export AIRTABLE_BASE_ID="appXXXXXXXXXXXXXX"
-```
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AIRTABLE_TOKEN` | Yes (if Airtable) | - | Your Airtable Personal Access Token |
+| `AIRTABLE_BASE_ID` | Yes (if Airtable) | - | Your Airtable Base ID |
 
 ### Default Topics
 
@@ -169,8 +111,6 @@ docker run -p 8080:8080 \
   -e OPENAI_API_KEY=your_anthropic_key \
   -e OPENAI_URL=https://api.anthropic.com/v1 \
   -e MODEL_NAME=claude-3-sonnet-20240229 \
-  -e AIRTABLE_TOKEN=your_airtable_token \
-  -e AIRTABLE_BASE_ID=your_base_id \
   german-conjunctions-trainer
 
 # Example: Using Azure OpenAI
@@ -178,8 +118,6 @@ docker run -p 8080:8080 \
   -e OPENAI_API_KEY=your_azure_key \
   -e OPENAI_URL=https://your-resource.openai.azure.com/v1 \
   -e MODEL_NAME=gpt-4 \
-  -e AIRTABLE_TOKEN=your_airtable_token \
-  -e AIRTABLE_BASE_ID=your_base_id \
   german-conjunctions-trainer
 ```
 
@@ -190,8 +128,6 @@ docker run -p 8080:8080 \
 ```bash
 # Set required environment variables
 export OPENAI_API_KEY=your_openai_api_key
-export AIRTABLE_TOKEN=your_airtable_token  
-export AIRTABLE_BASE_ID=your_base_id
 
 # Run the Go backend
 go run main.go
@@ -233,7 +169,7 @@ MIT License - see LICENSE file for details.
 
 ## CLI for Exercise Generation
 
-This project includes a command-line interface (CLI) to pre-generate exercises for a specific topic and save them to your Airtable base. This is useful for populating your database with content without using the web interface.
+This project includes a command-line interface (CLI) to pre-generate exercises for a specific topic and save them to your database. This is useful for populating your database with content without using the web interface.
 
 ### Usage
 
@@ -247,10 +183,8 @@ Replace `<topic_name>` with the exact name of the topic you want to generate exe
 
 ### Required Environment Variables
 
-The CLI requires the same environment variables as the main application to connect to Airtable and the OpenAI API:
+The CLI requires the same environment variables as the main application to connect to the database and the OpenAI API.
 
-- `AIRTABLE_TOKEN`: Your Airtable Personal Access Token.
-- `AIRTABLE_BASE_ID`: The ID of your Airtable base.
 - `OPENAI_API_KEY`: Your OpenAI API key.
 
 Make sure these variables are exported in your shell session before running the command.
@@ -260,16 +194,14 @@ Make sure these variables are exported in your shell session before running the 
 If you have a topic named "Verb + Preposition", you can generate new exercises for it by running:
 
 ```bash
-export AIRTABLE_TOKEN="patXXXXXXXXXXXXXX"
-export AIRTABLE_BASE_ID="appXXXXXXXXXXXXXX"
 export OPENAI_API_KEY="sk-..."
 
 go run cmd/generator/main.go "Verb + Preposition"
 ```
 
 The script will then:
-1. Find the topic in your Airtable base.
+1. Find the topic in your database.
 2. Fetch all existing exercises for that topic to prevent duplicates.
 3. Call the OpenAI API to generate a new set of exercises.
 4. Filter out any exercises that are already in your database.
-5. Save the new, unique exercises to the `Exercises` table in Airtable.
+5. Save the new, unique exercises to the database.
