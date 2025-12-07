@@ -86,6 +86,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyPrevBtn = document.getElementById('history-prev-btn');
     const historyNextBtn = document.getElementById('history-next-btn');
     const historyPageInfo = document.getElementById('history-page-info');
+    const historyFilterReady = document.getElementById('history-filter-ready');
+    const historyFilterFavorites = document.getElementById('history-filter-favorites');
 
     // --- Application State ---
     let state = {
@@ -115,7 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
         isAdmin: false,
         historyData: [],
         historyPage: 1,
-        historyItemsPerPage: 10
+        historyItemsPerPage: 10,
+        historyFilterReady: false,
+        historyFilterFavorites: false
     };
 
     // --- Sample Data ---
@@ -1214,6 +1218,43 @@ document.addEventListener('DOMContentLoaded', () => {
         historyModal.classList.add('hidden');
     });
 
+    historyFilterReady.addEventListener('click', () => {
+        state.historyFilterReady = !state.historyFilterReady;
+        state.historyPage = 1; // Reset to first page
+        updateHistoryFilterUI();
+        renderHistoryPage();
+    });
+
+    historyFilterFavorites.addEventListener('click', () => {
+        state.historyFilterFavorites = !state.historyFilterFavorites;
+        state.historyPage = 1; // Reset to first page
+        updateHistoryFilterUI();
+        renderHistoryPage();
+    });
+
+    function updateHistoryFilterUI() {
+        // Update Ready to Practice filter UI
+        if (state.historyFilterReady) {
+            historyFilterReady.classList.add('ring-2', 'ring-green-400', 'bg-green-200');
+            historyFilterReady.classList.remove('bg-green-100');
+        } else {
+            historyFilterReady.classList.remove('ring-2', 'ring-green-400', 'bg-green-200');
+            historyFilterReady.classList.add('bg-green-100');
+        }
+
+        // Update Favorites filter UI
+        const favoritesSvg = historyFilterFavorites.querySelector('svg');
+        if (state.historyFilterFavorites) {
+            historyFilterFavorites.classList.add('bg-yellow-50', 'border-yellow-400', 'text-yellow-700');
+            historyFilterFavorites.classList.remove('hover:bg-gray-100', 'border-gray-300');
+            favoritesSvg.setAttribute('fill', 'currentColor');
+        } else {
+            historyFilterFavorites.classList.remove('bg-yellow-50', 'border-yellow-400', 'text-yellow-700');
+            historyFilterFavorites.classList.add('hover:bg-gray-100', 'border-gray-300');
+            favoritesSvg.setAttribute('fill', 'none');
+        }
+    }
+
     historyPrevBtn.addEventListener('click', () => {
         if (state.historyPage > 1) {
             state.historyPage--;
@@ -1222,7 +1263,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     historyNextBtn.addEventListener('click', () => {
-        const totalPages = Math.ceil(state.historyData.length / state.historyItemsPerPage);
+        const filteredData = getFilteredHistoryData();
+        const totalPages = Math.ceil(filteredData.length / state.historyItemsPerPage);
         if (state.historyPage < totalPages) {
             state.historyPage++;
             renderHistoryPage();
@@ -1358,6 +1400,11 @@ document.addEventListener('DOMContentLoaded', () => {
             state.historyData = data.history || [];
             state.historyPage = 1;
 
+            // Reset filters when opening fresh history
+            state.historyFilterReady = false;
+            state.historyFilterFavorites = false;
+            updateHistoryFilterUI();
+
             historyLoading.classList.add('hidden');
 
             if (state.historyData.length === 0) {
@@ -1389,14 +1436,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function getFilteredHistoryData() {
+        return state.historyData.filter(item => {
+            let matches = true;
+            if (state.historyFilterReady) {
+                matches = matches && item.ready_to_repeat;
+            }
+            if (state.historyFilterFavorites) {
+                matches = matches && item.is_favorite;
+            }
+            return matches;
+        });
+    }
+
     function renderHistoryPage() {
+        const filteredData = getFilteredHistoryData();
         const start = (state.historyPage - 1) * state.historyItemsPerPage;
         const end = start + state.historyItemsPerPage;
-        const pageData = state.historyData.slice(start, end);
-        const totalPages = Math.ceil(state.historyData.length / state.historyItemsPerPage);
+        const pageData = filteredData.slice(start, end);
+        const totalPages = Math.ceil(filteredData.length / state.historyItemsPerPage);
 
         // Render items
         historyContent.innerHTML = '';
+
+        if (filteredData.length === 0) {
+             if (state.historyData.length > 0) {
+                 historyContent.innerHTML = '<div class="text-center py-4 text-gray-500">No exercises match the selected filters.</div>';
+             }
+             historyPagination.classList.add('hidden');
+             return;
+        }
+
         pageData.forEach(item => {
             const itemEl = createHistoryItem(item);
             historyContent.appendChild(itemEl);
