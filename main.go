@@ -149,15 +149,22 @@ func main() {
 		storageType = "sqlite" // Default to sqlite
 	}
 
-	// Initialize storage backend
-	dbPath := os.Getenv("SQLITE_PATH")
-	if dbPath == "" {
-		dbPath = "german.db"
-	}
 	var err error
-	storage.DB, err = storage.NewSQLiteStorage(dbPath)
-	if err != nil {
-		log.Fatalf("Failed to initialize SQLite storage: %v", err)
+	if storageType == "airtable" {
+		storage.DB, err = storage.NewAirtableStorage()
+		if err != nil {
+			log.Fatalf("Failed to initialize Airtable storage: %v", err)
+		}
+	} else {
+		// Initialize storage backend
+		dbPath := os.Getenv("SQLITE_PATH")
+		if dbPath == "" {
+			dbPath = "german.db"
+		}
+		storage.DB, err = storage.NewSQLiteStorage(dbPath)
+		if err != nil {
+			log.Fatalf("Failed to initialize SQLite storage: %v", err)
+		}
 	}
 
 	// Initialize Google OAuth

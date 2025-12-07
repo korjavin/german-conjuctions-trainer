@@ -38,8 +38,8 @@ A web-based application for learning German grammar. It features interactive wor
 - `OPENAI_API_KEY`: Required for AI exercise generation.
 - `STORAGE_TYPE`: (Optional) `sqlite` (default) or `airtable`.
 - `SQLITE_PATH`: (Optional) Path to the SQLite database file. Defaults to `german.db`.
-- `AIRTABLE_TOKEN`: Required only if `STORAGE_TYPE` is `airtable`.
-- `AIRTABLE_BASE_ID`: Required only if `STORAGE_TYPE` is `airtable`.
+- `AIRTABLE_TOKEN`: (Deprecated) Required only if `STORAGE_TYPE` is `airtable`.
+- `AIRTABLE_BASE_ID`: (Deprecated) Required only if `STORAGE_TYPE` is `airtable`.
 - `OPENAI_URL`: API endpoint (defaults to `https://api.openai.com/v1`).
 - `MODEL_NAME`: AI model (defaults to `gpt-3.5-turbo-1106`).
 - `PORT`: Server port (defaults to `8080`).
@@ -190,7 +190,7 @@ This entire process is now triggered **only when the exercise cache is insuffici
 - **Local Word Scrambling**: Moved word scrambling from the AI to the frontend for instant feedback.
 - **Rate Limiting**: Added server-side rate limiting to prevent abuse.
 - **Observability**: Added a feature to view the last refined prompt.
-- **Airtable Integration**: Added persistent storage for topics and prompt versions.
+- **Airtable Integration**: Added persistent storage for topics and prompt versions. (Legacy, deprecated)
 
 ## Development Workflow
 1. **Local Development**: `go run main.go` → http://localhost:8080
