@@ -288,8 +288,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.userSentence.push(word);
             addPunctuationIfNeeded(exercise, state.userSentence);
 
-            // Hide the clicked button
-            button.classList.add('hidden');
+            // Hide the clicked button without changing layout
+            button.classList.add('word-collected');
 
             // Update constructed sentence display
             constructedSentenceEl.innerHTML = '';
@@ -337,7 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateStats();
             
             // Show incorrect feedback
-            const wrongWords = scrambledWordsContainer.querySelectorAll('.btn-word.hidden');
+            const wrongWords = scrambledWordsContainer.querySelectorAll('.btn-word.word-collected');
             wrongWords.forEach(btn => {
                 btn.classList.add('incorrect-answer-feedback');
                 setTimeout(() => {
@@ -365,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (userWords.length < nonPunctuationWords.length) {
             const nextCorrectWord = nonPunctuationWords[userWords.length];
-            const availableButtons = scrambledWordsContainer.querySelectorAll('.btn-word:not(.hidden)');
+            const availableButtons = scrambledWordsContainer.querySelectorAll('.btn-word:not(.word-collected)');
 
             for (const button of availableButtons) {
                 if (button.dataset.word === nextCorrectWord) {
@@ -573,9 +573,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleKeyPress(event) {
         if (state.isLocked) return;
-        
+
         const key = event.key.toLowerCase();
-        const wordButtons = scrambledWordsContainer.querySelectorAll('.btn-word:not(.hidden)');
+        const wordButtons = scrambledWordsContainer.querySelectorAll('.btn-word:not(.word-collected)');
         
         for (const button of wordButtons) {
             if (button.dataset.hotkey === key) {
