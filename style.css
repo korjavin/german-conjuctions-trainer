@@ -1431,6 +1431,12 @@ body {
   position: relative;
 }
 
+.btn-word.word-collected {
+  opacity: 0;
+  pointer-events: none;
+  cursor: default;
+}
+
 #topic-dropdown {
   -webkit-backdrop-filter: blur(16px);
           backdrop-filter: blur(16px);
