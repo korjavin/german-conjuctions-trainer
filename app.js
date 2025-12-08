@@ -24,11 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressPercentage = document.getElementById('progress-percentage');
     const emptyStateContainer = document.getElementById('empty-state-container');
 
-    const statsMistakesEl = document.getElementById('stats-mistakes');
-    const statsHintsEl = document.getElementById('stats-hints');
-
     // Topics management elements
     const topicsList = document.getElementById('topics-list');
+    const topicSort = document.getElementById('topic-sort');
     const addTopicBtn = document.getElementById('add-topic-btn');
     const addTopicForm = document.getElementById('add-topic-form');
     const newTopicName = document.getElementById('new-topic-name');
@@ -59,8 +57,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const statsBtn = document.getElementById('stats-btn');
+    const historyBtn = document.getElementById('history-btn');
     const replayAudioBtn = document.getElementById('replay-audio-btn');
     const nextExerciseBtn = document.getElementById('next-exercise-btn');
+    const toggleFavoriteBtn = document.getElementById('toggle-favorite-btn');
+    const favoriteBtnText = document.getElementById('favorite-btn-text');
     const exerciseControls = document.getElementById('exercise-controls');
 
     // Stats Modal Elements
@@ -69,20 +70,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const statsReadyToRepeatEl = document.getElementById('stats-ready-to-repeat');
     const statsTrainedEl = document.getElementById('stats-trained');
 
+    // History Modal Elements
+    const historyModal = document.getElementById('history-modal');
+    const historyCloseBtn = document.getElementById('history-close-btn');
+    const historyTopicName = document.getElementById('history-topic-name');
+    const historySummary = document.getElementById('history-summary');
+    const historyTotalCount = document.getElementById('history-total-count');
+    const historyReadyCount = document.getElementById('history-ready-count');
+    const historySuccessRate = document.getElementById('history-success-rate');
+    const historyTotalAttempts = document.getElementById('history-total-attempts');
+    const historyLoading = document.getElementById('history-loading');
+    const historyEmpty = document.getElementById('history-empty');
+    const historyContent = document.getElementById('history-content');
+    const historyPagination = document.getElementById('history-pagination');
+    const historyPrevBtn = document.getElementById('history-prev-btn');
+    const historyNextBtn = document.getElementById('history-next-btn');
+    const historyPageInfo = document.getElementById('history-page-info');
+    const historyFilterReady = document.getElementById('history-filter-ready');
+    const historyFilterFavorites = document.getElementById('history-filter-favorites');
+
     // --- Application State ---
     let state = {
         lastAudioUrl: '',
         lastAudioText: '',
         currentTopicId: '',
         topics: [],
+        topicSortOrder: localStorage.getItem('topicSortOrder') || 'name-asc', // Default to name ascending
         exercises: [],
+        exerciseIds: [], // Store exercise IDs corresponding to exercises
         currentExerciseIndex: 0,
         userSentence: [],
         isLocked: false,
         mistakes: 0,
         hintsUsed: 0,
-        exercisesWithMistakes: new Set(), // Track exercises with mistakes
-        exercisesWithHints: new Set(), // Track exercises with hints
+        exercisesWithMistakes: new Set(), // Track exercises with mistakes (by index)
+        exercisesWithHints: new Set(), // Track exercises with hints (by index)
+        exercisePerformance: new Map(), // Track per-exercise performance: exerciseId -> {hints, mistakes}
         startTime: null,
         sessionTime: 0,
         isSessionComplete: false,
@@ -91,7 +114,12 @@ document.addEventListener('DOMContentLoaded', () => {
         timerInterval: null,
         isLoggedIn: false,
         userId: null,
-        isAdmin: false
+        isAdmin: false,
+        historyData: [],
+        historyPage: 1,
+        historyItemsPerPage: 10,
+        historyFilterReady: false,
+        historyFilterFavorites: false
     };
 
     // --- Sample Data ---
@@ -169,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addPunctuationIfNeeded(exercise, userSentence) {
         const correctWordArray = exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [];
-        
+
         while (userSentence.length < correctWordArray.length) {
             const nextToken = correctWordArray[userSentence.length];
             if (isPunctuation(nextToken)) {
@@ -178,11 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             }
         }
-    }
-
-    function updateStats() {
-        statsMistakesEl.textContent = `${state.mistakes}`;
-        statsHintsEl.textContent = `${state.hintsUsed}`;
     }
 
     // --- Exercise Rendering and Logic ---
@@ -212,6 +235,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         exerciseCounter.textContent = `${state.currentExerciseIndex + 1} / ${state.exercises.length}`;
         
+        // Update favorite button state
+        updateFavoriteButtonState(exercise.is_favorite);
+
         // Update progress bar
         const progress = ((state.currentExerciseIndex + 1) / state.exercises.length) * 100;
         if (progressBar) {
@@ -310,7 +336,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Incorrect word
             state.mistakes++;
             state.exercisesWithMistakes.add(state.currentExerciseIndex);
-            updateStats();
+
+            // Track per-exercise mistake
+            const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+            if (exerciseId && state.exercisePerformance.has(exerciseId)) {
+                const perf = state.exercisePerformance.get(exerciseId);
+                perf.mistakes++;
+            }
 
             button.classList.add('incorrect-answer-feedback');
             setTimeout(() => {
@@ -334,8 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hintBtn.classList.add('hidden');
         } else {
             state.mistakes++;
-            updateStats();
-            
+
             // Show incorrect feedback
             const wrongWords = scrambledWordsContainer.querySelectorAll('.btn-word.word-collected');
             wrongWords.forEach(btn => {
@@ -372,7 +403,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     button.classList.add('hint-word');
                     state.hintsUsed++;
                     state.exercisesWithHints.add(state.currentExerciseIndex);
-                    updateStats();
+
+                    // Track per-exercise hint
+                    const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+                    if (exerciseId && state.exercisePerformance.has(exerciseId)) {
+                        const perf = state.exercisePerformance.get(exerciseId);
+                        perf.hints++;
+                    }
 
                     setTimeout(() => {
                         button.classList.remove('hint-word');
@@ -391,43 +428,49 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isLoggedIn) {
             saveUserStats();
         }
-        
-        const accuracy = state.exercises.length > 0 ? 
-            Math.round(((state.exercises.length - state.mistakes) / state.exercises.length) * 100) : 0;
-        const avgTimePerExercise = state.exercises.length > 0 ? 
+
+        // Calculate session statistics
+        const mistakesCount = state.exercisesWithMistakes.size;
+        let solvedWithHintsOnlyCount = 0;
+        let solvedAloneCount = 0;
+
+        for (let i = 0; i < state.exercises.length; i++) {
+            const hadMistake = state.exercisesWithMistakes.has(i);
+            const hadHint = state.exercisesWithHints.has(i);
+
+            if (!hadMistake && !hadHint) {
+                solvedAloneCount++;
+            } else if (!hadMistake && hadHint) {
+                solvedWithHintsOnlyCount++;
+            }
+        }
+
+        const avgTimePerExercise = state.exercises.length > 0 ?
             (state.sessionTime / state.exercises.length).toFixed(1) : 0;
 
         // Create statistics display
         const statsContainer = document.createElement('div');
         statsContainer.id = 'statistics-container';
         statsContainer.className = 'card rounded-lg p-8 text-center';
-        
+
         statsContainer.innerHTML = `
             <h2 class="text-3xl font-bold text-gray-800 mb-6">Session Complete! 🎉</h2>
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-[#A58D78]">${state.exercises.length}</div>
-                    <div class="text-gray-600">Exercises Completed</div>
+                    <div class="text-2xl font-bold text-[#22C55E]">${solvedAloneCount}</div>
+                    <div class="text-gray-600">Perfect</div>
                 </div>
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-[#A58D78]">${state.mistakes}</div>
-                    <div class="text-gray-600">Total Mistakes</div>
+                    <div class="text-2xl font-bold text-[#3B82F6]">${solvedWithHintsOnlyCount}</div>
+                    <div class="text-gray-600">With Hints</div>
                 </div>
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-[#A58D78]">${state.hintsUsed}</div>
-                    <div class="text-gray-600">Hints Used</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-[#A58D78]">${accuracy}%</div>
-                    <div class="text-gray-600">Accuracy</div>
+                    <div class="text-2xl font-bold text-[#EF4444]">${mistakesCount}</div>
+                    <div class="text-gray-600">With Mistakes</div>
                 </div>
                 <div class="text-center">
                     <div class="text-2xl font-bold text-[#A58D78]">${state.sessionTime}s</div>
                     <div class="text-gray-600">Total Time</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-2xl font-bold text-[#A58D78]">${avgTimePerExercise}s</div>
-                    <div class="text-gray-600">Avg per Exercise</div>
                 </div>
             </div>
             <div class="mb-8">
@@ -463,32 +506,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- Chart.js Implementation ---
-        const mistakesCount = state.exercisesWithMistakes.size;
-        let solvedWithHintsOnlyCount = 0;
-        let solvedAloneCount = 0;
-
-        for (let i = 0; i < state.exercises.length; i++) {
-            const hadMistake = state.exercisesWithMistakes.has(i);
-            const hadHint = state.exercisesWithHints.has(i);
-
-            if (!hadMistake && !hadHint) {
-                solvedAloneCount++;
-            } else if (!hadMistake && hadHint) {
-                solvedWithHintsOnlyCount++;
-            }
-        }
-
         const ctx = document.getElementById('session-chart').getContext('2d');
         new Chart(ctx, {
             type: 'pie',
             data: {
-                labels: ['Mistakes', 'Hints Only', 'Correct'],
+                labels: ['Perfect', 'With Hints', 'With Mistakes'],
                 datasets: [{
-                    data: [mistakesCount, solvedWithHintsOnlyCount, solvedAloneCount],
+                    data: [solvedAloneCount, solvedWithHintsOnlyCount, mistakesCount],
                     backgroundColor: [
-                        '#EF4444', // Red for mistakes
-                        '#3B82F6', // Blue for hints
-                        '#22C55E'  // Green for solved alone
+                        '#22C55E',  // Green for perfect
+                        '#3B82F6',  // Blue for hints
+                        '#EF4444'   // Red for mistakes
                     ],
                     hoverOffset: 4
                 }]
@@ -535,8 +563,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Re-enable the generate button
         generateBtn.disabled = false;
 
-        updateStats();
-
         // Automatically fetch new exercises
         fetchExercises();
     }
@@ -567,7 +593,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Re-enable the generate button
         generateBtn.disabled = false;
 
-        updateStats();
         renderExercise();
     }
 
@@ -587,6 +612,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleReplayAudio() {
         playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
+    }
+
+    async function handleToggleFavorite() {
+        if (!state.isLoggedIn) return;
+
+        const exercise = state.exercises[state.currentExerciseIndex];
+        const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+
+        // Optimistic UI update
+        const newStatus = !exercise.is_favorite;
+        exercise.is_favorite = newStatus;
+        updateFavoriteButtonState(newStatus);
+
+        try {
+            const response = await fetch('/api/exercises/favorite', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    exercise_id: exerciseId
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to toggle favorite');
+            }
+
+            const data = await response.json();
+            // Ensure state matches server response
+            exercise.is_favorite = data.is_favorite;
+            updateFavoriteButtonState(exercise.is_favorite);
+
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+            // Revert on error
+            exercise.is_favorite = !newStatus;
+            updateFavoriteButtonState(exercise.is_favorite);
+            alert('Failed to update favorite status.');
+        }
+    }
+
+    function updateFavoriteButtonState(isFavorite) {
+        const svg = toggleFavoriteBtn.querySelector('svg');
+        if (isFavorite) {
+            favoriteBtnText.textContent = 'Remove from Favorites';
+            toggleFavoriteBtn.classList.remove('btn-secondary');
+            toggleFavoriteBtn.classList.add('btn-primary', 'bg-yellow-500', 'hover:bg-yellow-600', 'border-yellow-600');
+            svg.setAttribute('fill', 'currentColor');
+        } else {
+            favoriteBtnText.textContent = 'Add to Favorites';
+            toggleFavoriteBtn.classList.remove('btn-primary', 'bg-yellow-500', 'hover:bg-yellow-600', 'border-yellow-600');
+            toggleFavoriteBtn.classList.add('btn-secondary');
+            svg.setAttribute('fill', 'none');
+        }
     }
 
     function handleNextExercise() {
@@ -628,10 +708,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function sortTopics(topics, sortOrder) {
+        const sorted = [...topics]; // Create a copy to avoid mutating original
+
+        switch (sortOrder) {
+            case 'name-asc':
+                sorted.sort((a, b) => a.name.localeCompare(b.name));
+                break;
+            case 'name-desc':
+                sorted.sort((a, b) => b.name.localeCompare(a.name));
+                break;
+            case 'date-newest':
+                sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                break;
+            case 'date-oldest':
+                sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                break;
+        }
+
+        return sorted;
+    }
+
     function renderTopicsList() {
         topicsList.innerHTML = '';
-        
-        state.topics.forEach(topic => {
+
+        // Apply sorting
+        const sortedTopics = sortTopics(state.topics, state.topicSortOrder);
+
+        sortedTopics.forEach(topic => {
             const topicDiv = document.createElement('div');
             topicDiv.className = 'flex justify-between items-center p-3 border rounded-md bg-gray-50';
             
@@ -772,15 +876,26 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.exercises && data.exercises.length > 0) {
                 state.exercises = data.exercises.map(ex => ({
                     ...ex.exercise_json,
-                    audio_file_path: ex.audio_file_path
+                    id: ex.id,
+                    audio_file_path: ex.audio_file_path,
+                    is_favorite: ex.is_favorite || false
                 }));
+                state.exerciseIds = data.exercises.map(ex => ex.id);
                 state.currentExerciseIndex = 0;
                 state.mistakes = 0;
                 state.hintsUsed = 0;
                 state.sessionTime = 0;
                 state.isSessionComplete = false;
+                state.exercisesWithMistakes = new Set();
+                state.exercisesWithHints = new Set();
+                state.exercisePerformance = new Map();
+
+                // Initialize performance tracking for each exercise
+                state.exerciseIds.forEach(id => {
+                    state.exercisePerformance.set(id, { hints: 0, mistakes: 0 });
+                });
+
                 state.startTime = Date.now();
-                updateStats();
                 renderExercise();
             } else {
                 // This can happen if generation fails or cache is empty and generation is disabled
@@ -936,6 +1051,14 @@ document.addEventListener('DOMContentLoaded', () => {
         versionHistory.classList.add('hidden');
     });
 
+    // Topic sorting
+    topicSort.value = state.topicSortOrder; // Set initial value
+    topicSort.addEventListener('change', (e) => {
+        state.topicSortOrder = e.target.value;
+        localStorage.setItem('topicSortOrder', state.topicSortOrder);
+        renderTopicsList();
+    });
+
     addTopicBtn.addEventListener('click', showAddTopicForm);
     cancelAddBtn.addEventListener('click', hideAddTopicForm);
 
@@ -976,9 +1099,12 @@ document.addEventListener('DOMContentLoaded', () => {
         promptEditor.classList.remove('hidden');
     });
 
-    generateBtn.addEventListener('click', fetchExercises);
+    generateBtn.addEventListener('click', () => {
+        fetchExercises();
+    });
     hintBtn.addEventListener('click', handleHintClick);
     replayAudioBtn.addEventListener('click', handleReplayAudio);
+    toggleFavoriteBtn.addEventListener('click', handleToggleFavorite);
     nextExerciseBtn.addEventListener('click', handleNextExercise);
     document.addEventListener('keydown', handleKeyPress);
 
@@ -1086,6 +1212,65 @@ document.addEventListener('DOMContentLoaded', () => {
         statsModal.classList.add('hidden');
     });
 
+    historyBtn.addEventListener('click', showExerciseHistory);
+
+    historyCloseBtn.addEventListener('click', () => {
+        historyModal.classList.add('hidden');
+    });
+
+    historyFilterReady.addEventListener('click', () => {
+        state.historyFilterReady = !state.historyFilterReady;
+        state.historyPage = 1; // Reset to first page
+        updateHistoryFilterUI();
+        renderHistoryPage();
+    });
+
+    historyFilterFavorites.addEventListener('click', () => {
+        state.historyFilterFavorites = !state.historyFilterFavorites;
+        state.historyPage = 1; // Reset to first page
+        updateHistoryFilterUI();
+        renderHistoryPage();
+    });
+
+    function updateHistoryFilterUI() {
+        // Update Ready to Practice filter UI
+        if (state.historyFilterReady) {
+            historyFilterReady.classList.add('ring-2', 'ring-green-400', 'bg-green-200');
+            historyFilterReady.classList.remove('bg-green-100');
+        } else {
+            historyFilterReady.classList.remove('ring-2', 'ring-green-400', 'bg-green-200');
+            historyFilterReady.classList.add('bg-green-100');
+        }
+
+        // Update Favorites filter UI
+        const favoritesSvg = historyFilterFavorites.querySelector('svg');
+        if (state.historyFilterFavorites) {
+            historyFilterFavorites.classList.add('bg-yellow-50', 'border-yellow-400', 'text-yellow-700');
+            historyFilterFavorites.classList.remove('hover:bg-gray-100', 'border-gray-300');
+            favoritesSvg.setAttribute('fill', 'currentColor');
+        } else {
+            historyFilterFavorites.classList.remove('bg-yellow-50', 'border-yellow-400', 'text-yellow-700');
+            historyFilterFavorites.classList.add('hover:bg-gray-100', 'border-gray-300');
+            favoritesSvg.setAttribute('fill', 'none');
+        }
+    }
+
+    historyPrevBtn.addEventListener('click', () => {
+        if (state.historyPage > 1) {
+            state.historyPage--;
+            renderHistoryPage();
+        }
+    });
+
+    historyNextBtn.addEventListener('click', () => {
+        const filteredData = getFilteredHistoryData();
+        const totalPages = Math.ceil(filteredData.length / state.historyItemsPerPage);
+        if (state.historyPage < totalPages) {
+            state.historyPage++;
+            renderHistoryPage();
+        }
+    });
+
     logoutBtn.addEventListener('click', () => {
         window.location.href = '/auth/logout';
     });
@@ -1135,10 +1320,12 @@ document.addEventListener('DOMContentLoaded', () => {
             loginBtn.classList.add('hidden');
             logoutBtn.classList.remove('hidden');
             statsBtn.classList.remove('hidden');
+            historyBtn.classList.remove('hidden');
         } else {
             loginBtn.classList.remove('hidden');
             logoutBtn.classList.add('hidden');
             statsBtn.classList.add('hidden');
+            historyBtn.classList.add('hidden');
         }
 
         if (state.isAdmin) {
@@ -1175,8 +1362,201 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function showExerciseHistory() {
+        if (!state.isLoggedIn) {
+            alert("Please log in to view your exercise history.");
+            return;
+        }
+
+        // Show modal and loading state
+        historyModal.classList.remove('hidden');
+        historyLoading.classList.remove('hidden');
+        historyEmpty.classList.add('hidden');
+        historyContent.classList.add('hidden');
+        historyPagination.classList.add('hidden');
+
+        try {
+            // Build URL with optional topic filter
+            let url = '/api/exercises/history';
+            if (state.currentTopicId) {
+                url += `?topic_id=${state.currentTopicId}`;
+                const topic = state.topics.find(t => t.id === state.currentTopicId);
+                historyTopicName.textContent = topic ? topic.name : 'Selected Topic';
+            } else {
+                historyTopicName.textContent = 'All Topics';
+            }
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                if (response.status === 401) {
+                    alert("Your session has expired. Please log in again.");
+                    historyModal.classList.add('hidden');
+                    return;
+                }
+                throw new Error('Failed to fetch exercise history');
+            }
+
+            const data = await response.json();
+            state.historyData = data.history || [];
+            state.historyPage = 1;
+
+            // Reset filters when opening fresh history
+            state.historyFilterReady = false;
+            state.historyFilterFavorites = false;
+            updateHistoryFilterUI();
+
+            historyLoading.classList.add('hidden');
+
+            if (state.historyData.length === 0) {
+                historyEmpty.classList.remove('hidden');
+                historySummary.classList.add('hidden');
+            } else {
+                // Calculate summary statistics
+                const readyCount = state.historyData.filter(item => item.ready_to_repeat).length;
+                const totalAttempts = state.historyData.reduce((sum, item) => sum + item.total_attempts, 0);
+                const totalSuccessful = state.historyData.reduce((sum, item) => sum + item.successful_attempts, 0);
+                const successRate = totalAttempts > 0 ? Math.round((totalSuccessful / totalAttempts) * 100) : 0;
+
+                // Update summary display
+                historyTotalCount.textContent = state.historyData.length;
+                historyReadyCount.textContent = readyCount;
+                historySuccessRate.textContent = successRate + '%';
+                historyTotalAttempts.textContent = totalAttempts;
+
+                historySummary.classList.remove('hidden');
+                historyContent.classList.remove('hidden');
+                renderHistoryPage();
+            }
+
+        } catch (error) {
+            console.error('Error fetching exercise history:', error);
+            historyLoading.classList.add('hidden');
+            historySummary.classList.add('hidden');
+            alert('Could not load exercise history. Please try again later.');
+        }
+    }
+
+    function getFilteredHistoryData() {
+        return state.historyData.filter(item => {
+            let matches = true;
+            if (state.historyFilterReady) {
+                matches = matches && item.ready_to_repeat;
+            }
+            if (state.historyFilterFavorites) {
+                matches = matches && item.is_favorite;
+            }
+            return matches;
+        });
+    }
+
+    function renderHistoryPage() {
+        const filteredData = getFilteredHistoryData();
+        const start = (state.historyPage - 1) * state.historyItemsPerPage;
+        const end = start + state.historyItemsPerPage;
+        const pageData = filteredData.slice(start, end);
+        const totalPages = Math.ceil(filteredData.length / state.historyItemsPerPage);
+
+        // Render items
+        historyContent.innerHTML = '';
+
+        if (filteredData.length === 0) {
+             if (state.historyData.length > 0) {
+                 historyContent.innerHTML = '<div class="text-center py-4 text-gray-500">No exercises match the selected filters.</div>';
+             }
+             historyPagination.classList.add('hidden');
+             return;
+        }
+
+        pageData.forEach(item => {
+            const itemEl = createHistoryItem(item);
+            historyContent.appendChild(itemEl);
+        });
+
+        // Update pagination
+        if (totalPages > 1) {
+            historyPagination.classList.remove('hidden');
+            historyPageInfo.textContent = `Page ${state.historyPage} of ${totalPages}`;
+            historyPrevBtn.disabled = state.historyPage === 1;
+            historyNextBtn.disabled = state.historyPage === totalPages;
+        } else {
+            historyPagination.classList.add('hidden');
+        }
+    }
+
+    function createHistoryItem(item) {
+        const div = document.createElement('div');
+        div.className = 'border rounded-lg p-4 bg-white hover:shadow-md transition-shadow';
+
+        // Calculate time info
+        const lastViewed = new Date(item.last_viewed);
+        const daysAgo = Math.floor((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60 * 24));
+        const timeText = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`;
+
+        // Determine status badge
+        let statusBadge = '';
+        if (item.ready_to_repeat) {
+            statusBadge = '<span class="inline-block px-3 py-1 text-sm font-semibold text-white bg-green-500 rounded-full">Ready to Practice</span>';
+        } else {
+            const daysUntilReady = Math.ceil(item.next_review_days - ((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60 * 24)));
+            if (daysUntilReady > 0) {
+                statusBadge = `<span class="inline-block px-3 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full">Ready in ${daysUntilReady}d</span>`;
+            }
+        }
+
+        // Success rate calculation
+        const successRate = item.total_attempts > 0
+            ? Math.round((item.successful_attempts / item.total_attempts) * 100)
+            : 0;
+
+        // Favorite icon
+        const favoriteIcon = item.is_favorite ?
+            `<span class="text-yellow-500 mr-2" title="Favorite">
+                <svg class="w-5 h-5 inline" fill="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                </svg>
+            </span>` : '';
+
+        div.innerHTML = `
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                        ${favoriteIcon}
+                        ${escapeHtml(item.german_sentence)}
+                    </h3>
+                    <p class="text-sm text-gray-600 mt-1">${escapeHtml(item.english_hint)}</p>
+                </div>
+                <div class="ml-4">
+                    ${statusBadge}
+                </div>
+            </div>
+            <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
+                <div class="flex space-x-4 text-sm text-gray-600">
+                    <span class="font-medium">${item.topic_name}</span>
+                    <span>•</span>
+                    <span>${timeText}</span>
+                </div>
+                <div class="flex space-x-4 text-sm">
+                    <span class="text-green-600" title="Successful attempts">✓ ${item.successful_attempts}</span>
+                    <span class="text-red-600" title="Failed attempts">✗ ${item.failed_attempts}</span>
+                    <span class="text-blue-600" title="Hints used">💡 ${item.hints_used}</span>
+                    <span class="text-gray-600" title="Total attempts">Σ ${item.total_attempts}</span>
+                    <span class="font-semibold ${successRate >= 75 ? 'text-green-600' : successRate >= 50 ? 'text-yellow-600' : 'text-red-600'}" title="Success rate">${successRate}%</span>
+                </div>
+            </div>
+        `;
+
+        return div;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     async function saveUserStats() {
         try {
+            // Save aggregate stats
             await fetch('/api/user/stats', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1187,8 +1567,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     total_time: state.sessionTime,
                 })
             });
+
+            // Save per-exercise completion data
+            await saveExerciseCompletions();
         } catch (error) {
             console.error('Error saving user stats:', error);
+        }
+    }
+
+    async function saveExerciseCompletions() {
+        try {
+            // Build completions array from exercisePerformance map
+            const completions = [];
+            state.exercisePerformance.forEach((perf, exerciseId) => {
+                completions.push({
+                    exercise_id: exerciseId,
+                    hints_used: perf.hints,
+                    mistakes: perf.mistakes
+                });
+            });
+
+            if (completions.length > 0) {
+                await fetch('/api/exercises/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ completions })
+                });
+                console.log('Saved completion data for', completions.length, 'exercises');
+            }
+        } catch (error) {
+            console.error('Error saving exercise completions:', error);
         }
     }
 
@@ -1210,17 +1618,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function init() {
         checkAuthStatus();
         loadTopics();
-        
+
         // Start with sample exercises for testing
         state.exercises = sampleExercises.exercises;
+        state.exerciseIds = []; // Sample exercises don't have IDs
         state.currentExerciseIndex = 0;
         state.mistakes = 0;
         state.hintsUsed = 0;
         state.sessionTime = 0;
         state.isSessionComplete = false;
+        state.exercisesWithMistakes = new Set();
+        state.exercisesWithHints = new Set();
+        state.exercisePerformance = new Map(); // Empty for sample exercises
         state.startTime = Date.now();
-        
-        updateStats();
+
         renderExercise();
     }
 

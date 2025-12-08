@@ -18,75 +18,61 @@
 <body class="antialiased flex flex-col min-h-screen">
 
     <header class="bg-white/10 backdrop-blur-lg border-b border-white/20 shadow-lg">
-        <nav class="container mx-auto px-6 py-6 flex justify-between items-center">
-            <div class="flex items-center space-x-6">
-                <h1 class="text-3xl font-bold text-white drop-shadow-lg">German Grammar Trainer</h1>
+        <nav class="container mx-auto px-3 py-3 lg:px-4 lg:py-4">
+            <!-- Top row: Title and buttons -->
+            <div class="flex justify-between items-center">
+                <h1 class="text-xl lg:text-2xl font-bold text-white drop-shadow-lg">German Grammar Trainer</h1>
+                <div class="flex items-center space-x-2 lg:space-x-3">
+                    <button id="login-btn" class="btn-primary px-3 py-2 lg:px-4 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm">
+                        <span class="hidden sm:inline">Login with Google</span>
+                        <span class="sm:hidden">Login</span>
+                    </button>
+                    <button id="stats-btn" class="btn-primary px-3 py-2 lg:px-4 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm hidden">
+                        <span class="hidden sm:inline">Stats</span>
+                        <span class="sm:hidden">📊</span>
+                    </button>
+                    <button id="history-btn" class="btn-primary px-3 py-2 lg:px-4 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm hidden">
+                        <span class="hidden sm:inline">History</span>
+                        <span class="sm:hidden">📜</span>
+                    </button>
+                    <button id="logout-btn" class="btn-primary px-3 py-2 lg:px-4 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm hidden">
+                        <span class="hidden sm:inline">Logout</span>
+                        <span class="sm:hidden">👋</span>
+                    </button>
+                    <button id="settings-btn" class="btn-primary px-3 py-2 lg:px-4 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm">
+                        <span class="hidden sm:inline">Settings</span>
+                        <span class="sm:hidden">⚙️</span>
+                    </button>
+                </div>
             </div>
-            <div class="flex items-center space-x-8">
-                <div class="flex items-center space-x-6">
-                    <div class="flex items-center space-x-2 bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
-                        <svg class="w-5 h-5 text-red-300" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                        </svg>
-                        <span id="stats-mistakes" class="text-lg font-semibold text-white">0</span>
-                        <span class="text-sm text-white/80">Mistakes</span>
-                    </div>
-                    <div class="flex items-center space-x-2 bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2">
-                        <svg class="w-5 h-5 text-blue-300" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path>
-                        </svg>
-                        <span id="stats-hints" class="text-lg font-semibold text-white">0</span>
-                        <span class="text-sm text-white/80">Hints</span>
-                    </div>
+            <!-- Bottom row: Topic selector and Start button -->
+            <div id="topic-selection-section" class="flex items-center gap-3 mt-3 pt-3 border-t border-white/20">
+                <div id="topic-selector-container" class="relative flex-1 max-w-md">
+                    <input type="text" id="topic-search" class="w-full px-3 py-2 lg:px-4 lg:py-2.5 border-2 border-white/40 rounded-lg shadow-md focus:ring-2 focus:ring-white/30 focus:border-white/60 focus:outline-none text-sm lg:text-base bg-white/95 backdrop-blur-sm" placeholder="Select topic...">
+                    <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <button id="login-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">Login with Google</button>
-                    <button id="stats-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold hidden">Stats</button>
-                    <button id="logout-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold hidden">Logout</button>
-                    <button id="settings-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">Settings</button>
-                </div>
+                <button id="generate-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-2.5 rounded-lg font-bold text-sm lg:text-base shadow-lg hover:shadow-xl transition-all hover:scale-105 whitespace-nowrap">
+                    Start Practice
+                </button>
             </div>
         </nav>
     </header>
 
-    <div id="topic-selection-section" class="bg-white/10 backdrop-blur-lg border-b border-white/20 py-12">
-        <div class="container mx-auto px-6">
-            <div class="max-w-4xl mx-auto">
-                <div class="text-center mb-8">
-                    <h2 class="text-3xl font-bold text-white mb-3 drop-shadow-lg">Choose Your Topic</h2>
-                    <p class="text-white text-lg drop-shadow">Select what you'd like to practice today</p>
-                </div>
-                <div class="max-w-2xl mx-auto space-y-6">
-                    <div id="topic-selector-container" class="relative">
-                        <label for="topic-search" class="block text-white font-semibold mb-3 text-base drop-shadow text-center">Practice Topic</label>
-                        <div class="relative">
-                            <input type="text" id="topic-search" class="w-full p-4 border-2 border-white/40 rounded-xl shadow-xl focus:ring-4 focus:ring-white/30 focus:border-white/60 focus:outline-none text-lg bg-white/95 backdrop-blur-sm" placeholder="Search or select a topic...">
-                            <svg class="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                    </div>
-                    <div class="text-center">
-                        <button id="generate-btn" class="btn-primary px-12 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-xl transition-all hover:scale-105">Start Practice Session →</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <main class="container mx-auto px-6 py-12">
+    <main class="container mx-auto px-3 py-6 lg:px-6 lg:py-12">
         <div id="app" class="max-w-3xl mx-auto">
 
             <!-- Exercise Display -->
-            <div id="exercise-container" class="card rounded-lg p-6 md:p-8 mb-8">
-                <div class="flex justify-between items-center mb-6">
-                    <div id="exercise-counter" class="text-lg font-semibold text-gray-700 bg-white/50 backdrop-blur-sm rounded-lg px-4 py-2"></div>
-                    <div id="progress-bar-container" class="flex-1 mx-6">
-                        <div class="bg-gray-200/50 rounded-full h-3 overflow-hidden">
+            <div id="exercise-container" class="card rounded-lg p-4 lg:p-8 mb-8">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-4 lg:mb-6 gap-3">
+                    <div id="exercise-counter" class="text-sm lg:text-lg font-semibold text-gray-700 bg-white/50 backdrop-blur-sm rounded-lg px-3 py-1 lg:px-4 lg:py-2 w-full sm:w-auto text-center"></div>
+                    <div id="progress-bar-container" class="flex-1 w-full sm:mx-6">
+                        <div class="bg-gray-200/50 rounded-full h-2 lg:h-3 overflow-hidden">
                             <div id="progress-bar" class="bg-gradient-to-r from-green-400 to-blue-500 h-full rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
                         </div>
                     </div>
-                    <div class="text-sm font-medium text-gray-600 bg-white/50 backdrop-blur-sm rounded-lg px-3 py-1">
+                    <div class="text-xs lg:text-sm font-medium text-gray-600 bg-white/50 backdrop-blur-sm rounded-lg px-2 py-1 lg:px-3 lg:py-1">
                         <span id="progress-percentage">0%</span>
                     </div>
                 </div>
@@ -109,17 +95,17 @@
                 </div>
 
                 <div id="exercise-content">
-                    <p class="text-lg text-gray-600 mb-2">English Hint:</p>
-                    <p id="english-hint" class="text-2xl font-semibold text-gray-800 mb-6">Loading exercise...</p>
+                    <p class="text-sm lg:text-lg text-gray-600 mb-2">English Hint:</p>
+                    <p id="english-hint" class="text-lg lg:text-2xl font-semibold text-gray-800 mb-4 lg:mb-6">Loading exercise...</p>
 
-                    <div id="answer-area" class="bg-gradient-to-r from-blue-50/50 to-purple-50/50 backdrop-blur-sm rounded-xl p-6 mb-8 min-h-[80px] border-2 border-blue-200/50 flex items-center justify-center transition-all duration-300">
-                        <p id="answer-prompt" class="text-gray-600 font-medium text-lg">Click the words below to form the sentence.</p>
-                        <div id="constructed-sentence" class="flex flex-wrap gap-3"></div>
+                    <div id="answer-area" class="bg-gradient-to-r from-blue-50/50 to-purple-50/50 backdrop-blur-sm rounded-xl p-4 lg:p-6 mb-6 lg:mb-8 min-h-[60px] lg:min-h-[80px] border-2 border-blue-200/50 flex items-center justify-center transition-all duration-300">
+                        <p id="answer-prompt" class="text-gray-600 font-medium text-sm lg:text-lg">Click the words below to form the sentence.</p>
+                        <div id="constructed-sentence" class="flex flex-wrap gap-2 lg:gap-3"></div>
                     </div>
 
-                    <div class="flex justify-between items-center mb-6">
-                        <p class="text-xl font-semibold text-gray-700">Scrambled Words:</p>
-                        <button id="hint-btn" class="btn-primary px-6 py-3 rounded-xl font-bold text-sm flex items-center space-x-2">
+                    <div class="flex justify-between items-center mb-4 lg:mb-6">
+                        <p class="text-base lg:text-xl font-semibold text-gray-700">Scrambled Words:</p>
+                        <button id="hint-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-3 rounded-xl font-bold text-xs lg:text-sm flex items-center space-x-2">
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path>
                             </svg>
@@ -131,13 +117,19 @@
                     </div>
 
                     <!-- Control buttons (shown after correct answer) -->
-                    <div id="exercise-controls" class="flex flex-wrap gap-3 justify-center mt-4 hidden">
-                        <button id="replay-audio-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">🔊 Replay Audio</button>
-                        <button id="next-exercise-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold">Next Exercise →</button>
+                    <div id="exercise-controls" class="flex flex-wrap gap-2 lg:gap-3 justify-center mt-4 hidden">
+                        <button id="toggle-favorite-btn" class="btn-secondary px-4 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-sm lg:text-base flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                            </svg>
+                            <span id="favorite-btn-text">Add to Favorites</span>
+                        </button>
+                        <button id="replay-audio-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-sm lg:text-base">🔊 Replay Audio</button>
+                        <button id="next-exercise-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-sm lg:text-base">Next Exercise →</button>
                     </div>
 
-                    <div id="feedback-area" class="mt-6 text-center min-h-[24px]">
-                        <p id="correct-sentence-display" class="text-lg correct-answer-feedback font-semibold"></p>
+                    <div id="feedback-area" class="mt-4 lg:mt-6 text-center min-h-[24px]">
+                        <p id="correct-sentence-display" class="text-base lg:text-lg correct-answer-feedback font-semibold"></p>
                     </div>
                 </div>
             </div>
@@ -146,7 +138,7 @@
     </main>
 
     <!-- Settings Modal -->
-    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden overflow-y-auto">
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden overflow-y-auto z-50">
         <div class="card rounded-lg p-8 w-full max-w-4xl max-h-screen overflow-y-auto m-4">
             <h2 class="text-2xl font-bold mb-6 text-gray-800">Topics Management</h2>
 
@@ -165,7 +157,18 @@
             <div class="mb-6">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold text-gray-800">All Topics</h3>
-                    <button id="add-topic-btn" class="btn-primary px-4 py-2 rounded-md text-sm">Add New Topic</button>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <label for="topic-sort" class="text-sm text-gray-600">Sort by:</label>
+                            <select id="topic-sort" class="border rounded-md px-3 py-1 text-sm">
+                                <option value="name-asc">Name (A-Z)</option>
+                                <option value="name-desc">Name (Z-A)</option>
+                                <option value="date-newest">Newest First</option>
+                                <option value="date-oldest">Oldest First</option>
+                            </select>
+                        </div>
+                        <button id="add-topic-btn" class="btn-primary px-4 py-2 rounded-md text-sm">Add New Topic</button>
+                    </div>
                 </div>
                 <div id="topics-list" class="space-y-4 max-h-60 overflow-y-auto">
                     <!-- Topics will be loaded here -->
@@ -246,6 +249,70 @@
                     <span class="font-semibold text-green-800">Trained (Strengthening)</span>
                     <span id="stats-trained" class="text-2xl font-bold text-green-800">0</span>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exercise History Modal -->
+    <div id="history-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden overflow-y-auto">
+        <div class="card rounded-lg p-8 w-full max-w-6xl max-h-screen overflow-y-auto m-4">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">Practice History</h2>
+                    <p id="history-topic-name" class="text-sm text-gray-600 mt-1">All Topics</p>
+                </div>
+                <button id="history-close-btn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+
+            <div id="history-summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 hidden">
+                <div class="bg-blue-100 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-blue-800" id="history-total-count">0</div>
+                    <div class="text-sm text-blue-600">Total Practiced</div>
+                </div>
+                <div id="history-filter-ready" class="bg-green-100 rounded-lg p-4 text-center cursor-pointer transition-all hover:ring-2 hover:ring-green-400 select-none">
+                    <div class="text-2xl font-bold text-green-800" id="history-ready-count">0</div>
+                    <div class="text-sm text-green-600">Ready to Practice (Filter)</div>
+                </div>
+                <div class="bg-purple-100 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-purple-800" id="history-success-rate">0%</div>
+                    <div class="text-sm text-purple-600">Success Rate</div>
+                </div>
+                <div class="bg-orange-100 rounded-lg p-4 text-center">
+                    <div class="text-2xl font-bold text-orange-800" id="history-total-attempts">0</div>
+                    <div class="text-sm text-orange-600">Total Attempts</div>
+                </div>
+            </div>
+
+            <div id="history-loading" class="text-center py-8 hidden">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+                <p class="mt-4 text-gray-600">Loading history...</p>
+            </div>
+
+            <div id="history-empty" class="text-center py-8 hidden">
+                <p class="text-gray-600">No practice history yet. Complete some exercises to see your progress!</p>
+            </div>
+
+            <div id="history-filters" class="flex justify-end mb-4">
+                <button id="history-filter-favorites" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 flex items-center gap-2 transition-colors">
+                    <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                    </svg>
+                    <span>Favorites Only</span>
+                </button>
+            </div>
+
+            <div id="history-content" class="space-y-3">
+                <!-- History items will be dynamically inserted here -->
+            </div>
+
+            <div id="history-pagination" class="flex justify-center items-center space-x-4 mt-6 hidden">
+                <button id="history-prev-btn" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Previous
+                </button>
+                <span id="history-page-info" class="text-gray-600">Page 1</span>
+                <button id="history-next-btn" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Next
+                </button>
             </div>
         </div>
     </div>

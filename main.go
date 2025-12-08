@@ -149,15 +149,22 @@ func main() {
 		storageType = "sqlite" // Default to sqlite
 	}
 
-	// Initialize storage backend
-	dbPath := os.Getenv("SQLITE_PATH")
-	if dbPath == "" {
-		dbPath = "german.db"
-	}
 	var err error
-	storage.DB, err = storage.NewSQLiteStorage(dbPath)
-	if err != nil {
-		log.Fatalf("Failed to initialize SQLite storage: %v", err)
+	if storageType == "airtable" {
+		storage.DB, err = storage.NewAirtableStorage()
+		if err != nil {
+			log.Fatalf("Failed to initialize Airtable storage: %v", err)
+		}
+	} else {
+		// Initialize storage backend
+		dbPath := os.Getenv("SQLITE_PATH")
+		if dbPath == "" {
+			dbPath = "german.db"
+		}
+		storage.DB, err = storage.NewSQLiteStorage(dbPath)
+		if err != nil {
+			log.Fatalf("Failed to initialize SQLite storage: %v", err)
+		}
 	}
 
 	// Initialize Google OAuth
@@ -232,9 +239,12 @@ func main() {
 
 	// API endpoints
 	http.HandleFunc("/api/exercises", withOptionalAuth(handleExercises))
-	http.HandleFunc("/api/topics", handleTopics)
-	http.HandleFunc("/api/topics/", handleTopicByID)
-	http.HandleFunc("/api/versions/", handleVersions)
+	http.HandleFunc("/api/exercises/complete", withAuth(handleExercisesComplete))
+	http.HandleFunc("/api/exercises/favorite", withAuth(handleExerciseFavorite))
+	http.HandleFunc("/api/exercises/history", withAuth(handleExerciseHistory))
+	http.HandleFunc("/api/topics", withOptionalAuth(handleTopics))
+	http.HandleFunc("/api/topics/", withOptionalAuth(handleTopicByID))
+	http.HandleFunc("/api/versions/", withOptionalAuth(handleVersions))
 	http.HandleFunc("/api/last-refined-prompt", handleGetLastRefinedPrompt)
 
 	// Auth endpoints
@@ -242,7 +252,7 @@ func main() {
 	http.HandleFunc("/auth/google/callback", handleGoogleCallback)
 	http.HandleFunc("/api/auth/status", handleAuthStatus)
 	http.HandleFunc("/auth/logout", handleLogout)
-	http.HandleFunc("/api/auth/is_admin", handleIsAdmin)
+	http.HandleFunc("/api/auth/is_admin", withOptionalAuth(handleIsAdmin))
 
 	// User stats and settings endpoints (protected by withAuth middleware)
 	http.HandleFunc("/api/user/stats", withAuth(handleUserStats))
@@ -496,6 +506,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[EXERCISES] Found %d exercises in cache for topic %s", len(allExercises), req.TopicID)
 
 	var finalExercises []*storage.Exercise
+	userViews := make(map[string]*storage.UserExerciseView)
 	if userID == "" {
 		// Guest user logic - only serve from cache, never generate.
 		log.Printf("[EXERCISES] Guest user mode - serving random exercises from cache")
@@ -503,7 +514,8 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Authenticated user SRS logic
 		log.Printf("[EXERCISES] Authenticated user %s - applying SRS logic", userID)
-		userViews, err := storage.DB.GetUserExerciseViews(userID)
+		var err error
+		userViews, err = storage.DB.GetUserExerciseViews(userID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
 			return
@@ -521,45 +533,39 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 			eligibleExercises = getEligibleExercisesForSRS(allExercises, userViews)
 		}
 
-		finalExercises = getRandomExercises(eligibleExercises, 10)
-
-		// Update views for the selected exercises
-		var viewsToUpdate []*storage.UserExerciseView
-		now := time.Now()
-		for _, ex := range finalExercises {
-			view, exists := userViews[ex.ID]
-			if !exists {
-				log.Printf("[SRS] User %s viewing exercise %s for the first time", userID, ex.ID)
-				view = &storage.UserExerciseView{
-					UserID:     userID,
-					ExerciseID: ex.ID,
-				}
-			} else {
-				log.Printf("[SRS] User %s viewing exercise %s again (counter was: %d)", userID, ex.ID, view.RepetitionCounter)
-			}
-			view.LastViewed = now
-			view.RepetitionCounter++
-			viewsToUpdate = append(viewsToUpdate, view)
-			log.Printf("[SRS] Updated: exercise %s, counter=%d, last_viewed=%s", ex.ID, view.RepetitionCounter, now.Format(time.RFC3339))
-		}
-		if err := storage.DB.UpdateUserExerciseViews(viewsToUpdate); err != nil {
-			log.Printf("ERROR: failed to update user exercise views: %v", err)
-			// Don't block user, just log the error
+		// Take top 10 (which are already sorted by SRS priority and favorite status)
+		// Or shuffle if we want randomness among equally important ones?
+		// The requirement implies prioritization. "favorite maker is the second condition for sorting".
+		// getEligibleExercisesForSRS returns them sorted.
+		// However, returning strictly top 10 might lead to repetition if the list is small or static.
+		// But for SRS, we usually want the most due items.
+		if len(eligibleExercises) > 10 {
+			finalExercises = eligibleExercises[:10]
 		} else {
-			log.Printf("[SRS] Successfully updated %d exercise views for user %s", len(viewsToUpdate), userID)
+			finalExercises = eligibleExercises
 		}
+
+		log.Printf("[SRS] Selected %d exercises for user %s", len(finalExercises), userID)
 	}
 
 	// Prepare response
 	type ExerciseResponse struct {
+		ID            string          `json:"id"`
 		ExerciseJSON  json.RawMessage `json:"exercise_json"`
 		AudioFilePath string          `json:"audio_file_path"`
+		IsFavorite    bool            `json:"is_favorite"`
 	}
 	var responseExercises []ExerciseResponse
 	for _, ex := range finalExercises {
+		isFavorite := false
+		if view, exists := userViews[ex.ID]; exists {
+			isFavorite = view.IsFavorite
+		}
 		responseExercises = append(responseExercises, ExerciseResponse{
+			ID:            ex.ID,
 			ExerciseJSON:  []byte(ex.ExerciseJSON),
 			AudioFilePath: ex.AudioFilePath,
+			IsFavorite:    isFavorite,
 		})
 	}
 
@@ -567,25 +573,321 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string][]ExerciseResponse{"exercises": responseExercises})
 }
 
-func getEligibleExercisesForSRS(allExercises []*storage.Exercise, userViews map[string]*storage.UserExerciseView) []*storage.Exercise {
-	var eligible []*storage.Exercise
+// handleExercisesComplete records the completion of exercises with performance data
+func handleExercisesComplete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserIDFromRequest(r)
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	type ExerciseCompletion struct {
+		ExerciseID string `json:"exercise_id"`
+		HintsUsed  int    `json:"hints_used"`
+		Mistakes   int    `json:"mistakes"`
+	}
+
+	type CompletionRequest struct {
+		Completions []ExerciseCompletion `json:"completions"`
+	}
+
+	var req CompletionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[COMPLETION] User %s completing %d exercises", userID, len(req.Completions))
+
+	// Get existing user views
+	userViews, err := storage.DB.GetUserExerciseViews(userID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
+		return
+	}
+
 	now := time.Now()
+	var viewsToUpdate []*storage.UserExerciseView
+
+	for _, completion := range req.Completions {
+		view, exists := userViews[completion.ExerciseID]
+		if !exists {
+			// Create new view if it doesn't exist
+			view = &storage.UserExerciseView{
+				UserID:     userID,
+				ExerciseID: completion.ExerciseID,
+			}
+		}
+
+		// Update statistics
+		view.LastViewed = now
+		view.TotalAttempts++
+		view.HintsUsed += completion.HintsUsed
+		view.MistakesMade += completion.Mistakes
+
+		// Determine if this was a perfect attempt
+		isPerfect := completion.HintsUsed == 0 && completion.Mistakes == 0
+
+		if isPerfect {
+			// Perfect attempt: increment counter and successful attempts
+			view.RepetitionCounter++
+			view.SuccessfulAttempts++
+			log.Printf("[COMPLETION] Exercise %s: PERFECT - counter: %d -> %d",
+				completion.ExerciseID, view.RepetitionCounter-1, view.RepetitionCounter)
+		} else if completion.Mistakes > 0 {
+			// Failed attempt: decrement counter (minimum 0) and increment failed attempts
+			oldCounter := view.RepetitionCounter
+			view.RepetitionCounter = max(0, view.RepetitionCounter-1)
+			view.FailedAttempts++
+			log.Printf("[COMPLETION] Exercise %s: FAILED (%d mistakes) - counter: %d -> %d",
+				completion.ExerciseID, completion.Mistakes, oldCounter, view.RepetitionCounter)
+		} else {
+			// Used hints but no mistakes: keep counter same
+			log.Printf("[COMPLETION] Exercise %s: HINTS USED (%d) - counter stays at %d",
+				completion.ExerciseID, completion.HintsUsed, view.RepetitionCounter)
+		}
+
+		viewsToUpdate = append(viewsToUpdate, view)
+	}
+
+	// Update all views in the database
+	if err := storage.DB.UpdateUserExerciseViews(viewsToUpdate); err != nil {
+		log.Printf("ERROR: failed to update user exercise views: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to update views: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[COMPLETION] Successfully updated %d exercise completions for user %s", len(viewsToUpdate), userID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// handleExerciseFavorite toggles the favorite status of an exercise
+func handleExerciseFavorite(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserIDFromRequest(r)
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		ExerciseID string `json:"exercise_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ExerciseID == "" {
+		http.Error(w, "Exercise ID is required", http.StatusBadRequest)
+		return
+	}
+
+	newStatus, err := storage.DB.ToggleFavorite(userID, req.ExerciseID)
+	if err != nil {
+		log.Printf("ERROR: failed to toggle favorite for user %s exercise %s: %v", userID, req.ExerciseID, err)
+		http.Error(w, fmt.Sprintf("Failed to toggle favorite: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[FAVORITE] User %s toggled favorite for exercise %s to %v", userID, req.ExerciseID, newStatus)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"is_favorite": newStatus,
+	})
+}
+
+// handleExerciseHistory returns the practice history for all exercises a user has attempted
+func handleExerciseHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserIDFromRequest(r)
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get optional topic_id parameter
+	topicID := r.URL.Query().Get("topic_id")
+
+	history, err := storage.DB.GetUserExerciseHistory(userID, topicID)
+	if err != nil {
+		log.Printf("ERROR: failed to get exercise history for user %s: %v", userID, err)
+		http.Error(w, fmt.Sprintf("Failed to get exercise history: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[HISTORY] Retrieved %d exercise history items for user %s (topic: %s)", len(history), userID, topicID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"history": history,
+	})
+}
+
+// max returns the maximum of two integers
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func getEligibleExercisesForSRS(allExercises []*storage.Exercise, userViews map[string]*storage.UserExerciseView) []*storage.Exercise {
+	type ScoredExercise struct {
+		Exercise      *storage.Exercise
+		OverdueAmount float64
+		IsFavorite    bool
+	}
+
+	var candidates []ScoredExercise
+	now := time.Now()
+
 	for _, ex := range allExercises {
 		view, seen := userViews[ex.ID]
 		if !seen {
-			log.Printf("[SRS_ELIGIBILITY] Exercise %s never seen before - ELIGIBLE", ex.ID)
-			eligible = append(eligible, ex)
+			// Never seen before: treated as very overdue or high priority
+			// We can assign a high arbitrary overdue amount to prioritize new items mixed with old ones
+			// Or just treat them as "due now".
+			// Let's give them a high score so they appear at the top if no overdue items exist,
+			// or mix them.
+			// For now, let's treat "never seen" as effectively "overdue by 0 days" but we want to show them.
+			// Actually, typical SRS systems prioritize overdue items over new items.
+			// Let's set overdue amount to a large number if we want to prioritize new items, or 0 if we assume they are "due today".
+			// A simple approach: treat as slightly overdue to ensure they get picked up.
+			candidates = append(candidates, ScoredExercise{
+				Exercise:      ex,
+				OverdueAmount: 1000.0, // Treat new items as very high priority? Or low?
+				// If we have many overdue items, we should clear them first.
+				// If we have no overdue items, we pick new ones.
+				// So "OverdueAmount" for new items should be considered carefully.
+				// Let's say new items are "due immediately".
+				// An item overdue by 10 days is more urgent than a new item.
+				// So new item overdue amount = 0.
+				// Wait, "OverdueAmount" = daysSinceView - nextReviewInDays.
+				// For new item: undefined.
+				// Let's stick to the prompt requirement:
+				// "if non-favorite and favorite mean both to be repeated today algo should choose favorite.
+				// hovever if non-favorite is more due to repetion it will be chosen."
+				// This implies a sorting based on "dueness".
+				// New items don't have a repetition schedule yet.
+				// Let's prioritize overdue items first, then new items.
+				IsFavorite: false,
+			})
 			continue
 		}
+
 		// SRS logic: next review date is (counter^2) days after last view
 		daysSinceView := now.Sub(view.LastViewed).Hours() / 24
 		nextReviewInDays := float64(view.RepetitionCounter * view.RepetitionCounter)
-		log.Printf("[SRS_ELIGIBILITY] Exercise %s: counter=%d, days_since_view=%.2f, next_review_in=%.0f days, eligible=%v",
-			ex.ID, view.RepetitionCounter, daysSinceView, nextReviewInDays, daysSinceView >= nextReviewInDays)
-		if daysSinceView >= nextReviewInDays {
-			eligible = append(eligible, ex)
+		overdueAmount := daysSinceView - nextReviewInDays
+
+		log.Printf("[SRS_ELIGIBILITY] Exercise %s: counter=%d, days_since_view=%.2f, next_review_in=%.0f days, overdue=%.2f, favorite=%v",
+			ex.ID, view.RepetitionCounter, daysSinceView, nextReviewInDays, overdueAmount, view.IsFavorite)
+
+		if overdueAmount >= 0 {
+			candidates = append(candidates, ScoredExercise{
+				Exercise:      ex,
+				OverdueAmount: overdueAmount,
+				IsFavorite:    view.IsFavorite,
+			})
 		}
 	}
+
+	// Sort candidates
+	// 1. OverdueAmount descending (more overdue = higher priority)
+	// 2. IsFavorite (true > false)
+	// Actually, the prompt says: "favorite maker is the second condition for sorting"
+	mrand.Shuffle(len(candidates), func(i, j int) {
+		candidates[i], candidates[j] = candidates[j], candidates[i]
+	}) // Shuffle first to randomize equal items (like new items)
+
+	// Sort stable so equal elements maintain relative order (randomized above)
+	// But we need explicit sort.
+	// We want to sort descending.
+	// Using a custom sort function.
+	// Since Go's sort.Slice is not stable, but we want a primary and secondary key.
+	// Primary: OverdueAmount. Secondary: IsFavorite.
+	// We can combine them into a score or just use a comparator.
+
+	// Comparator: return true if i should come before j
+	// i comes before j if i.Overdue > j.Overdue
+	// OR i.Overdue == j.Overdue AND i.Favorite && !j.Favorite
+
+	// NOTE: Floating point comparison for equality is tricky. Let's use a small epsilon or just direct comparison if they are close.
+	// But "overdue amount" is continuous.
+	// "if non-favorite and favorite mean both to be repeated today algo should choose favorite"
+	// This implies if they are "both to be repeated today", i.e. both have overdue >= 0.
+	// But if one is overdue by 5 days and one by 0.1 days, the 5 days one wins.
+	// So OverdueAmount is indeed the primary sort key.
+	// IsFavorite is secondary. This only really matters if OverdueAmount is very similar.
+	// Or maybe the user means: Favorite gives a bonus to OverdueAmount?
+	// "if non-favorite is more due ... it will be chosen".
+	// So yes, strict sorting by OverdueAmount, then Favorite.
+
+	// To make Favorite meaningful, maybe we treat "close enough" overdue amounts as equal?
+	// E.g. within same day?
+	// Let's try to group by day?
+	// Or just add a small bonus to favorites? e.g. +0.5 days overdue?
+	// "if non0favorite and favorite mean both to be repeated today algo should choose favorite"
+	// If Item A (fav) is overdue 0.1 days, Item B (non-fav) overdue 0.2 days.
+	// Strictly, B is more due. But they are "both to be repeated today".
+	// This suggests we should perhaps bin the overdue amount or add a bonus.
+	// Let's add a bonus of 1.0 (1 day) to favorites? No, that might be too much.
+	// Let's interpret "repeated today" as "available today".
+	// The prompt is slightly ambiguous. "if non-favorite is more due... it will be chosen".
+	// This suggests strict "more due" wins.
+	// "favorite maker is the second condition for sorting".
+	// This technically means: Sort by Due, then Sort by Favorite.
+	// If Due is continuous float, ties are rare.
+	// Unless we treat "new items" (Overdue=1000 above) as ties.
+	// For existing items, Overdue is unlikely to tie exactly.
+	// Maybe I should round OverdueAmount to integer days?
+	// If I round to integer days, then strict secondary sorting applies.
+	// Let's do that.
+
+	for i := 0; i < len(candidates)-1; i++ {
+		for j := i + 1; j < len(candidates); j++ {
+			// Sort descending
+			scoreI := int(candidates[i].OverdueAmount) // Floor to integer days
+			scoreJ := int(candidates[j].OverdueAmount)
+
+			swap := false
+			if scoreI < scoreJ {
+				swap = true
+			} else if scoreI == scoreJ {
+				// Secondary sort: Favorite
+				if !candidates[i].IsFavorite && candidates[j].IsFavorite {
+					swap = true
+				}
+			}
+
+			if swap {
+				candidates[i], candidates[j] = candidates[j], candidates[i]
+			}
+		}
+	}
+
+	var eligible []*storage.Exercise
+	for _, c := range candidates {
+		eligible = append(eligible, c.Exercise)
+	}
+
 	log.Printf("[SRS_ELIGIBILITY] Total exercises checked: %d, eligible: %d", len(allExercises), len(eligible))
 	return eligible
 }

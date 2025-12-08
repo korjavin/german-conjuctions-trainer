@@ -35,12 +35,18 @@ type Exercise struct {
 }
 
 type UserExerciseView struct {
-	ID                string    `json:"id"`
-	AirtableID        string    `json:"airtable_id"` // Will be deprecated
-	UserID            string    `json:"user_id"`
-	ExerciseID        string    `json:"exercise_id"`
-	LastViewed        time.Time `json:"last_viewed"`
-	RepetitionCounter int       `json:"repetition_counter"`
+	ID                 string    `json:"id"`
+	AirtableID         string    `json:"airtable_id"` // Will be deprecated
+	UserID             string    `json:"user_id"`
+	ExerciseID         string    `json:"exercise_id"`
+	LastViewed         time.Time `json:"last_viewed"`
+	RepetitionCounter  int       `json:"repetition_counter"`
+	TotalAttempts      int       `json:"total_attempts"`       // Total number of times attempted
+	SuccessfulAttempts int       `json:"successful_attempts"`  // Perfect attempts (no hints, no mistakes)
+	FailedAttempts     int       `json:"failed_attempts"`      // Attempts with mistakes
+	HintsUsed          int       `json:"hints_used"`           // Total hints used
+	MistakesMade       int       `json:"mistakes_made"`        // Total mistakes made
+	IsFavorite         bool      `json:"is_favorite"`          // User marked as favorite
 }
 
 type User struct {
@@ -63,6 +69,24 @@ type UserStats struct {
 type UserExerciseStats struct {
 	TrainedCount       int `json:"trained"`
 	ReadyToRepeatCount int `json:"ready_to_repeat"`
+}
+
+// ExerciseHistoryItem represents an exercise with its practice history
+type ExerciseHistoryItem struct {
+	ExerciseID         string    `json:"exercise_id"`
+	TopicName          string    `json:"topic_name"`
+	GermanSentence     string    `json:"german_sentence"`
+	EnglishHint        string    `json:"english_hint"`
+	LastViewed         time.Time `json:"last_viewed"`
+	RepetitionCounter  int       `json:"repetition_counter"`
+	TotalAttempts      int       `json:"total_attempts"`
+	SuccessfulAttempts int       `json:"successful_attempts"`
+	FailedAttempts     int       `json:"failed_attempts"`
+	HintsUsed          int       `json:"hints_used"`
+	MistakesMade       int       `json:"mistakes_made"`
+	NextReviewDays     float64   `json:"next_review_days"`
+	ReadyToRepeat      bool      `json:"ready_to_repeat"`
+	IsFavorite         bool      `json:"is_favorite"`
 }
 
 // Storage defines the interface for database operations.
@@ -95,6 +119,8 @@ type Storage interface {
 	UpdateUserStats(stats *UserStats) error
 	UpdateUserSetting(userID, lastTopicID string) error
 	GetUserExerciseStats(userID string) (*UserExerciseStats, error)
+	GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error)
+	ToggleFavorite(userID, exerciseID string) (bool, error)
 
 	// Initialization
 	InitializeDefaultTopics()

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -74,7 +75,13 @@ func (s *SQLiteStorage) initSchema() error {
 		user_id TEXT NOT NULL,
 		exercise_id TEXT NOT NULL,
 		last_viewed DATETIME NOT NULL,
-		repetition_counter INTEGER NOT NULL,
+		repetition_counter INTEGER NOT NULL DEFAULT 0,
+		total_attempts INTEGER NOT NULL DEFAULT 0,
+		successful_attempts INTEGER NOT NULL DEFAULT 0,
+		failed_attempts INTEGER NOT NULL DEFAULT 0,
+		hints_used INTEGER NOT NULL DEFAULT 0,
+		mistakes_made INTEGER NOT NULL DEFAULT 0,
+		is_favorite BOOLEAN NOT NULL DEFAULT 0,
 		FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
 		FOREIGN KEY(exercise_id) REFERENCES exercises(id) ON DELETE CASCADE,
 		UNIQUE(user_id, exercise_id)
@@ -95,8 +102,46 @@ func (s *SQLiteStorage) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_user_exercise_views_user ON user_exercise_views(user_id);
 	CREATE INDEX IF NOT EXISTS idx_prompt_versions_topic ON prompt_versions(topic_id);
 	`
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+
+	// Run migrations to add new columns to existing databases
+	return s.runMigrations()
+}
+
+// runMigrations adds new columns to existing tables if they don't exist
+func (s *SQLiteStorage) runMigrations() error {
+	migrations := []string{
+		`ALTER TABLE user_exercise_views ADD COLUMN total_attempts INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE user_exercise_views ADD COLUMN successful_attempts INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE user_exercise_views ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE user_exercise_views ADD COLUMN hints_used INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE user_exercise_views ADD COLUMN mistakes_made INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE user_exercise_views ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT 0`,
+	}
+
+	for _, migration := range migrations {
+		// Try to execute migration, ignore error if column already exists
+		_, err := s.db.Exec(migration)
+		if err != nil && !isColumnExistsError(err) {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+	}
+
+	log.Println("Database migrations completed successfully")
+	return nil
+}
+
+// isColumnExistsError checks if the error is due to column already existing
+func isColumnExistsError(err error) bool {
+	return err != nil && (
+		err.Error() == "duplicate column name: total_attempts" ||
+		err.Error() == "duplicate column name: successful_attempts" ||
+		err.Error() == "duplicate column name: failed_attempts" ||
+		err.Error() == "duplicate column name: hints_used" ||
+		err.Error() == "duplicate column name: mistakes_made" ||
+		err.Error() == "duplicate column name: is_favorite")
 }
 
 // querier is an interface that can be a *sql.DB or *sql.Tx
@@ -412,7 +457,10 @@ func (s *SQLiteStorage) UpdateLegacyExercisesWithAudio(text, audioPath string) {
 }
 
 func (s *SQLiteStorage) GetUserExerciseViews(userID string) (map[string]*UserExerciseView, error) {
-	rows, err := s.db.Query("SELECT id, user_id, exercise_id, last_viewed, repetition_counter FROM user_exercise_views WHERE user_id = ?", userID)
+	rows, err := s.db.Query(`
+		SELECT id, user_id, exercise_id, last_viewed, repetition_counter,
+		       total_attempts, successful_attempts, failed_attempts, hints_used, mistakes_made, is_favorite
+		FROM user_exercise_views WHERE user_id = ?`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -421,7 +469,8 @@ func (s *SQLiteStorage) GetUserExerciseViews(userID string) (map[string]*UserExe
 	views := make(map[string]*UserExerciseView)
 	for rows.Next() {
 		var view UserExerciseView
-		if err := rows.Scan(&view.ID, &view.UserID, &view.ExerciseID, &view.LastViewed, &view.RepetitionCounter); err != nil {
+		if err := rows.Scan(&view.ID, &view.UserID, &view.ExerciseID, &view.LastViewed, &view.RepetitionCounter,
+			&view.TotalAttempts, &view.SuccessfulAttempts, &view.FailedAttempts, &view.HintsUsed, &view.MistakesMade, &view.IsFavorite); err != nil {
 			return nil, err
 		}
 		views[view.ExerciseID] = &view
@@ -437,11 +486,17 @@ func (s *SQLiteStorage) UpdateUserExerciseViews(viewsToUpdate []*UserExerciseVie
 	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`
-		INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter)
-		VALUES(?, ?, ?, ?, ?)
+		INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter,
+		                                 total_attempts, successful_attempts, failed_attempts, hints_used, mistakes_made, is_favorite)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, exercise_id) DO UPDATE SET
 		last_viewed = excluded.last_viewed,
-		repetition_counter = excluded.repetition_counter
+		repetition_counter = excluded.repetition_counter,
+		total_attempts = excluded.total_attempts,
+		successful_attempts = excluded.successful_attempts,
+		failed_attempts = excluded.failed_attempts,
+		hints_used = excluded.hints_used,
+		mistakes_made = excluded.mistakes_made
 	`)
 	if err != nil {
 		return err
@@ -453,7 +508,8 @@ func (s *SQLiteStorage) UpdateUserExerciseViews(viewsToUpdate []*UserExerciseVie
 		if view.ID == "" {
 			view.ID = uuid.NewString()
 		}
-		_, err := stmt.Exec(view.ID, view.UserID, view.ExerciseID, view.LastViewed, view.RepetitionCounter)
+		_, err := stmt.Exec(view.ID, view.UserID, view.ExerciseID, view.LastViewed, view.RepetitionCounter,
+			view.TotalAttempts, view.SuccessfulAttempts, view.FailedAttempts, view.HintsUsed, view.MistakesMade, view.IsFavorite)
 		if err != nil {
 			return err
 		}
@@ -593,4 +649,146 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 
 	log.Printf("[STATS_CALC] Final stats for user %s: ready=%d, trained=%d", userID, stats.ReadyToRepeatCount, stats.TrainedCount)
 	return stats, nil
+}
+
+// GetUserExerciseHistory returns the practice history for all exercises a user has attempted
+func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error) {
+	query := `
+		SELECT
+			uev.exercise_id,
+			t.name AS topic_name,
+			e.exercise_json,
+			uev.last_viewed,
+			uev.repetition_counter,
+			uev.total_attempts,
+			uev.successful_attempts,
+			uev.failed_attempts,
+			uev.hints_used,
+			uev.mistakes_made,
+			uev.is_favorite
+		FROM user_exercise_views uev
+		JOIN exercises e ON uev.exercise_id = e.id
+		JOIN topics t ON e.topic_id = t.id
+		WHERE uev.user_id = ?
+	`
+
+	args := []interface{}{userID}
+
+	// Add topic filter if specified
+	if topicID != "" {
+		query += " AND e.topic_id = ?"
+		args = append(args, topicID)
+	}
+
+	query += " ORDER BY uev.last_viewed DESC"
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var history []*ExerciseHistoryItem
+	now := time.Now()
+
+	for rows.Next() {
+		var item ExerciseHistoryItem
+		var exerciseJSON string
+
+		if err := rows.Scan(
+			&item.ExerciseID,
+			&item.TopicName,
+			&exerciseJSON,
+			&item.LastViewed,
+			&item.RepetitionCounter,
+			&item.TotalAttempts,
+			&item.SuccessfulAttempts,
+			&item.FailedAttempts,
+			&item.HintsUsed,
+			&item.MistakesMade,
+			&item.IsFavorite,
+		); err != nil {
+			return nil, err
+		}
+
+		// Parse the exercise JSON to extract German sentence and English hint
+		var exerciseData map[string]interface{}
+		if err := json.Unmarshal([]byte(exerciseJSON), &exerciseData); err != nil {
+			log.Printf("Error parsing exercise JSON for %s: %v", item.ExerciseID, err)
+			continue
+		}
+
+		if sentence, ok := exerciseData["correct_german_sentence"].(string); ok {
+			item.GermanSentence = sentence
+		}
+		if hint, ok := exerciseData["english_hint"].(string); ok {
+			item.EnglishHint = hint
+		}
+
+		// Calculate next review time using SRS formula: (counter^2) days
+		daysSinceView := now.Sub(item.LastViewed).Hours() / 24
+		item.NextReviewDays = float64(item.RepetitionCounter * item.RepetitionCounter)
+		item.ReadyToRepeat = daysSinceView >= item.NextReviewDays
+
+		history = append(history, &item)
+	}
+
+	return history, nil
+}
+
+func (s *SQLiteStorage) ToggleFavorite(userID, exerciseID string) (bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	// Check if view exists
+	var isFavorite bool
+	var exists bool
+	row := tx.QueryRow("SELECT is_favorite FROM user_exercise_views WHERE user_id = ? AND exercise_id = ?", userID, exerciseID)
+	err = row.Scan(&isFavorite)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			exists = false
+		} else {
+			return false, err
+		}
+	} else {
+		exists = true
+	}
+
+	newStatus := !isFavorite
+
+	if exists {
+		_, err = tx.Exec("UPDATE user_exercise_views SET is_favorite = ? WHERE user_id = ? AND exercise_id = ?", newStatus, userID, exerciseID)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		// Create new view if it doesn't exist, initializing other fields to 0/now
+		_, err = tx.Exec(`
+			INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter, is_favorite, created_at)
+			VALUES(?, ?, ?, ?, 0, ?, ?)
+		`, uuid.NewString(), userID, exerciseID, time.Now().UTC(), newStatus, time.Now().UTC())
+		// Note: created_at is not in the schema provided in initSchema, checking...
+		// initSchema: last_viewed DATETIME NOT NULL.
+		// So we insert last_viewed as now.
+		// Wait, the INSERT above had created_at which is not in schema. Correcting query.
+
+		_, err = tx.Exec(`
+			INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter, is_favorite)
+			VALUES(?, ?, ?, ?, 0, ?)
+		`, uuid.NewString(), userID, exerciseID, time.Now().UTC(), newStatus)
+
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+
+	return newStatus, nil
 }

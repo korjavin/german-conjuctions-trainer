@@ -15,6 +15,9 @@ import (
 // --- Airtable Storage Implementation ---
 
 // AirtableStorage implements the Storage interface for Airtable.
+//
+// Deprecated: AirtableStorage is legacy and will be removed in future versions.
+// Use SQLiteStorage instead.
 type AirtableStorage struct {
 	client *airtable.Client
 	baseID string
@@ -34,7 +37,10 @@ var (
 )
 
 // NewAirtableStorage creates a new Airtable storage instance.
+//
+// Deprecated: AirtableStorage is legacy and will be removed in future versions.
 func NewAirtableStorage() (*AirtableStorage, error) {
+	log.Println("WARNING: AirtableStorage is deprecated and will be removed in future versions. Please migrate to SQLite.")
 	airtableToken := os.Getenv("AIRTABLE_TOKEN")
 	baseID := os.Getenv("AIRTABLE_BASE_ID")
 
@@ -987,4 +993,28 @@ func (a *AirtableStorage) UpdateUserSetting(userID, lastTopicID string) error {
 
 func (a *AirtableStorage) InitializeDefaultTopics() {
 	InitializeDefaultTopics()
+}
+
+func GetUserExerciseStats(userID string) (*UserExerciseStats, error) {
+	return nil, fmt.Errorf("GetUserExerciseStats not implemented for Airtable")
+}
+
+func GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error) {
+	return nil, fmt.Errorf("GetUserExerciseHistory not implemented for Airtable")
+}
+
+func ToggleFavorite(userID, exerciseID string) (bool, error) {
+	return false, fmt.Errorf("ToggleFavorite not implemented for Airtable")
+}
+
+func (a *AirtableStorage) GetUserExerciseStats(userID string) (*UserExerciseStats, error) {
+	return GetUserExerciseStats(userID)
+}
+
+func (a *AirtableStorage) GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error) {
+	return GetUserExerciseHistory(userID, topicID)
+}
+
+func (a *AirtableStorage) ToggleFavorite(userID, exerciseID string) (bool, error) {
+	return ToggleFavorite(userID, exerciseID)
 }

@@ -121,6 +121,33 @@ body {
     background: linear-gradient(135deg, #DDD6FE 0%, #C7D2FE 100%);
 }
 
+/* Mobile responsiveness improvements */
+@media (max-width: 1024px) {
+    /* Hide header buttons text on mobile, show icons only */
+    header .btn-primary {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+    }
+
+    /* Reduce header padding on mobile */
+    header nav {
+        padding: 1rem 1.5rem;
+    }
+
+    /* Make exercise container more compact on mobile */
+    main {
+        padding: 1.5rem 1rem;
+    }
+}
+
+@media (max-width: 640px) {
+    /* Stack header items vertically on very small screens if needed */
+    header .btn-primary {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.75rem;
+    }
+}
+
 /* Privacy page specific styles */
 .privacy-page {
     background-color: #FDFBF8;
