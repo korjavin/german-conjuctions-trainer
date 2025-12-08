@@ -1432,8 +1432,9 @@ body {
 }
 
 .btn-word.word-collected {
-  visibility: hidden;
+  opacity: 0;
   pointer-events: none;
+  cursor: default;
 }
 
 #topic-dropdown {
