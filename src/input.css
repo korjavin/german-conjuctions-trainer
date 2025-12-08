@@ -94,6 +94,11 @@ body {
 .btn-word {
     position: relative;
 }
+.btn-word.word-collected {
+    opacity: 0;
+    pointer-events: none;
+    cursor: default;
+}
 #topic-dropdown {
     backdrop-filter: blur(16px);
     border: 2px solid rgba(79, 70, 229, 0.2);
