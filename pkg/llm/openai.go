@@ -136,10 +136,23 @@ func validateRefinedPrompt(prompt string) error {
 }
 
 func ensurePromptContainsJSON(prompt string) string {
-	if strings.Contains(strings.ToLower(prompt), "json") {
-		return prompt
+	trimmed := strings.TrimSpace(prompt)
+	if strings.Contains(trimmed, "json") {
+		return trimmed
 	}
-	return strings.TrimSpace(prompt) + "\n\nImportant: Return only valid JSON."
+	if trimmed == "" {
+		return "Return only valid json."
+	}
+	return trimmed + "\n\nImportant: return only valid json."
+}
+
+func isMissingJSONPromptError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lowerErr := strings.ToLower(err.Error())
+	return strings.Contains(lowerErr, "prompt must contain the word 'json'") ||
+		strings.Contains(lowerErr, "prompt must contain the word \"json\"")
 }
 
 // IsTimeoutError identifies timeout-like errors from upstream provider calls.
@@ -259,12 +272,11 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 	if err != nil {
 		log.Printf("Error refining prompt, falling back to original: %v", err)
 		finalPrompt = topic.Prompt
-	} else {
-		lastRefinedPromptMutex.Lock()
-		lastRefinedPrompt = finalPrompt
-		lastRefinedPromptMutex.Unlock()
 	}
 	finalPrompt = ensurePromptContainsJSON(finalPrompt)
+	lastRefinedPromptMutex.Lock()
+	lastRefinedPrompt = finalPrompt
+	lastRefinedPromptMutex.Unlock()
 
 	openaiReq := OpenAIRequest{
 		Model:          modelName,
@@ -274,10 +286,18 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 
 	timeout := getOpenAITimeout()
 	client := &http.Client{Timeout: timeout}
-	log.Printf("Generating exercises for topic=%s model=%s timeout=%s", topic.ID, modelName, timeout)
+	log.Printf("Generating exercises for topic=%s model=%s timeout=%s prompt_has_lowercase_json=%v", topic.ID, modelName, timeout, strings.Contains(finalPrompt, "json"))
 	openaiResp, elapsed, err := callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, "exercise generation")
 	if err != nil {
-		return nil, err
+		if isMissingJSONPromptError(err) {
+			retryPrompt := strings.TrimSpace(finalPrompt) + "\n\nReminder: respond with valid json."
+			log.Printf("Retrying exercise generation for topic=%s after provider rejected missing 'json' keyword", topic.ID)
+			openaiReq.Messages = []Message{{Role: "user", Content: retryPrompt}}
+			openaiResp, elapsed, err = callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, "exercise generation retry")
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var exerciseData struct {

@@ -166,3 +166,63 @@ func TestGenerateExercisesFallsBackWhenRefineReturnsExercisePayload(t *testing.T
 		t.Fatalf("Expected generation prompt to fall back to original topic prompt, got: %s", generationPrompt)
 	}
 }
+
+func TestGenerateExercisesAddsLowercaseJSONForProviderRequirement(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqBody map[string]interface{}
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &reqBody)
+
+		if _, ok := reqBody["response_format"]; ok {
+			messages := reqBody["messages"].([]interface{})
+			content := messages[0].(map[string]interface{})["content"].(string)
+			if !strings.Contains(content, "json") {
+				w.WriteHeader(http.StatusBadRequest)
+				fmt.Fprintln(w, `{
+					"error": {
+						"message": "Prompt must contain the word 'json' in some form to use 'response_format' of type 'json_object'."
+					}
+				}`)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintln(w, `{
+				"choices": [
+					{
+						"message": {
+							"content": "{\"exercises\":[{\"correct_german_sentence\":\"Das ist ein JSON-Test.\",\"english_hint\":\"This is a JSON test.\"}]}"
+						}
+					}
+				]
+			}`)
+			return
+		}
+
+		// Refinement returns uppercase JSON only.
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, `{
+			"choices": [
+				{
+					"message": {
+						"content": "Generate exercises and return a JSON object."
+					}
+				}
+			]
+		}`)
+	}))
+	defer server.Close()
+
+	topic := &storage.Topic{
+		ID:     "json-lowercase-topic",
+		Name:   "JSON lowercase topic",
+		Prompt: "Generate B1 exercises.",
+	}
+
+	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model")
+	if err != nil {
+		t.Fatalf("Expected generation to succeed after lowercase json injection, but got: %v", err)
+	}
+	if len(exercises) != 1 {
+		t.Fatalf("Expected 1 exercise, but got %d", len(exercises))
+	}
+}
