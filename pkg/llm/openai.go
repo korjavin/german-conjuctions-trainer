@@ -112,6 +112,36 @@ func formatBodySnippet(respBody []byte) string {
 	return snippet
 }
 
+func looksLikeExercisePayload(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return false
+	}
+	lower := strings.ToLower(trimmed)
+	return strings.HasPrefix(trimmed, "{") && strings.Contains(lower, "\"exercises\"")
+}
+
+func validateRefinedPrompt(prompt string) error {
+	trimmed := strings.TrimSpace(prompt)
+	if trimmed == "" {
+		return fmt.Errorf("refined prompt is empty")
+	}
+	if looksLikeExercisePayload(trimmed) {
+		return fmt.Errorf("refined prompt appears to be generated exercises JSON instead of instructions")
+	}
+	if !strings.Contains(strings.ToLower(trimmed), "json") {
+		return fmt.Errorf("refined prompt missing required keyword 'json'")
+	}
+	return nil
+}
+
+func ensurePromptContainsJSON(prompt string) string {
+	if strings.Contains(strings.ToLower(prompt), "json") {
+		return prompt
+	}
+	return strings.TrimSpace(prompt) + "\n\nImportant: Return only valid JSON."
+}
+
 // IsTimeoutError identifies timeout-like errors from upstream provider calls.
 func IsTimeoutError(err error) bool {
 	if err == nil {
@@ -216,6 +246,9 @@ func RefinePrompt(originalPrompt, apiKey, openaiURL, modelName string) (string, 
 	}
 
 	refinedPrompt := strings.TrimSpace(openaiResp.Choices[0].Message.Content)
+	if err := validateRefinedPrompt(refinedPrompt); err != nil {
+		return "", err
+	}
 	log.Printf("Successfully refined prompt in %s.", elapsed.Round(time.Millisecond))
 	return refinedPrompt, nil
 }
@@ -231,6 +264,7 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 		lastRefinedPrompt = finalPrompt
 		lastRefinedPromptMutex.Unlock()
 	}
+	finalPrompt = ensurePromptContainsJSON(finalPrompt)
 
 	openaiReq := OpenAIRequest{
 		Model:          modelName,
