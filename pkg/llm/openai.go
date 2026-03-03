@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"german-conjunctions-trainer/pkg/storage"
 	"io"
 	"log"
 	"net"
@@ -16,6 +15,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"german-conjunctions-trainer/pkg/storage"
+
+	"github.com/google/uuid"
 )
 
 // --- Data Structures ---
@@ -59,11 +62,32 @@ type GeneratedExercise struct {
 	ScrambledWords        []string `json:"scrambled_words"`
 }
 
+type GenerationDebugInfo struct {
+	BatchID               string           `json:"batch_id"`
+	TopicID               string           `json:"topic_id"`
+	ModelName             string           `json:"model_name"`
+	Prompt                string           `json:"prompt"`
+	Profile               VariationProfile `json:"profile"`
+	RefinementEnabled     bool             `json:"refinement_enabled"`
+	RefinementUsed        bool             `json:"refinement_used"`
+	RefinementError       string           `json:"refinement_error,omitempty"`
+	ProviderRetryCount    int              `json:"provider_retry_count"`
+	QualityGateRetryCount int              `json:"quality_gate_retry_count"`
+	QualityGateFailures   []string         `json:"quality_gate_failures,omitempty"`
+	GeneratedCount        int              `json:"generated_count"`
+	GenerationLatencyMS   int64            `json:"generation_latency_ms"`
+	LastError             string           `json:"last_error,omitempty"`
+	GeneratedAt           time.Time        `json:"generated_at"`
+}
+
 // --- Globals ---
 
 var (
-	lastRefinedPrompt      string
-	lastRefinedPromptMutex sync.RWMutex
+	lastPromptUsed      string
+	lastPromptUsedMutex sync.RWMutex
+
+	lastGenerationDebug      GenerationDebugInfo
+	lastGenerationDebugMutex sync.RWMutex
 )
 
 const defaultOpenAITimeoutSeconds = 180
@@ -97,6 +121,16 @@ func getOpenAITimeout() time.Duration {
 		}
 	}
 	return time.Duration(timeoutSeconds) * time.Second
+}
+
+func isPromptRefinementEnabled() bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv("ENABLE_PROMPT_REFINEMENT")))
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func formatBodySnippet(respBody []byte) string {
@@ -137,11 +171,11 @@ func validateRefinedPrompt(prompt string) error {
 
 func ensurePromptContainsJSON(prompt string) string {
 	trimmed := strings.TrimSpace(prompt)
-	if strings.Contains(trimmed, "json") {
-		return trimmed
-	}
 	if trimmed == "" {
 		return "Return only valid json."
+	}
+	if strings.Contains(trimmed, "json") {
+		return trimmed
 	}
 	return trimmed + "\n\nImportant: return only valid json."
 }
@@ -153,6 +187,42 @@ func isMissingJSONPromptError(err error) bool {
 	lowerErr := strings.ToLower(err.Error())
 	return strings.Contains(lowerErr, "prompt must contain the word 'json'") ||
 		strings.Contains(lowerErr, "prompt must contain the word \"json\"")
+}
+
+func parseGeneratedExercises(content string) ([]GeneratedExercise, error) {
+	var exerciseData struct {
+		Exercises []GeneratedExercise `json:"exercises"`
+	}
+	if err := json.Unmarshal([]byte(content), &exerciseData); err != nil {
+		return nil, fmt.Errorf("failed to parse exercises from provider response: %w", err)
+	}
+	if len(exerciseData.Exercises) == 0 {
+		return nil, fmt.Errorf("provider returned zero exercises")
+	}
+	return exerciseData.Exercises, nil
+}
+
+func cloneGenerationDebugInfo(info GenerationDebugInfo) GenerationDebugInfo {
+	copyInfo := info
+	copyInfo.Profile.ConjunctionSet = append([]string(nil), info.Profile.ConjunctionSet...)
+	copyInfo.Profile.TenseMix = append([]string(nil), info.Profile.TenseMix...)
+	copyInfo.Profile.SubjectMix = append([]string(nil), info.Profile.SubjectMix...)
+	copyInfo.Profile.SentenceForms = append([]string(nil), info.Profile.SentenceForms...)
+	copyInfo.Profile.ClausePatterns = append([]string(nil), info.Profile.ClausePatterns...)
+	copyInfo.QualityGateFailures = append([]string(nil), info.QualityGateFailures...)
+	return copyInfo
+}
+
+func setLastPromptUsed(prompt string) {
+	lastPromptUsedMutex.Lock()
+	defer lastPromptUsedMutex.Unlock()
+	lastPromptUsed = prompt
+}
+
+func setLastGenerationDebugInfo(info GenerationDebugInfo) {
+	lastGenerationDebugMutex.Lock()
+	defer lastGenerationDebugMutex.Unlock()
+	lastGenerationDebug = cloneGenerationDebugInfo(info)
 }
 
 // IsTimeoutError identifies timeout-like errors from upstream provider calls.
@@ -236,6 +306,46 @@ func callChatCompletions(
 	return &openaiResp, elapsed, nil
 }
 
+func requestExercisesFromProvider(
+	client *http.Client,
+	apiKey string,
+	openaiURL string,
+	modelName string,
+	timeout time.Duration,
+	prompt string,
+	stage string,
+) ([]GeneratedExercise, time.Duration, int, error) {
+	providerRetries := 0
+	totalElapsed := time.Duration(0)
+
+	openaiReq := OpenAIRequest{
+		Model:          modelName,
+		Messages:       []Message{{Role: "user", Content: prompt}},
+		ResponseFormat: &ResponseFormat{Type: "json_object"},
+	}
+
+	openaiResp, elapsed, err := callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, stage)
+	totalElapsed += elapsed
+	if err != nil {
+		if isMissingJSONPromptError(err) {
+			providerRetries = 1
+			retryPrompt := strings.TrimSpace(prompt) + "\n\nReminder: respond with valid json."
+			openaiReq.Messages = []Message{{Role: "user", Content: retryPrompt}}
+			openaiResp, elapsed, err = callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, stage+" retry")
+			totalElapsed += elapsed
+		}
+		if err != nil {
+			return nil, totalElapsed, providerRetries, err
+		}
+	}
+
+	exercises, parseErr := parseGeneratedExercises(openaiResp.Choices[0].Message.Content)
+	if parseErr != nil {
+		return nil, totalElapsed, providerRetries, parseErr
+	}
+	return exercises, totalElapsed, providerRetries, nil
+}
+
 func RefinePrompt(originalPrompt, apiKey, openaiURL, modelName string) (string, error) {
 	timeout := getOpenAITimeout()
 	client := &http.Client{Timeout: timeout}
@@ -266,55 +376,103 @@ func RefinePrompt(originalPrompt, apiKey, openaiURL, modelName string) (string, 
 	return refinedPrompt, nil
 }
 
-// GenerateExercises calls the LLM and returns the generated exercises without saving them.
+// GenerateExercises calls the LLM and returns generated exercises without saving them.
 func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string) ([]GeneratedExercise, error) {
-	finalPrompt, err := RefinePrompt(topic.Prompt, apiKey, openaiURL, modelName)
-	if err != nil {
-		log.Printf("Error refining prompt, falling back to original: %v", err)
-		finalPrompt = topic.Prompt
-	}
-	finalPrompt = ensurePromptContainsJSON(finalPrompt)
-	lastRefinedPromptMutex.Lock()
-	lastRefinedPrompt = finalPrompt
-	lastRefinedPromptMutex.Unlock()
+	batchID := uuid.NewString()
+	profile := BuildVariationProfile(topic)
+	generationStarted := time.Now().UTC()
 
-	openaiReq := OpenAIRequest{
-		Model:          modelName,
-		Messages:       []Message{{Role: "user", Content: finalPrompt}},
-		ResponseFormat: &ResponseFormat{Type: "json_object"},
+	debugInfo := GenerationDebugInfo{
+		BatchID:           batchID,
+		TopicID:           topic.ID,
+		ModelName:         modelName,
+		Profile:           profile,
+		RefinementEnabled: isPromptRefinementEnabled(),
+		GeneratedAt:       generationStarted,
 	}
+	defer func() {
+		setLastGenerationDebugInfo(debugInfo)
+	}()
+
+	basePrompt := topic.Prompt
+	if debugInfo.RefinementEnabled {
+		refinedPrompt, refineErr := RefinePrompt(basePrompt, apiKey, openaiURL, modelName)
+		if refineErr != nil {
+			debugInfo.RefinementError = refineErr.Error()
+			log.Printf("[GENERATION] batch=%s refinement failed, using base prompt: %v", batchID, refineErr)
+		} else {
+			basePrompt = refinedPrompt
+			debugInfo.RefinementUsed = true
+		}
+	}
+
+	finalPrompt := BuildGenerationPrompt(basePrompt, profile)
+	finalPrompt = ensurePromptContainsJSON(finalPrompt)
+	debugInfo.Prompt = finalPrompt
+	setLastPromptUsed(finalPrompt)
 
 	timeout := getOpenAITimeout()
 	client := &http.Client{Timeout: timeout}
-	log.Printf("Generating exercises for topic=%s model=%s timeout=%s prompt_has_lowercase_json=%v", topic.ID, modelName, timeout, strings.Contains(finalPrompt, "json"))
-	openaiResp, elapsed, err := callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, "exercise generation")
+
+	log.Printf("[GENERATION] batch=%s topic=%s model=%s timeout=%s seed=%d conjunction_targets=%d refinement_enabled=%v refinement_used=%v",
+		batchID, topic.ID, modelName, timeout, profile.Seed, len(profile.ConjunctionSet), debugInfo.RefinementEnabled, debugInfo.RefinementUsed)
+
+	exercises, elapsed, providerRetries, err := requestExercisesFromProvider(
+		client,
+		apiKey,
+		openaiURL,
+		modelName,
+		timeout,
+		finalPrompt,
+		"exercise generation",
+	)
+	debugInfo.ProviderRetryCount += providerRetries
+	debugInfo.GenerationLatencyMS += elapsed.Milliseconds()
 	if err != nil {
-		if isMissingJSONPromptError(err) {
-			retryPrompt := strings.TrimSpace(finalPrompt) + "\n\nReminder: respond with valid json."
-			log.Printf("Retrying exercise generation for topic=%s after provider rejected missing 'json' keyword", topic.ID)
-			openaiReq.Messages = []Message{{Role: "user", Content: retryPrompt}}
-			openaiResp, elapsed, err = callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, "exercise generation retry")
-		}
+		debugInfo.LastError = err.Error()
+		return nil, err
+	}
+
+	if qualityErr := ValidateExerciseSet(exercises, profile); qualityErr != nil {
+		debugInfo.QualityGateFailures = append(debugInfo.QualityGateFailures, qualityErr.Error())
+		debugInfo.QualityGateRetryCount = 1
+
+		correctivePrompt := BuildCorrectivePrompt(finalPrompt, profile, qualityErr.Error())
+		correctivePrompt = ensurePromptContainsJSON(correctivePrompt)
+		debugInfo.Prompt = correctivePrompt
+		setLastPromptUsed(correctivePrompt)
+
+		exercises, elapsed, providerRetries, err = requestExercisesFromProvider(
+			client,
+			apiKey,
+			openaiURL,
+			modelName,
+			timeout,
+			correctivePrompt,
+			"exercise generation corrective",
+		)
+		debugInfo.ProviderRetryCount += providerRetries
+		debugInfo.GenerationLatencyMS += elapsed.Milliseconds()
 		if err != nil {
+			debugInfo.LastError = fmt.Sprintf("quality retry request failed: %v", err)
 			return nil, err
 		}
+
+		if secondQualityErr := ValidateExerciseSet(exercises, profile); secondQualityErr != nil {
+			debugInfo.QualityGateFailures = append(debugInfo.QualityGateFailures, secondQualityErr.Error())
+			debugInfo.LastError = secondQualityErr.Error()
+			return nil, secondQualityErr
+		}
 	}
 
-	var exerciseData struct {
-		Exercises []GeneratedExercise `json:"exercises"`
-	}
-	if err := json.Unmarshal([]byte(openaiResp.Choices[0].Message.Content), &exerciseData); err != nil {
-		return nil, fmt.Errorf("failed to parse exercises from OpenAI response: %w", err)
-	}
-	if len(exerciseData.Exercises) == 0 {
-		return nil, fmt.Errorf("exercise generation completed in %s but returned zero exercises", elapsed.Round(time.Millisecond))
-	}
-	log.Printf("Generated %d exercises in %s", len(exerciseData.Exercises), elapsed.Round(time.Millisecond))
+	debugInfo.GeneratedCount = len(exercises)
+	log.Printf("[GENERATION] batch=%s completed topic=%s exercises=%d latency_ms=%d provider_retries=%d quality_retries=%d",
+		batchID, topic.ID, len(exercises), debugInfo.GenerationLatencyMS, debugInfo.ProviderRetryCount, debugInfo.QualityGateRetryCount)
 
-	return exerciseData.Exercises, nil
+	return exercises, nil
 }
 
-// GenerateAndCacheExercises generates exercises and saves them to Airtable.
+// GenerateAndCacheExercises generates exercises and saves them to storage.
 func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool) ([]*storage.Exercise, error) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if strings.TrimSpace(apiKey) == "" {
@@ -361,8 +519,15 @@ func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool) ([]*sto
 	return newlyCached, nil
 }
 
+// GetLastRefinedPrompt is kept for backward compatibility with the existing UI.
 func GetLastRefinedPrompt() string {
-	lastRefinedPromptMutex.RLock()
-	defer lastRefinedPromptMutex.RUnlock()
-	return lastRefinedPrompt
+	lastPromptUsedMutex.RLock()
+	defer lastPromptUsedMutex.RUnlock()
+	return lastPromptUsed
+}
+
+func GetLastGenerationDebugInfo() GenerationDebugInfo {
+	lastGenerationDebugMutex.RLock()
+	defer lastGenerationDebugMutex.RUnlock()
+	return cloneGenerationDebugInfo(lastGenerationDebug)
 }

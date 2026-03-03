@@ -246,6 +246,7 @@ func main() {
 	http.HandleFunc("/api/topics/", withOptionalAuth(handleTopicByID))
 	http.HandleFunc("/api/versions/", withOptionalAuth(handleVersions))
 	http.HandleFunc("/api/last-refined-prompt", handleGetLastRefinedPrompt)
+	http.HandleFunc("/api/last-generation-debug", handleGetLastGenerationDebug)
 
 	// Auth endpoints
 	http.HandleFunc("/auth/google/login", handleGoogleLogin)
@@ -1163,6 +1164,20 @@ func handleGetLastRefinedPrompt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+func handleGetLastGenerationDebug(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(llm.GetLastGenerationDebugInfo()); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }

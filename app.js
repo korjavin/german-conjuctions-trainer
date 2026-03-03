@@ -1048,11 +1048,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Observability Functions ---
     async function showLastRefinedPrompt() {
         try {
-            const response = await fetch('/api/last-refined-prompt');
-            if (!response.ok) throw new Error('Failed to fetch the last refined prompt.');
+            let promptText = 'No generation prompt has been recorded yet.';
 
-            const data = await response.json();
-            const promptText = data.last_refined_prompt || 'No refined prompt has been generated yet.';
+            const debugResponse = await fetch('/api/last-generation-debug');
+            if (debugResponse.ok) {
+                const debugData = await debugResponse.json();
+                const conjunctions = (debugData.profile?.conjunction_set || []).join(', ') || 'none';
+                const qualityFailures = (debugData.quality_gate_failures || []).length;
+                const debugSummary = [
+                    `Batch: ${debugData.batch_id || 'n/a'}`,
+                    `Model: ${debugData.model_name || 'n/a'}`,
+                    `Refinement: ${debugData.refinement_used ? 'used' : 'fallback/base prompt'}`,
+                    `Provider retries: ${debugData.provider_retry_count || 0}`,
+                    `Quality retries: ${debugData.quality_gate_retry_count || 0}`,
+                    `Conjunction targets: ${conjunctions}`,
+                    `Quality issues: ${qualityFailures}`
+                ].join('\n');
+
+                promptText = (debugData.prompt || promptText) + `\n\n---\n${debugSummary}`;
+            } else {
+                const legacyResponse = await fetch('/api/last-refined-prompt');
+                if (!legacyResponse.ok) throw new Error('Failed to fetch generation prompt details.');
+                const legacyData = await legacyResponse.json();
+                promptText = legacyData.last_refined_prompt || promptText;
+            }
 
             lastRefinedPromptContent.textContent = promptText;
             lastRefinedPromptModal.classList.remove('hidden');

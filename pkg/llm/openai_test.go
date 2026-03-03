@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"german-conjunctions-trainer/pkg/storage"
@@ -15,214 +15,237 @@ import (
 
 func TestRefinePrompt(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, `{
-			"choices": [
-				{
-					"message": {
-						"content": "This is a refined prompt that returns JSON output."
-					}
-				}
-			]
-		}`)
+		writeChatChoice(w, http.StatusOK, "This is a refined prompt that returns json output.")
 	}))
 	defer server.Close()
 
-	originalPrompt := "This is the original prompt."
-	refinedPrompt, err := RefinePrompt(originalPrompt, "fake-api-key", server.URL, "test-model")
-
+	refinedPrompt, err := RefinePrompt("Base prompt", "fake-api-key", server.URL, "test-model")
 	if err != nil {
 		t.Fatalf("Expected no error, but got: %v", err)
 	}
-
-	expectedRefinedPrompt := "This is a refined prompt that returns JSON output."
-	if refinedPrompt != expectedRefinedPrompt {
-		t.Errorf("Expected refined prompt to be '%s', but got '%s'", expectedRefinedPrompt, refinedPrompt)
+	if !strings.Contains(refinedPrompt, "json") {
+		t.Fatalf("Expected refined prompt to contain json, got: %s", refinedPrompt)
 	}
 }
 
-func TestGenerateExercises(t *testing.T) {
-	// Set a dummy API key for the test
-	os.Setenv("OPENAI_API_KEY", "dummy-key")
-	defer os.Unsetenv("OPENAI_API_KEY")
+func TestGenerateExercisesVariationProfileSuccess(t *testing.T) {
+	t.Setenv("ENABLE_PROMPT_REFINEMENT", "false")
 
+	var capturedPrompt string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var reqBody map[string]interface{}
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &reqBody)
+		_ = json.Unmarshal(body, &reqBody)
 
-		// Differentiate between refine and generate calls
-		if _, ok := reqBody["response_format"]; ok {
-			// This is the exercise generation call
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprintln(w, `{
-				"choices": [
-					{
-						"message": {
-							"content": "{\"exercises\":[{\"correct_german_sentence\":\"Das ist ein Test.\",\"english_hint\":\"This is a test.\"}]}"
-						}
-					}
-				]
-			}`)
-		} else {
-			// This is the refine prompt call
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprintln(w, `{
-					"choices": [
-					{
-						"message": {
-							"content": "This is a refined prompt."
-						}
-					}
-				]
-				}`)
-		}
+		messages := reqBody["messages"].([]interface{})
+		capturedPrompt = messages[0].(map[string]interface{})["content"].(string)
+		exercises := buildExercises(10, "valid")
+		writeChatChoice(w, http.StatusOK, mustJSONString(t, map[string]interface{}{"exercises": exercises}))
 	}))
 	defer server.Close()
 
-	topic := &storage.Topic{
-		ID:     "test-topic-id",
-		Name:   "Test Topic",
-		Prompt: "Test prompt",
-	}
-
-	// We pass the mock server's URL to the function being tested.
+	topic := &storage.Topic{ID: "topic-1", Prompt: "Generate B1 exercises."}
 	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model")
 	if err != nil {
-		t.Fatalf("Expected no error, but got: %v", err)
+		t.Fatalf("Expected no error, got: %v", err)
 	}
-
-	if len(exercises) != 1 {
-		t.Fatalf("Expected 1 exercise, but got %d", len(exercises))
+	if len(exercises) != 10 {
+		t.Fatalf("Expected 10 exercises, got %d", len(exercises))
 	}
-
-	expectedSentence := "Das ist ein Test."
-	if exercises[0].CorrectGermanSentence != expectedSentence {
-		t.Errorf("Expected sentence to be '%s', but got '%s'", expectedSentence, exercises[0].CorrectGermanSentence)
+	if !strings.Contains(capturedPrompt, "System-generated variation profile") {
+		t.Fatalf("Expected variation profile block in prompt, got: %s", capturedPrompt)
+	}
+	if !strings.Contains(capturedPrompt, "json") {
+		t.Fatalf("Expected lowercase json in prompt, got: %s", capturedPrompt)
 	}
 }
 
-func TestGenerateExercisesFallsBackWhenRefineReturnsExercisePayload(t *testing.T) {
-	var generationPrompt string
+func TestGenerateExercisesRetriesOnMissingJSONKeywordError(t *testing.T) {
+	t.Setenv("ENABLE_PROMPT_REFINEMENT", "false")
 
+	var generationCalls int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var reqBody map[string]interface{}
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &reqBody)
+		_ = json.Unmarshal(body, &reqBody)
 
 		if _, ok := reqBody["response_format"]; ok {
-			if messages, ok := reqBody["messages"].([]interface{}); ok && len(messages) > 0 {
-				if firstMessage, ok := messages[0].(map[string]interface{}); ok {
-					if content, ok := firstMessage["content"].(string); ok {
-						generationPrompt = content
-					}
-				}
+			call := atomic.AddInt32(&generationCalls, 1)
+			if call == 1 {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": map[string]interface{}{
+						"message": "Prompt must contain the word 'json' in some form to use 'response_format' of type 'json_object'.",
+					},
+				})
+				return
 			}
-
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprintln(w, `{
-				"choices": [
-					{
-						"message": {
-							"content": "{\"exercises\":[{\"correct_german_sentence\":\"Das ist ein Fallback-Test.\",\"english_hint\":\"This is a fallback test.\"}]}"
-						}
-					}
-				]
-			}`)
+			exercises := buildExercises(10, "retry")
+			writeChatChoice(w, http.StatusOK, mustJSONString(t, map[string]interface{}{"exercises": exercises}))
 			return
 		}
 
-		// Refinement incorrectly returns exercises payload instead of a prompt.
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, `{
-			"choices": [
-				{
-					"message": {
-						"content": "{\"exercises\":[{\"correct_german_sentence\":\"Bad refine response.\",\"english_hint\":\"Bad.\"}]}"
-					}
-				}
-			]
-		}`)
+		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	topic := &storage.Topic{
-		ID:     "fallback-topic-id",
-		Name:   "Fallback Topic",
-		Prompt: "Generate grammar exercises and return JSON with an exercises array.",
-	}
-
+	topic := &storage.Topic{ID: "topic-2", Prompt: "Generate B1 exercises."}
 	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model")
 	if err != nil {
-		t.Fatalf("Expected fallback generation to succeed, but got: %v", err)
+		t.Fatalf("Expected no error after retry, got: %v", err)
 	}
-	if len(exercises) != 1 {
-		t.Fatalf("Expected 1 exercise, but got %d", len(exercises))
+	if len(exercises) != 10 {
+		t.Fatalf("Expected 10 exercises, got %d", len(exercises))
 	}
-	if !strings.Contains(strings.ToLower(generationPrompt), "json") {
-		t.Fatalf("Expected generation prompt to contain 'json', got: %s", generationPrompt)
+	if atomic.LoadInt32(&generationCalls) != 2 {
+		t.Fatalf("Expected 2 generation calls, got %d", generationCalls)
 	}
-	if !strings.Contains(generationPrompt, "Generate grammar exercises") {
-		t.Fatalf("Expected generation prompt to fall back to original topic prompt, got: %s", generationPrompt)
+
+	debug := GetLastGenerationDebugInfo()
+	if debug.ProviderRetryCount < 1 {
+		t.Fatalf("Expected provider retry count >= 1, got %d", debug.ProviderRetryCount)
 	}
 }
 
-func TestGenerateExercisesAddsLowercaseJSONForProviderRequirement(t *testing.T) {
+func TestGenerateExercisesQualityGateRetry(t *testing.T) {
+	t.Setenv("ENABLE_PROMPT_REFINEMENT", "false")
+
+	var generationCalls int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var reqBody map[string]interface{}
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &reqBody)
+		_ = json.Unmarshal(body, &reqBody)
+
+		if _, ok := reqBody["response_format"]; ok {
+			call := atomic.AddInt32(&generationCalls, 1)
+			if call == 1 {
+				dup := buildDuplicateExercises(10)
+				writeChatChoice(w, http.StatusOK, mustJSONString(t, map[string]interface{}{"exercises": dup}))
+				return
+			}
+			exercises := buildExercises(10, "quality")
+			writeChatChoice(w, http.StatusOK, mustJSONString(t, map[string]interface{}{"exercises": exercises}))
+			return
+		}
+
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	topic := &storage.Topic{ID: "topic-3", Prompt: "Generate B1 exercises."}
+	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model")
+	if err != nil {
+		t.Fatalf("Expected successful corrective retry, got: %v", err)
+	}
+	if len(exercises) != 10 {
+		t.Fatalf("Expected 10 exercises, got %d", len(exercises))
+	}
+	if atomic.LoadInt32(&generationCalls) != 2 {
+		t.Fatalf("Expected 2 generation calls, got %d", generationCalls)
+	}
+
+	debug := GetLastGenerationDebugInfo()
+	if debug.QualityGateRetryCount != 1 {
+		t.Fatalf("Expected quality gate retry count 1, got %d", debug.QualityGateRetryCount)
+	}
+	if len(debug.QualityGateFailures) == 0 {
+		t.Fatalf("Expected quality gate failures to be recorded")
+	}
+}
+
+func TestGenerateExercisesRefinementFallbackWhenMalformed(t *testing.T) {
+	t.Setenv("ENABLE_PROMPT_REFINEMENT", "true")
+
+	var sawRefineCall bool
+	var generationPrompt string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var reqBody map[string]interface{}
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &reqBody)
 
 		if _, ok := reqBody["response_format"]; ok {
 			messages := reqBody["messages"].([]interface{})
-			content := messages[0].(map[string]interface{})["content"].(string)
-			if !strings.Contains(content, "json") {
-				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprintln(w, `{
-					"error": {
-						"message": "Prompt must contain the word 'json' in some form to use 'response_format' of type 'json_object'."
-					}
-				}`)
-				return
-			}
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprintln(w, `{
-				"choices": [
-					{
-						"message": {
-							"content": "{\"exercises\":[{\"correct_german_sentence\":\"Das ist ein JSON-Test.\",\"english_hint\":\"This is a JSON test.\"}]}"
-						}
-					}
-				]
-			}`)
+			generationPrompt = messages[0].(map[string]interface{})["content"].(string)
+			exercises := buildExercises(10, "refine-fallback")
+			writeChatChoice(w, http.StatusOK, mustJSONString(t, map[string]interface{}{"exercises": exercises}))
 			return
 		}
 
-		// Refinement returns uppercase JSON only.
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, `{
-			"choices": [
-				{
-					"message": {
-						"content": "Generate exercises and return a JSON object."
-					}
-				}
-			]
-		}`)
+		sawRefineCall = true
+		// Malformed for refinement (looks like exercises payload), should trigger fallback.
+		writeChatChoice(w, http.StatusOK, `{"exercises":[{"english_hint":"x","correct_german_sentence":"y"}]}`)
 	}))
 	defer server.Close()
 
-	topic := &storage.Topic{
-		ID:     "json-lowercase-topic",
-		Name:   "JSON lowercase topic",
-		Prompt: "Generate B1 exercises.",
-	}
-
+	basePrompt := "Generate grammar exercises and return json."
+	topic := &storage.Topic{ID: "topic-4", Prompt: basePrompt}
 	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model")
 	if err != nil {
-		t.Fatalf("Expected generation to succeed after lowercase json injection, but got: %v", err)
+		t.Fatalf("Expected successful fallback generation, got: %v", err)
 	}
-	if len(exercises) != 1 {
-		t.Fatalf("Expected 1 exercise, but got %d", len(exercises))
+	if len(exercises) != 10 {
+		t.Fatalf("Expected 10 exercises, got %d", len(exercises))
 	}
+	if !sawRefineCall {
+		t.Fatalf("Expected refinement call when feature flag is enabled")
+	}
+	if !strings.Contains(generationPrompt, "System-generated variation profile") {
+		t.Fatalf("Expected generation prompt to include composed profile, got: %s", generationPrompt)
+	}
+
+	debug := GetLastGenerationDebugInfo()
+	if !debug.RefinementEnabled {
+		t.Fatalf("Expected refinement to be enabled in debug info")
+	}
+	if debug.RefinementUsed {
+		t.Fatalf("Expected refinement_used=false due to malformed refinement output")
+	}
+	if debug.RefinementError == "" {
+		t.Fatalf("Expected refinement_error to be populated")
+	}
+}
+
+func buildExercises(count int, prefix string) []map[string]string {
+	exercises := make([]map[string]string, 0, count)
+	for i := 1; i <= count; i++ {
+		exercises = append(exercises, map[string]string{
+			"english_hint":            fmt.Sprintf("%s hint %d", prefix, i),
+			"correct_german_sentence": fmt.Sprintf("Ich lerne heute Deutsch Nummer %d mit einem neuen Beispiel.", i),
+		})
+	}
+	return exercises
+}
+
+func buildDuplicateExercises(count int) []map[string]string {
+	exercises := make([]map[string]string, 0, count)
+	for i := 1; i <= count; i++ {
+		exercises = append(exercises, map[string]string{
+			"english_hint":            fmt.Sprintf("duplicate hint %d", i),
+			"correct_german_sentence": "Ich lerne heute Deutsch mit einem neuen Beispiel.",
+		})
+	}
+	return exercises
+}
+
+func writeChatChoice(w http.ResponseWriter, status int, content string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"choices": []map[string]interface{}{
+			{
+				"message": map[string]interface{}{
+					"content": content,
+				},
+			},
+		},
+	})
+}
+
+func mustJSONString(t *testing.T, payload interface{}) string {
+	t.Helper()
+	bytes, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("failed to marshal payload: %v", err)
+	}
+	return string(bytes)
 }

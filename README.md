@@ -75,6 +75,7 @@ docker run -p 8080:8080 \
 | `OPENAI_API_KEY` | Yes | - | Your OpenAI API key or compatible API key |
 | `OPENAI_URL` | No | `https://api.openai.com/v1` | API endpoint URL |
 | `OPENAI_TIMEOUT_SECONDS` | No | `180` | Timeout for each LLM request (refinement and generation) |
+| `ENABLE_PROMPT_REFINEMENT` | No | `false` | When `true`, runs refinement before generation; otherwise uses variation-profile generation directly |
 | `MODEL_NAME` | No | `gpt-3.5-turbo-1106` | Model name to use |
 | `SQLITE_PATH` | No | `german.db` | Path to the SQLite database file |
 | `PORT` | No | `8080` | Port for the web server |
