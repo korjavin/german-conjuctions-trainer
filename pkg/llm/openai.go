@@ -2,14 +2,20 @@ package llm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"german-conjunctions-trainer/pkg/storage"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
-	"german-conjunctions-trainer/pkg/storage"
+	"time"
 )
 
 // --- Data Structures ---
@@ -47,12 +53,11 @@ type OpenAIResponse struct {
 }
 
 type GeneratedExercise struct {
-	CorrectGermanSentence string `json:"correct_german_sentence"`
-	ConjunctionTopic      string `json:"conjunction_topic"`
-	EnglishHint           string `json:"english_hint"`
+	CorrectGermanSentence string   `json:"correct_german_sentence"`
+	ConjunctionTopic      string   `json:"conjunction_topic"`
+	EnglishHint           string   `json:"english_hint"`
 	ScrambledWords        []string `json:"scrambled_words"`
 }
-
 
 // --- Globals ---
 
@@ -60,6 +65,9 @@ var (
 	lastRefinedPrompt      string
 	lastRefinedPromptMutex sync.RWMutex
 )
+
+const defaultOpenAITimeoutSeconds = 180
+const maxErrorSnippetLen = 500
 
 const metaPrompt = `You are a prompt engineering assistant. Your task is to refine the following user-provided prompt to improve the variety and creativity of the AI's output for generating language exercises.
 
@@ -78,8 +86,117 @@ Here is the prompt to refine:
 
 // --- LLM Functions ---
 
+func getOpenAITimeout() time.Duration {
+	timeoutSeconds := defaultOpenAITimeoutSeconds
+	if configured := strings.TrimSpace(os.Getenv("OPENAI_TIMEOUT_SECONDS")); configured != "" {
+		parsed, err := strconv.Atoi(configured)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid OPENAI_TIMEOUT_SECONDS value '%s', using default %d seconds", configured, defaultOpenAITimeoutSeconds)
+		} else {
+			timeoutSeconds = parsed
+		}
+	}
+	return time.Duration(timeoutSeconds) * time.Second
+}
+
+func formatBodySnippet(respBody []byte) string {
+	if len(respBody) == 0 {
+		return "<empty body>"
+	}
+	snippet := strings.TrimSpace(string(respBody))
+	snippet = strings.ReplaceAll(snippet, "\n", " ")
+	snippet = strings.ReplaceAll(snippet, "\r", " ")
+	if len(snippet) > maxErrorSnippetLen {
+		snippet = snippet[:maxErrorSnippetLen] + "..."
+	}
+	return snippet
+}
+
+// IsTimeoutError identifies timeout-like errors from upstream provider calls.
+func IsTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	return false
+}
+
+func callChatCompletions(
+	client *http.Client,
+	openaiURL string,
+	apiKey string,
+	reqPayload OpenAIRequest,
+	timeout time.Duration,
+	stage string,
+) (*OpenAIResponse, time.Duration, error) {
+	reqBody, err := json.Marshal(reqPayload)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%s: failed to encode request body: %w", stage, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	apiReq, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(openaiURL, "/")+"/chat/completions", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, 0, fmt.Errorf("%s: failed to create request: %w", stage, err)
+	}
+	apiReq.Header.Set("Content-Type", "application/json")
+	apiReq.Header.Set("Authorization", "Bearer "+apiKey)
+
+	start := time.Now()
+	resp, err := client.Do(apiReq)
+	elapsed := time.Since(start)
+	if err != nil {
+		if IsTimeoutError(err) {
+			return nil, elapsed, fmt.Errorf("%s timed out after %s: %w", stage, elapsed.Round(time.Millisecond), err)
+		}
+		return nil, elapsed, fmt.Errorf("%s request failed after %s: %w", stage, elapsed.Round(time.Millisecond), err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, elapsed, fmt.Errorf("%s: failed to read response body: %w", stage, err)
+	}
+
+	var openaiResp OpenAIResponse
+	if len(respBody) > 0 {
+		if err := json.Unmarshal(respBody, &openaiResp); err != nil && resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+			return nil, elapsed, fmt.Errorf("%s returned non-JSON response (status=%d): %s", stage, resp.StatusCode, formatBodySnippet(respBody))
+		}
+	}
+
+	requestID := resp.Header.Get("x-request-id")
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		providerMessage := formatBodySnippet(respBody)
+		if openaiResp.Error != nil && openaiResp.Error.Message != "" {
+			providerMessage = openaiResp.Error.Message
+		}
+		return nil, elapsed, fmt.Errorf("%s failed with status %d after %s (request_id=%s): %s", stage, resp.StatusCode, elapsed.Round(time.Millisecond), requestID, providerMessage)
+	}
+
+	if openaiResp.Error != nil {
+		return nil, elapsed, fmt.Errorf("%s returned API error after %s: %s (type=%s code=%s)", stage, elapsed.Round(time.Millisecond), openaiResp.Error.Message, openaiResp.Error.Type, openaiResp.Error.Code)
+	}
+
+	if len(openaiResp.Choices) == 0 || strings.TrimSpace(openaiResp.Choices[0].Message.Content) == "" {
+		return nil, elapsed, fmt.Errorf("%s returned empty choices after %s", stage, elapsed.Round(time.Millisecond))
+	}
+
+	return &openaiResp, elapsed, nil
+}
+
 func RefinePrompt(originalPrompt, apiKey, openaiURL, modelName string) (string, error) {
-	log.Println("Refining prompt...")
+	timeout := getOpenAITimeout()
+	client := &http.Client{Timeout: timeout}
+	log.Printf("Refining prompt with model=%s timeout=%s", modelName, timeout)
 
 	refineMessages := []Message{
 		{
@@ -93,45 +210,13 @@ func RefinePrompt(originalPrompt, apiKey, openaiURL, modelName string) (string, 
 		Messages: refineMessages,
 	}
 
-	reqBody, err := json.Marshal(refineReq)
+	openaiResp, elapsed, err := callChatCompletions(client, openaiURL, apiKey, refineReq, timeout, "prompt refinement")
 	if err != nil {
-		return "", fmt.Errorf("failed to create refine request body: %w", err)
+		return "", err
 	}
 
-	client := &http.Client{}
-	apiReq, err := http.NewRequest("POST", openaiURL+"/chat/completions", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return "", fmt.Errorf("failed to create API request for refining: %w", err)
-	}
-	apiReq.Header.Set("Content-Type", "application/json")
-	apiReq.Header.Set("Authorization", "Bearer "+apiKey)
-
-	resp, err := client.Do(apiReq)
-	if err != nil {
-		return "", fmt.Errorf("failed to call OpenAI API for refining: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read API response for refining: %w", err)
-	}
-
-	var openaiResp OpenAIResponse
-	if err := json.Unmarshal(respBody, &openaiResp); err != nil {
-		return "", fmt.Errorf("failed to parse API response for refining: %w", err)
-	}
-
-	if openaiResp.Error != nil {
-		return "", fmt.Errorf("API error during refining: %s", openaiResp.Error.Message)
-	}
-
-	if len(openaiResp.Choices) == 0 || openaiResp.Choices[0].Message.Content == "" {
-		return "", fmt.Errorf("received an empty response from the refining API")
-	}
-
-	refinedPrompt := openaiResp.Choices[0].Message.Content
-	log.Println("Successfully refined prompt.")
+	refinedPrompt := strings.TrimSpace(openaiResp.Choices[0].Message.Content)
+	log.Printf("Successfully refined prompt in %s.", elapsed.Round(time.Millisecond))
 	return refinedPrompt, nil
 }
 
@@ -153,28 +238,12 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 		ResponseFormat: &ResponseFormat{Type: "json_object"},
 	}
 
-	reqBody, _ := json.Marshal(openaiReq)
-	client := &http.Client{}
-	apiReq, _ := http.NewRequest("POST", openaiURL+"/chat/completions", bytes.NewBuffer(reqBody))
-	apiReq.Header.Set("Content-Type", "application/json")
-	apiReq.Header.Set("Authorization", "Bearer "+apiKey)
-
-	resp, err := client.Do(apiReq)
+	timeout := getOpenAITimeout()
+	client := &http.Client{Timeout: timeout}
+	log.Printf("Generating exercises for topic=%s model=%s timeout=%s", topic.ID, modelName, timeout)
+	openaiResp, elapsed, err := callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, "exercise generation")
 	if err != nil {
-		return nil, fmt.Errorf("failed to call OpenAI API: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-	var openaiResp OpenAIResponse
-	json.Unmarshal(respBody, &openaiResp)
-
-	if openaiResp.Error != nil {
-		return nil, fmt.Errorf("API error: %s", openaiResp.Error.Message)
-	}
-
-	if len(openaiResp.Choices) == 0 || openaiResp.Choices[0].Message.Content == "" {
-		return nil, fmt.Errorf("received an empty response from OpenAI")
+		return nil, err
 	}
 
 	var exerciseData struct {
@@ -183,6 +252,10 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 	if err := json.Unmarshal([]byte(openaiResp.Choices[0].Message.Content), &exerciseData); err != nil {
 		return nil, fmt.Errorf("failed to parse exercises from OpenAI response: %w", err)
 	}
+	if len(exerciseData.Exercises) == 0 {
+		return nil, fmt.Errorf("exercise generation completed in %s but returned zero exercises", elapsed.Round(time.Millisecond))
+	}
+	log.Printf("Generated %d exercises in %s", len(exerciseData.Exercises), elapsed.Round(time.Millisecond))
 
 	return exerciseData.Exercises, nil
 }
@@ -190,6 +263,9 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 // GenerateAndCacheExercises generates exercises and saves them to Airtable.
 func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool) ([]*storage.Exercise, error) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
+	if strings.TrimSpace(apiKey) == "" {
+		return nil, fmt.Errorf("OPENAI_API_KEY is not configured")
+	}
 	openaiURL := os.Getenv("OPENAI_URL")
 	if openaiURL == "" {
 		openaiURL = "https://api.openai.com/v1"
@@ -230,7 +306,6 @@ func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool) ([]*sto
 
 	return newlyCached, nil
 }
-
 
 func GetLastRefinedPrompt() string {
 	lastRefinedPromptMutex.RLock()

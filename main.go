@@ -26,8 +26,8 @@ import (
 	"github.com/gorilla/securecookie"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	oauth2v2 "google.golang.org/api/oauth2/v2"
 	"golang.org/x/time/rate"
+	oauth2v2 "google.golang.org/api/oauth2/v2"
 )
 
 // contextKey defines a type for context keys to avoid collisions.
@@ -419,11 +419,11 @@ func generateAndSaveAudio(text string) (string, error) {
 		"text":     text,
 		"model_id": elevenlabsModelID,
 		"voice_settings": map[string]interface{}{
-			"stability":        0.5,
-			"similarity_boost": 0.75,
-			"style":            0.0,
+			"stability":         0.5,
+			"similarity_boost":  0.75,
+			"style":             0.0,
 			"use_speaker_boost": true,
-			"speed":            elevenlabsVoiceSpeed,
+			"speed":             elevenlabsVoiceSpeed,
 		},
 	})
 	if err != nil {
@@ -468,9 +468,28 @@ func generateAndSaveAudio(text string) (string, error) {
 	return filename, nil
 }
 
+func writeJSONError(w http.ResponseWriter, status int, code, message, details string, retryable bool) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	errPayload := map[string]interface{}{
+		"message":   message,
+		"code":      code,
+		"retryable": retryable,
+	}
+	if strings.TrimSpace(details) != "" {
+		errPayload["details"] = details
+	}
+
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"error": errPayload}); err != nil {
+		log.Printf("ERROR: failed to encode error response (status=%d code=%s): %v", status, code, err)
+	}
+}
+
 func handleExercises(w http.ResponseWriter, r *http.Request) {
+	requestStartedAt := time.Now()
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "", false)
 		return
 	}
 
@@ -484,13 +503,13 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 
 	var req llm.GenerateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST_BODY", "Invalid request body", err.Error(), false)
 		return
 	}
 
 	topic, err := storage.DB.GetTopic(req.TopicID)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Topic not found: %v", err), http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "TOPIC_NOT_FOUND", "Topic not found", err.Error(), false)
 		return
 	}
 
@@ -500,7 +519,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 
 	allExercises, err := storage.DB.GetExercisesForTopic(req.TopicID, promptHash)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get exercises: %v", err), http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "EXERCISE_LOOKUP_FAILED", "Failed to get exercises", err.Error(), false)
 		return
 	}
 	log.Printf("[EXERCISES] Found %d exercises in cache for topic %s", len(allExercises), req.TopicID)
@@ -517,7 +536,7 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 		var err error
 		userViews, err = storage.DB.GetUserExerciseViews(userID)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
+			writeJSONError(w, http.StatusInternalServerError, "USER_VIEWS_LOOKUP_FAILED", "Failed to get user exercise views", err.Error(), false)
 			return
 		}
 		log.Printf("[EXERCISES] Found %d user exercise views for user %s", len(userViews), userID)
@@ -526,9 +545,19 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 		if len(eligibleExercises) < 10 {
 			newlyGenerated, err := llm.GenerateAndCacheExercises(topic, true)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to generate exercises: %v", err), http.StatusInternalServerError)
+				status := http.StatusBadGateway
+				code := "EXERCISE_GENERATION_FAILED"
+				message := "Failed to generate new exercises from AI provider."
+				if llm.IsTimeoutError(err) {
+					status = http.StatusGatewayTimeout
+					code = "UPSTREAM_TIMEOUT"
+					message = "Exercise generation timed out while waiting for AI provider. Please try again."
+				}
+				log.Printf("[EXERCISES] ERROR generating exercises for topic %s user %s: %v", req.TopicID, userID, err)
+				writeJSONError(w, status, code, message, err.Error(), true)
 				return
 			}
+			log.Printf("[EXERCISES] Generated and cached %d new exercises for topic %s", len(newlyGenerated), req.TopicID)
 			allExercises = append(allExercises, newlyGenerated...)
 			eligibleExercises = getEligibleExercisesForSRS(allExercises, userViews)
 		}
@@ -570,7 +599,10 @@ func handleExercises(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string][]ExerciseResponse{"exercises": responseExercises})
+	if err := json.NewEncoder(w).Encode(map[string][]ExerciseResponse{"exercises": responseExercises}); err != nil {
+		log.Printf("[EXERCISES] ERROR encoding response for topic %s user %s: %v", req.TopicID, userID, err)
+	}
+	log.Printf("[EXERCISES] Completed request for topic %s userID='%s' with %d exercises in %s", req.TopicID, userID, len(responseExercises), time.Since(requestStartedAt).Round(time.Millisecond))
 }
 
 // handleExercisesComplete records the completion of exercises with performance data
@@ -1057,11 +1089,11 @@ func handleTTS(w http.ResponseWriter, r *http.Request) {
 		"text":     req.Text,
 		"model_id": elevenlabsModelID,
 		"voice_settings": map[string]interface{}{
-			"stability":        0.5,
-			"similarity_boost": 0.75,
-			"style":            0.0,
+			"stability":         0.5,
+			"similarity_boost":  0.75,
+			"style":             0.0,
 			"use_speaker_boost": true,
-			"speed":            elevenlabsVoiceSpeed,
+			"speed":             elevenlabsVoiceSpeed,
 		},
 	})
 	if err != nil {

@@ -864,10 +864,32 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({})); // Gracefully handle non-JSON error bodies
-                const errorMessage = errorData.error?.message || response.statusText;
+                let errorMessage = `${response.status} ${response.statusText}`;
+                let errorCode = '';
+                let retryable = false;
+
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    const errorData = await response.json().catch(() => ({}));
+                    if (errorData?.error?.message) {
+                        errorMessage = errorData.error.message;
+                    }
+                    if (errorData?.error?.details) {
+                        errorMessage = `${errorMessage}\nDetails: ${errorData.error.details}`;
+                    }
+                    errorCode = errorData?.error?.code || '';
+                    retryable = Boolean(errorData?.error?.retryable);
+                } else {
+                    const errorText = await response.text().catch(() => '');
+                    if (errorText) {
+                        errorMessage = errorText;
+                    }
+                }
+
                 const error = new Error(errorMessage);
                 error.status = response.status;
+                error.code = errorCode;
+                error.retryable = retryable;
                 throw error;
             }
 
@@ -907,8 +929,11 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching exercises:', error);
             if (error.status === 429) {
                 alert(`Rate Limit Exceeded: ${error.message}`);
+            } else if (error.status === 504 || error.code === 'UPSTREAM_TIMEOUT') {
+                alert(`The AI provider took too long to respond. Please try again in a moment.\nError: ${error.message}`);
             } else {
-                alert(`Failed to fetch new exercises. Please check your API key and network connection. \nError: ${error.message}`);
+                const retryHint = error.retryable ? '\nYou can retry this request.' : '';
+                alert(`Failed to fetch new exercises.\nError: ${error.message}${retryHint}`);
             }
             renderExercise();
         } finally {
