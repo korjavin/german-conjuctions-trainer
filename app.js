@@ -91,10 +91,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyFilterReady = document.getElementById('history-filter-ready');
     const historyFilterFavorites = document.getElementById('history-filter-favorites');
 
+    const WORD_AUDIO_CACHE_STORAGE_KEY = 'wordAudioCacheV1';
+    const MAX_WORD_AUDIO_CACHE_ENTRIES = 2000;
+    const WORD_AUDIO_PRELOAD_CONCURRENCY = 3;
+
     // --- Application State ---
     let state = {
         lastAudioUrl: '',
         lastAudioText: '',
+        wordAudioCache: loadWordAudioCache(),
+        wordAudioInflight: new Map(),
+        activeAudio: null,
         currentTopicId: '',
         topics: [],
         topicSortOrder: localStorage.getItem('topicSortOrder') || 'name-asc', // Default to name ascending
@@ -151,46 +158,251 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function playSentenceAudio(audioPath, text) {
-        // If audio path exists, try to play it directly
-        if (audioPath) {
-            try {
-                const audio = new Audio(audioPath);
-                await audio.play();
-                return;
-            } catch (error) {
-                console.error("Error playing cached audio:", error);
-                // Fall through to generate new audio
+    function normalizeWordForCache(word) {
+        if (typeof word !== 'string') return '';
+        return word.trim();
+    }
+
+    function loadWordAudioCache() {
+        try {
+            const rawCache = localStorage.getItem(WORD_AUDIO_CACHE_STORAGE_KEY);
+            if (!rawCache) return {};
+
+            const parsedCache = JSON.parse(rawCache);
+            if (!parsedCache || typeof parsedCache !== 'object' || Array.isArray(parsedCache)) {
+                return {};
             }
-        }
 
-        // If no audio path or playback failed, generate audio via TTS
-        if (text) {
-            try {
-                const response = await fetch('/api/tts', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ text })
-                });
-
-                if (!response.ok) {
-                    console.error('Failed to fetch audio:', response.statusText);
+            const normalizedCache = {};
+            Object.entries(parsedCache).forEach(([word, entry]) => {
+                if (typeof entry === 'string' && entry) {
+                    normalizedCache[word] = {
+                        filePath: entry,
+                        updatedAt: Date.now()
+                    };
                     return;
                 }
 
-                const data = await response.json();
-                if (data.filePath) {
-                    const audio = new Audio(data.filePath);
-                    await audio.play();
-                    // Update the lastAudioUrl so replay button works
-                    state.lastAudioUrl = data.filePath;
+                if (!entry || typeof entry !== 'object') return;
+                if (typeof entry.filePath !== 'string' || !entry.filePath) return;
+
+                const updatedAt = Number.isFinite(entry.updatedAt) ? entry.updatedAt : Date.now();
+                normalizedCache[word] = {
+                    filePath: entry.filePath,
+                    updatedAt
+                };
+            });
+
+            return normalizedCache;
+        } catch (error) {
+            console.error('Failed to load word audio cache:', error);
+            return {};
+        }
+    }
+
+    function saveWordAudioCache() {
+        try {
+            localStorage.setItem(WORD_AUDIO_CACHE_STORAGE_KEY, JSON.stringify(state.wordAudioCache));
+        } catch (error) {
+            console.error('Failed to persist word audio cache:', error);
+        }
+    }
+
+    function getWordAudioPathFromCache(word) {
+        const normalizedWord = normalizeWordForCache(word);
+        if (!normalizedWord) return '';
+
+        const cacheEntry = state.wordAudioCache[normalizedWord];
+        if (!cacheEntry || typeof cacheEntry.filePath !== 'string') {
+            return '';
+        }
+
+        cacheEntry.updatedAt = Date.now();
+        saveWordAudioCache();
+        return cacheEntry.filePath;
+    }
+
+    function peekWordAudioPathFromCache(word) {
+        const normalizedWord = normalizeWordForCache(word);
+        if (!normalizedWord) return '';
+
+        const cacheEntry = state.wordAudioCache[normalizedWord];
+        if (!cacheEntry || typeof cacheEntry.filePath !== 'string') {
+            return '';
+        }
+
+        return cacheEntry.filePath;
+    }
+
+    function updateWordAudioCache(word, filePath) {
+        const normalizedWord = normalizeWordForCache(word);
+        if (!normalizedWord || !filePath) return;
+
+        state.wordAudioCache[normalizedWord] = {
+            filePath,
+            updatedAt: Date.now()
+        };
+
+        const entries = Object.entries(state.wordAudioCache);
+        if (entries.length > MAX_WORD_AUDIO_CACHE_ENTRIES) {
+            entries
+                .sort((a, b) => a[1].updatedAt - b[1].updatedAt)
+                .slice(0, entries.length - MAX_WORD_AUDIO_CACHE_ENTRIES)
+                .forEach(([staleWord]) => {
+                    delete state.wordAudioCache[staleWord];
+                });
+        }
+
+        saveWordAudioCache();
+    }
+
+    async function playAudioFile(filePath) {
+        if (!filePath) return false;
+
+        let audio = null;
+        try {
+            if (state.activeAudio) {
+                state.activeAudio.pause();
+                state.activeAudio.currentTime = 0;
+            }
+
+            audio = new Audio(filePath);
+            state.activeAudio = audio;
+
+            audio.addEventListener('ended', () => {
+                if (state.activeAudio === audio) {
+                    state.activeAudio = null;
                 }
-            } catch (error) {
-                console.error('Error generating audio:', error);
+            });
+            audio.addEventListener('error', () => {
+                if (state.activeAudio === audio) {
+                    state.activeAudio = null;
+                }
+            });
+
+            await audio.play();
+            return true;
+        } catch (error) {
+            if (state.activeAudio === audio) {
+                state.activeAudio = null;
+            }
+            console.error('Error playing audio:', error);
+            return false;
+        }
+    }
+
+    async function fetchTTSFilePath(text) {
+        if (!text) return '';
+
+        try {
+            const response = await fetch('/api/tts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ text })
+            });
+
+            if (!response.ok) {
+                console.error('Failed to fetch audio:', response.statusText);
+                return '';
+            }
+
+            const data = await response.json();
+            return data.filePath || '';
+        } catch (error) {
+            console.error('Error generating audio:', error);
+            return '';
+        }
+    }
+
+    async function playSentenceAudio(audioPath, text) {
+        const playedFromProvidedPath = await playAudioFile(audioPath);
+        if (playedFromProvidedPath) {
+            return;
+        }
+
+        const generatedFilePath = await fetchTTSFilePath(text);
+        if (!generatedFilePath) {
+            return;
+        }
+
+        state.lastAudioUrl = generatedFilePath;
+        await playAudioFile(generatedFilePath);
+    }
+
+    async function ensureWordAudioCached(word) {
+        const normalizedWord = normalizeWordForCache(word);
+        if (!normalizedWord) return '';
+
+        const cachedFilePath = peekWordAudioPathFromCache(normalizedWord);
+        if (cachedFilePath) {
+            return cachedFilePath;
+        }
+
+        if (state.wordAudioInflight.has(normalizedWord)) {
+            return state.wordAudioInflight.get(normalizedWord);
+        }
+
+        const preloadPromise = (async () => {
+            const generatedFilePath = await fetchTTSFilePath(normalizedWord);
+            if (!generatedFilePath) {
+                return '';
+            }
+
+            updateWordAudioCache(normalizedWord, generatedFilePath);
+            return generatedFilePath;
+        })();
+
+        state.wordAudioInflight.set(normalizedWord, preloadPromise);
+        try {
+            return await preloadPromise;
+        } finally {
+            state.wordAudioInflight.delete(normalizedWord);
+        }
+    }
+
+    async function playWordAudio(word) {
+        const normalizedWord = normalizeWordForCache(word);
+        if (!normalizedWord) return;
+
+        const cachedFilePath = getWordAudioPathFromCache(normalizedWord);
+        if (cachedFilePath) {
+            const playedFromCache = await playAudioFile(cachedFilePath);
+            if (playedFromCache) {
+                return;
             }
         }
+
+        const generatedFilePath = await ensureWordAudioCached(normalizedWord);
+        if (!generatedFilePath) {
+            return;
+        }
+
+        await playAudioFile(generatedFilePath);
+    }
+
+    function preloadExerciseWordAudio(exercise) {
+        if (!exercise || !exercise.correct_german_sentence) return;
+
+        const allTokens = exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [];
+        const uniqueWords = [...new Set(allTokens.filter(token => !isPunctuation(token)).map(normalizeWordForCache))].filter(Boolean);
+        const wordsToPreload = uniqueWords.filter(word => !peekWordAudioPathFromCache(word));
+
+        if (wordsToPreload.length === 0) return;
+
+        let currentIndex = 0;
+        const workerCount = Math.min(WORD_AUDIO_PRELOAD_CONCURRENCY, wordsToPreload.length);
+        const workers = Array.from({ length: workerCount }, async () => {
+            while (currentIndex < wordsToPreload.length) {
+                const word = wordsToPreload[currentIndex++];
+                await ensureWordAudioCached(word);
+            }
+        });
+
+        Promise.allSettled(workers).catch(() => {
+            // Ignore preload errors; on-demand playback remains available.
+        });
     }
 
     function isPunctuation(token) {
@@ -300,6 +512,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             scrambledWordsContainer.appendChild(button);
         });
+
+        preloadExerciseWordAudio(exercise);
     }
 
     function handleWordClick(word, button) {
@@ -333,7 +547,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Check if sentence is complete
             if (state.userSentence.length === correctWordArray.length) {
-                handleSentenceCompletion(exercise, correctWordArray);
+                handleSentenceCompletion(exercise, correctWordArray, word);
+            } else {
+                playWordAudio(word);
             }
         } else {
             // Incorrect word
@@ -354,7 +570,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function handleSentenceCompletion(exercise, correctWordArray) {
+    async function handleSentenceCompletion(exercise, correctWordArray, lastWord = '') {
         state.isLocked = true;
         const isCorrect = state.userSentence.join(' ') === correctWordArray.join(' ');
 
@@ -362,6 +578,9 @@ document.addEventListener('DOMContentLoaded', () => {
             correctSentenceDisplay.textContent = `Correct! "${exercise.correct_german_sentence}"`;
             state.lastAudioUrl = exercise.audio_file_path;
             state.lastAudioText = exercise.correct_german_sentence;
+            if (lastWord) {
+                await playWordAudio(lastWord);
+            }
             playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
 
             // Show exercise controls and hide hint/skip buttons
