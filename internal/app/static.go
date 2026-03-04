@@ -16,6 +16,13 @@ func getFilePath(filename string) string {
 	return filename
 }
 
+func getJSDir() string {
+	if _, err := os.Stat("static/js"); err == nil {
+		return "static/js"
+	}
+	return "js"
+}
+
 func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)

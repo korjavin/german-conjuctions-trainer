@@ -93,6 +93,7 @@ func (a *App) RegisterRoutes() {
 
 	http.HandleFunc("/api/tts", a.handleTTS)
 	http.Handle("/audio_cache/", http.StripPrefix("/audio_cache/", http.FileServer(http.Dir("./audio_cache"))))
+	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir(getJSDir()))))
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
