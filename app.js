@@ -119,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         exercisesWithMistakes: new Set(), // Track exercises with mistakes (by index)
         exercisesWithHints: new Set(), // Track exercises with hints (by index)
         exercisePerformance: new Map(), // Track per-exercise performance: exerciseId -> {hints, mistakes}
+        completedExerciseIds: new Set(), // Track finished exercises so only completed items affect SRS
         startTime: null,
         sessionTime: 0,
         isSessionComplete: false,
@@ -626,6 +627,12 @@ document.addEventListener('DOMContentLoaded', () => {
             correctSentenceDisplay.textContent = `Correct! "${exercise.correct_german_sentence}"`;
             state.lastAudioUrl = exercise.audio_file_path;
             state.lastAudioText = exercise.correct_german_sentence;
+
+            const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+            if (exerciseId) {
+                state.completedExerciseIds.add(exerciseId);
+            }
+
             if (lastWord) {
                 await playWordAudio(lastWord);
             }
@@ -824,6 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.exercises = [];
         state.exercisesWithMistakes.clear();
         state.exercisesWithHints.clear();
+        state.completedExerciseIds.clear();
 
         // Clean up loading state and timers
         loadingSpinner.classList.add('hidden');
@@ -854,6 +862,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.startTime = Date.now();
         state.exercisesWithMistakes.clear();
         state.exercisesWithHints.clear();
+        state.completedExerciseIds.clear();
 
         // Clean up loading state and timers
         loadingSpinner.classList.add('hidden');
@@ -946,13 +955,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleSkipExercise() {
+        const wasLastExercise = state.currentExerciseIndex === state.exercises.length - 1;
+        const skippedExerciseId = state.exerciseIds[state.currentExerciseIndex];
+        if (skippedExerciseId) {
+            state.exercisePerformance.delete(skippedExerciseId);
+            state.completedExerciseIds.delete(skippedExerciseId);
+        }
+
         // Remove the current exercise from the session queue (client-side only)
         state.exercises.splice(state.currentExerciseIndex, 1);
         state.exerciseIds.splice(state.currentExerciseIndex, 1);
 
-        if (state.exercises.length === 0) {
-            state.isSessionComplete = true;
-            renderExercise();
+        // If the last queue item was skipped, session should finish immediately.
+        if (state.exercises.length === 0 || wasLastExercise) {
+            showStatisticsPage();
             return;
         }
 
@@ -967,6 +983,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleHideExercise() {
         if (!state.isLoggedIn) return;
 
+        const wasLastExercise = state.currentExerciseIndex === state.exercises.length - 1;
         const exerciseId = state.exerciseIds[state.currentExerciseIndex];
 
         try {
@@ -986,12 +1003,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Remove from session queue
+        if (exerciseId) {
+            state.exercisePerformance.delete(exerciseId);
+            state.completedExerciseIds.delete(exerciseId);
+        }
         state.exercises.splice(state.currentExerciseIndex, 1);
         state.exerciseIds.splice(state.currentExerciseIndex, 1);
 
-        if (state.exercises.length === 0) {
-            state.isSessionComplete = true;
-            renderExercise();
+        if (state.exercises.length === 0 || wasLastExercise) {
+            showStatisticsPage();
             return;
         }
 
@@ -1244,6 +1264,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.exercisesWithMistakes = new Set();
                 state.exercisesWithHints = new Set();
                 state.exercisePerformance = new Map();
+                state.completedExerciseIds = new Set();
 
                 // Initialize performance tracking for each exercise
                 state.exerciseIds.forEach(id => {
@@ -1959,9 +1980,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveExerciseCompletions() {
         try {
-            // Build completions array from exercisePerformance map
+            // Build completions only from exercises that were actually finished by the user.
             const completions = [];
-            state.exercisePerformance.forEach((perf, exerciseId) => {
+            state.completedExerciseIds.forEach((exerciseId) => {
+                const perf = state.exercisePerformance.get(exerciseId) || { hints: 0, mistakes: 0 };
                 completions.push({
                     exercise_id: exerciseId,
                     hints_used: perf.hints,
@@ -2013,6 +2035,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.exercisesWithMistakes = new Set();
         state.exercisesWithHints = new Set();
         state.exercisePerformance = new Map(); // Empty for sample exercises
+        state.completedExerciseIds = new Set();
         state.startTime = Date.now();
 
         renderExercise();
