@@ -25,7 +25,7 @@ RUN go mod download
 COPY --from=css-builder /app/public/style.css ./public/style.css
 
 # Build the application with CGO enabled for SQLite support
-RUN CGO_ENABLED=1 GOOS=linux go build -o main .
+RUN CGO_ENABLED=1 GOOS=linux go build -o main ./cmd/server
 
 
 # Final stage
