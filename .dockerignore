@@ -19,8 +19,8 @@ docker-compose.yml
 *.log
 server.log
 
-# Exclude the CLI tool from the production image
-cmd/
+# Exclude the generator CLI tool from the production image
+cmd/generator/
 
 # Exclude local development files
 .idea/
