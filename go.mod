@@ -4,8 +4,6 @@ go 1.23.0
 
 toolchain go1.24.3
 
-require github.com/mehanizm/airtable v0.3.4
-
 require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.2

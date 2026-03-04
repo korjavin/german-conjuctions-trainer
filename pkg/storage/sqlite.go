@@ -119,6 +119,7 @@ func (s *SQLiteStorage) runMigrations() error {
 		`ALTER TABLE user_exercise_views ADD COLUMN hints_used INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE user_exercise_views ADD COLUMN mistakes_made INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE user_exercise_views ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT 0`,
+		`ALTER TABLE user_exercise_views ADD COLUMN is_hidden BOOLEAN NOT NULL DEFAULT 0`,
 	}
 
 	for _, migration := range migrations {
@@ -141,7 +142,8 @@ func isColumnExistsError(err error) bool {
 		err.Error() == "duplicate column name: failed_attempts" ||
 		err.Error() == "duplicate column name: hints_used" ||
 		err.Error() == "duplicate column name: mistakes_made" ||
-		err.Error() == "duplicate column name: is_favorite")
+		err.Error() == "duplicate column name: is_favorite" ||
+		err.Error() == "duplicate column name: is_hidden")
 }
 
 // querier is an interface that can be a *sql.DB or *sql.Tx
@@ -459,7 +461,7 @@ func (s *SQLiteStorage) UpdateLegacyExercisesWithAudio(text, audioPath string) {
 func (s *SQLiteStorage) GetUserExerciseViews(userID string) (map[string]*UserExerciseView, error) {
 	rows, err := s.db.Query(`
 		SELECT id, user_id, exercise_id, last_viewed, repetition_counter,
-		       total_attempts, successful_attempts, failed_attempts, hints_used, mistakes_made, is_favorite
+		       total_attempts, successful_attempts, failed_attempts, hints_used, mistakes_made, is_favorite, is_hidden
 		FROM user_exercise_views WHERE user_id = ?`, userID)
 	if err != nil {
 		return nil, err
@@ -470,7 +472,7 @@ func (s *SQLiteStorage) GetUserExerciseViews(userID string) (map[string]*UserExe
 	for rows.Next() {
 		var view UserExerciseView
 		if err := rows.Scan(&view.ID, &view.UserID, &view.ExerciseID, &view.LastViewed, &view.RepetitionCounter,
-			&view.TotalAttempts, &view.SuccessfulAttempts, &view.FailedAttempts, &view.HintsUsed, &view.MistakesMade, &view.IsFavorite); err != nil {
+			&view.TotalAttempts, &view.SuccessfulAttempts, &view.FailedAttempts, &view.HintsUsed, &view.MistakesMade, &view.IsFavorite, &view.IsHidden); err != nil {
 			return nil, err
 		}
 		views[view.ExerciseID] = &view
@@ -791,4 +793,13 @@ func (s *SQLiteStorage) ToggleFavorite(userID, exerciseID string) (bool, error) 
 	}
 
 	return newStatus, nil
+}
+
+func (s *SQLiteStorage) HideExercise(userID, exerciseID string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter, is_hidden)
+		VALUES(?, ?, ?, ?, 0, 1)
+		ON CONFLICT(user_id, exercise_id) DO UPDATE SET is_hidden = 1
+	`, uuid.NewString(), userID, exerciseID, time.Now().UTC())
+	return err
 }

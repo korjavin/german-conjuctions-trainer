@@ -26,7 +26,6 @@ type PromptVersion struct {
 
 type Exercise struct {
 	ID            string    `json:"id"`
-	AirtableID    string    `json:"airtable_id"` // Will be deprecated
 	TopicID       string    `json:"topic_id"`
 	PromptHash    string    `json:"prompt_hash"`
 	ExerciseJSON  string    `json:"exercise_json"`
@@ -36,7 +35,6 @@ type Exercise struct {
 
 type UserExerciseView struct {
 	ID                 string    `json:"id"`
-	AirtableID         string    `json:"airtable_id"` // Will be deprecated
 	UserID             string    `json:"user_id"`
 	ExerciseID         string    `json:"exercise_id"`
 	LastViewed         time.Time `json:"last_viewed"`
@@ -47,22 +45,21 @@ type UserExerciseView struct {
 	HintsUsed          int       `json:"hints_used"`           // Total hints used
 	MistakesMade       int       `json:"mistakes_made"`        // Total mistakes made
 	IsFavorite         bool      `json:"is_favorite"`          // User marked as favorite
+	IsHidden           bool      `json:"is_hidden"`            // User hid this exercise (soft delete for this user)
 }
 
 type User struct {
-	ID         string `json:"id"`
-	GoogleID   string `json:"google_id"`
-	AirtableID string `json:"airtable_id"` // Will be deprecated
+	ID       string `json:"id"`
+	GoogleID string `json:"google_id"`
 }
 
 type UserStats struct {
-	UserID           string `json:"user_id"`
-	TotalExercises   int    `json:"total_exercises"`
-	TotalMistakes    int    `json:"total_mistakes"`
-	TotalHints       int    `json:"total_hints"`
-	TotalTime        int    `json:"total_time"`
-	LastTopicID      string `json:"last_topic_id"`
-	AirtableRecordID string `json:"airtable_record_id"` // Will be deprecated
+	UserID         string `json:"user_id"`
+	TotalExercises int    `json:"total_exercises"`
+	TotalMistakes  int    `json:"total_mistakes"`
+	TotalHints     int    `json:"total_hints"`
+	TotalTime      int    `json:"total_time"`
+	LastTopicID    string `json:"last_topic_id"`
 }
 
 // UserExerciseStats holds the counts of exercises in different states for a user.
@@ -114,13 +111,13 @@ type Storage interface {
 	GetUserByGoogleID(googleID string) (*User, error)
 	CreateUser(googleID string) (*User, error)
 	GetUserByID(userID string) (*User, error)
-	GetAllUsers() ([]*User, error)
 	GetUserStats(userID string) (*UserStats, error)
 	UpdateUserStats(stats *UserStats) error
 	UpdateUserSetting(userID, lastTopicID string) error
 	GetUserExerciseStats(userID string) (*UserExerciseStats, error)
 	GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error)
 	ToggleFavorite(userID, exerciseID string) (bool, error)
+	HideExercise(userID, exerciseID string) error
 
 	// Initialization
 	InitializeDefaultTopics()

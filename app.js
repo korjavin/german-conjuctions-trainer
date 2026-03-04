@@ -62,6 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const nextExerciseBtn = document.getElementById('next-exercise-btn');
     const toggleFavoriteBtn = document.getElementById('toggle-favorite-btn');
     const favoriteBtnText = document.getElementById('favorite-btn-text');
+    const skipExerciseBtn = document.getElementById('skip-exercise-btn');
+    const hideExerciseBtn = document.getElementById('hide-exercise-btn');
     const exerciseControls = document.getElementById('exercise-controls');
 
     // Stats Modal Elements
@@ -669,6 +671,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function handleSkipExercise() {
+        // Remove the current exercise from the session queue (client-side only)
+        state.exercises.splice(state.currentExerciseIndex, 1);
+        state.exerciseIds.splice(state.currentExerciseIndex, 1);
+
+        if (state.exercises.length === 0) {
+            state.isSessionComplete = true;
+            renderExercise();
+            return;
+        }
+
+        // Stay at the same index (which now points to the next exercise), or go back if at end
+        if (state.currentExerciseIndex >= state.exercises.length) {
+            state.currentExerciseIndex = state.exercises.length - 1;
+        }
+
+        renderExercise();
+    }
+
+    async function handleHideExercise() {
+        if (!state.isLoggedIn) return;
+
+        const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+
+        try {
+            const response = await fetch('/api/exercises/hide', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ exercise_id: exerciseId })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to hide exercise');
+            }
+        } catch (error) {
+            console.error('Error hiding exercise:', error);
+            alert('Failed to remove exercise. Please try again.');
+            return;
+        }
+
+        // Remove from session queue
+        state.exercises.splice(state.currentExerciseIndex, 1);
+        state.exerciseIds.splice(state.currentExerciseIndex, 1);
+
+        if (state.exercises.length === 0) {
+            state.isSessionComplete = true;
+            renderExercise();
+            return;
+        }
+
+        if (state.currentExerciseIndex >= state.exercises.length) {
+            state.currentExerciseIndex = state.exercises.length - 1;
+        }
+
+        renderExercise();
+    }
+
     function handleNextExercise() {
         if (state.currentExerciseIndex < state.exercises.length - 1) {
             state.currentExerciseIndex++;
@@ -1149,6 +1208,8 @@ document.addEventListener('DOMContentLoaded', () => {
     hintBtn.addEventListener('click', handleHintClick);
     replayAudioBtn.addEventListener('click', handleReplayAudio);
     toggleFavoriteBtn.addEventListener('click', handleToggleFavorite);
+    skipExerciseBtn.addEventListener('click', handleSkipExercise);
+    hideExerciseBtn.addEventListener('click', handleHideExercise);
     nextExerciseBtn.addEventListener('click', handleNextExercise);
     document.addEventListener('keydown', handleKeyPress);
 
@@ -1365,11 +1426,13 @@ document.addEventListener('DOMContentLoaded', () => {
             logoutBtn.classList.remove('hidden');
             statsBtn.classList.remove('hidden');
             historyBtn.classList.remove('hidden');
+            hideExerciseBtn.classList.remove('hidden');
         } else {
             loginBtn.classList.remove('hidden');
             logoutBtn.classList.add('hidden');
             statsBtn.classList.add('hidden');
             historyBtn.classList.add('hidden');
+            hideExerciseBtn.classList.add('hidden');
         }
 
         if (state.isAdmin) {

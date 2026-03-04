@@ -144,27 +144,14 @@ func init() {
 
 func main() {
 	// Initialize storage backend
-	storageType := os.Getenv("STORAGE_TYPE")
-	if storageType == "" {
-		storageType = "sqlite" // Default to sqlite
+	dbPath := os.Getenv("SQLITE_PATH")
+	if dbPath == "" {
+		dbPath = "german.db"
 	}
-
 	var err error
-	if storageType == "airtable" {
-		storage.DB, err = storage.NewAirtableStorage()
-		if err != nil {
-			log.Fatalf("Failed to initialize Airtable storage: %v", err)
-		}
-	} else {
-		// Initialize storage backend
-		dbPath := os.Getenv("SQLITE_PATH")
-		if dbPath == "" {
-			dbPath = "german.db"
-		}
-		storage.DB, err = storage.NewSQLiteStorage(dbPath)
-		if err != nil {
-			log.Fatalf("Failed to initialize SQLite storage: %v", err)
-		}
+	storage.DB, err = storage.NewSQLiteStorage(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize SQLite storage: %v", err)
 	}
 
 	// Initialize Google OAuth
@@ -241,6 +228,7 @@ func main() {
 	http.HandleFunc("/api/exercises", withOptionalAuth(handleExercises))
 	http.HandleFunc("/api/exercises/complete", withAuth(handleExercisesComplete))
 	http.HandleFunc("/api/exercises/favorite", withAuth(handleExerciseFavorite))
+	http.HandleFunc("/api/exercises/hide", withAuth(handleExerciseHide))
 	http.HandleFunc("/api/exercises/history", withAuth(handleExerciseHistory))
 	http.HandleFunc("/api/topics", withOptionalAuth(handleTopics))
 	http.HandleFunc("/api/topics/", withOptionalAuth(handleTopicByID))
@@ -742,6 +730,44 @@ func handleExerciseFavorite(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleExerciseHide hides an exercise for the current user (soft delete, other users still see it)
+func handleExerciseHide(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserIDFromRequest(r)
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		ExerciseID string `json:"exercise_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ExerciseID == "" {
+		http.Error(w, "Exercise ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := storage.DB.HideExercise(userID, req.ExerciseID); err != nil {
+		log.Printf("ERROR: failed to hide exercise for user %s exercise %s: %v", userID, req.ExerciseID, err)
+		http.Error(w, fmt.Sprintf("Failed to hide exercise: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[HIDE] User %s hid exercise %s", userID, req.ExerciseID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "hidden"})
+}
+
 // handleExerciseHistory returns the practice history for all exercises a user has attempted
 func handleExerciseHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -793,6 +819,9 @@ func getEligibleExercisesForSRS(allExercises []*storage.Exercise, userViews map[
 
 	for _, ex := range allExercises {
 		view, seen := userViews[ex.ID]
+		if seen && view.IsHidden {
+			continue
+		}
 		if !seen {
 			// Never seen before: treated as very overdue or high priority
 			// We can assign a high arbitrary overdue amount to prioritize new items mixed with old ones
