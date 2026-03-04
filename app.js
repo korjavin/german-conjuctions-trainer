@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const topicDropdown = document.getElementById('topic-dropdown');
 
     const generateBtn = document.getElementById('generate-btn');
+    const audioToggleBtn = document.getElementById('audio-toggle-btn');
+    const audioToggleIcon = document.getElementById('audio-toggle-icon');
     const hintBtn = document.getElementById('hint-btn');
     const loadingSpinner = document.getElementById('loading-spinner');
     const timer = document.getElementById('timer');
@@ -92,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyFilterFavorites = document.getElementById('history-filter-favorites');
 
     const WORD_AUDIO_CACHE_STORAGE_KEY = 'wordAudioCacheV1';
+    const AUDIO_ENABLED_STORAGE_KEY = 'audioEnabled';
     const MAX_WORD_AUDIO_CACHE_ENTRIES = 2000;
     const WORD_AUDIO_PRELOAD_CONCURRENCY = 3;
 
@@ -99,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let state = {
         lastAudioUrl: '',
         lastAudioText: '',
+        isAudioEnabled: loadAudioEnabled(),
         wordAudioCache: loadWordAudioCache(),
         wordAudioInflight: new Map(),
         activeAudio: null,
@@ -161,6 +165,43 @@ document.addEventListener('DOMContentLoaded', () => {
     function normalizeWordForCache(word) {
         if (typeof word !== 'string') return '';
         return word.trim();
+    }
+
+    function loadAudioEnabled() {
+        const savedValue = localStorage.getItem(AUDIO_ENABLED_STORAGE_KEY);
+        if (savedValue === null) return true;
+        return savedValue === 'true';
+    }
+
+    function updateAudioToggleUI() {
+        if (!audioToggleBtn || !audioToggleIcon) return;
+
+        const isEnabled = state.isAudioEnabled;
+        audioToggleIcon.textContent = isEnabled ? '🔊' : '🔇';
+        audioToggleBtn.setAttribute('title', isEnabled ? 'Sound: on' : 'Sound: off');
+        audioToggleBtn.setAttribute('aria-label', isEnabled ? 'Disable sound' : 'Enable sound');
+
+        audioToggleBtn.classList.toggle('opacity-70', !isEnabled);
+        audioToggleBtn.classList.toggle('border-red-400', !isEnabled);
+        audioToggleBtn.classList.toggle('text-red-500', !isEnabled);
+        audioToggleBtn.classList.toggle('hover:text-red-600', !isEnabled);
+
+        replayAudioBtn.disabled = !isEnabled;
+        replayAudioBtn.classList.toggle('opacity-60', !isEnabled);
+        replayAudioBtn.classList.toggle('cursor-not-allowed', !isEnabled);
+    }
+
+    function setAudioEnabled(isEnabled) {
+        state.isAudioEnabled = Boolean(isEnabled);
+        localStorage.setItem(AUDIO_ENABLED_STORAGE_KEY, String(state.isAudioEnabled));
+
+        if (!state.isAudioEnabled && state.activeAudio) {
+            state.activeAudio.pause();
+            state.activeAudio.currentTime = 0;
+            state.activeAudio = null;
+        }
+
+        updateAudioToggleUI();
     }
 
     function loadWordAudioCache() {
@@ -257,7 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function playAudioFile(filePath) {
-        if (!filePath) return false;
+        if (!state.isAudioEnabled || !filePath) return false;
 
         let audio = null;
         try {
@@ -292,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchTTSFilePath(text) {
-        if (!text) return '';
+        if (!state.isAudioEnabled || !text) return '';
 
         try {
             const response = await fetch('/api/tts', {
@@ -317,6 +358,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function playSentenceAudio(audioPath, text) {
+        if (!state.isAudioEnabled) return;
+
         const playedFromProvidedPath = await playAudioFile(audioPath);
         if (playedFromProvidedPath) {
             return;
@@ -332,6 +375,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function ensureWordAudioCached(word) {
+        if (!state.isAudioEnabled) return '';
+
         const normalizedWord = normalizeWordForCache(word);
         if (!normalizedWord) return '';
 
@@ -363,6 +408,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function playWordAudio(word) {
+        if (!state.isAudioEnabled) return;
+
         const normalizedWord = normalizeWordForCache(word);
         if (!normalizedWord) return;
 
@@ -383,6 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function preloadExerciseWordAudio(exercise) {
+        if (!state.isAudioEnabled) return;
         if (!exercise || !exercise.correct_german_sentence) return;
 
         const allTokens = exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [];
@@ -834,7 +882,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleReplayAudio() {
+        if (!state.isAudioEnabled) return;
         playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
+    }
+
+    function handleAudioToggle() {
+        setAudioEnabled(!state.isAudioEnabled);
     }
 
     async function handleToggleFavorite() {
@@ -1426,6 +1479,7 @@ document.addEventListener('DOMContentLoaded', () => {
     generateBtn.addEventListener('click', () => {
         fetchExercises();
     });
+    audioToggleBtn.addEventListener('click', handleAudioToggle);
     hintBtn.addEventListener('click', handleHintClick);
     replayAudioBtn.addEventListener('click', handleReplayAudio);
     toggleFavoriteBtn.addEventListener('click', handleToggleFavorite);
@@ -1944,6 +1998,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialization ---
     function init() {
+        updateAudioToggleUI();
         checkAuthStatus();
         loadTopics();
 
