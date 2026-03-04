@@ -215,9 +215,10 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isLocked = false;
         state.userSentence = [];
 
-        // Hide control buttons by default and show hint button
+        // Hide control buttons by default and show hint/skip buttons
         exerciseControls.classList.add('hidden');
         hintBtn.classList.remove('hidden');
+        skipExerciseBtn.classList.remove('hidden');
 
         if (state.exercises.length === 0) {
             exerciseContent.classList.add('hidden');
@@ -363,9 +364,10 @@ document.addEventListener('DOMContentLoaded', () => {
             state.lastAudioText = exercise.correct_german_sentence;
             playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
 
-            // Show exercise controls and hide hint button
+            // Show exercise controls and hide hint/skip buttons
             exerciseControls.classList.remove('hidden');
             hintBtn.classList.add('hidden');
+            skipExerciseBtn.classList.add('hidden');
         } else {
             state.mistakes++;
 
