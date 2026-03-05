@@ -98,8 +98,9 @@ export function showStatisticsPage() {
     let perfectCount = 0;
 
     for (let i = 0; i < state.exercises.length; i++) {
-        const hadMistake = state.exercisesWithMistakes.has(i);
-        const hadHint = state.exercisesWithHints.has(i);
+        const exerciseId = state.exerciseIds[i];
+        const hadMistake = exerciseId ? state.exercisesWithMistakes.has(exerciseId) : false;
+        const hadHint = exerciseId ? state.exercisesWithHints.has(exerciseId) : false;
 
         if (!hadMistake && !hadHint) {
             perfectCount++;

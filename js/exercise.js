@@ -159,10 +159,12 @@ export function handleWordClick(word, button) {
     } else {
         // Incorrect word
         state.mistakes++;
-        state.exercisesWithMistakes.add(state.currentExerciseIndex);
+        const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+        if (exerciseId) {
+            state.exercisesWithMistakes.add(exerciseId);
+        }
 
         // Track per-exercise mistake
-        const exerciseId = state.exerciseIds[state.currentExerciseIndex];
         if (exerciseId && state.exercisePerformance.has(exerciseId)) {
             const perf = state.exercisePerformance.get(exerciseId);
             perf.mistakes++;
@@ -235,10 +237,13 @@ export function handleHintClick() {
             if (button.dataset.word === nextCorrectWord) {
                 button.classList.add('hint-word');
                 state.hintsUsed++;
-                state.exercisesWithHints.add(state.currentExerciseIndex);
+
+                const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+                if (exerciseId) {
+                    state.exercisesWithHints.add(exerciseId);
+                }
 
                 // Track per-exercise hint
-                const exerciseId = state.exerciseIds[state.currentExerciseIndex];
                 if (exerciseId && state.exercisePerformance.has(exerciseId)) {
                     const perf = state.exercisePerformance.get(exerciseId);
                     perf.hints++;

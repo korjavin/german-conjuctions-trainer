@@ -116,8 +116,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isLocked: false,
         mistakes: 0,
         hintsUsed: 0,
-        exercisesWithMistakes: new Set(), // Track exercises with mistakes (by index)
-        exercisesWithHints: new Set(), // Track exercises with hints (by index)
+        exercisesWithMistakes: new Set(), // Track exercises with mistakes (by exerciseId)
+        exercisesWithHints: new Set(), // Track exercises with hints (by exerciseId)
         exercisePerformance: new Map(), // Track per-exercise performance: exerciseId -> {hints, mistakes}
         completedExerciseIds: new Set(), // Track finished exercises so only completed items affect SRS
         startTime: null,
@@ -603,10 +603,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             // Incorrect word
             state.mistakes++;
-            state.exercisesWithMistakes.add(state.currentExerciseIndex);
+            const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+            if (exerciseId) {
+                state.exercisesWithMistakes.add(exerciseId);
+            }
 
             // Track per-exercise mistake
-            const exerciseId = state.exerciseIds[state.currentExerciseIndex];
             if (exerciseId && state.exercisePerformance.has(exerciseId)) {
                 const perf = state.exercisePerformance.get(exerciseId);
                 perf.mistakes++;
@@ -680,10 +682,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (button.dataset.word === nextCorrectWord) {
                     button.classList.add('hint-word');
                     state.hintsUsed++;
-                    state.exercisesWithHints.add(state.currentExerciseIndex);
+
+                    const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+                    if (exerciseId) {
+                        state.exercisesWithHints.add(exerciseId);
+                    }
 
                     // Track per-exercise hint
-                    const exerciseId = state.exerciseIds[state.currentExerciseIndex];
                     if (exerciseId && state.exercisePerformance.has(exerciseId)) {
                         const perf = state.exercisePerformance.get(exerciseId);
                         perf.hints++;
@@ -713,8 +718,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let perfectCount = 0;
 
         for (let i = 0; i < state.exercises.length; i++) {
-            const hadMistake = state.exercisesWithMistakes.has(i);
-            const hadHint = state.exercisesWithHints.has(i);
+            const exerciseId = state.exerciseIds[i];
+            const hadMistake = exerciseId ? state.exercisesWithMistakes.has(exerciseId) : false;
+            const hadHint = exerciseId ? state.exercisesWithHints.has(exerciseId) : false;
 
             if (!hadMistake && !hadHint) {
                 perfectCount++;
