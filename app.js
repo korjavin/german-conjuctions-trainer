@@ -708,18 +708,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Calculate session statistics
-        const mistakesCount = state.exercisesWithMistakes.size;
-        let solvedWithHintsOnlyCount = 0;
-        let solvedAloneCount = 0;
+        const withMistakesCount = state.exercisesWithMistakes.size;
+        const withHintsCount = state.exercisesWithHints.size;
+        let perfectCount = 0;
 
         for (let i = 0; i < state.exercises.length; i++) {
             const hadMistake = state.exercisesWithMistakes.has(i);
             const hadHint = state.exercisesWithHints.has(i);
 
             if (!hadMistake && !hadHint) {
-                solvedAloneCount++;
-            } else if (!hadMistake && hadHint) {
-                solvedWithHintsOnlyCount++;
+                perfectCount++;
             }
         }
 
@@ -735,15 +733,15 @@ document.addEventListener('DOMContentLoaded', () => {
             <h2 class="text-3xl font-bold text-gray-800 mb-6">Session Complete! 🎉</h2>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-[#22C55E]">${solvedAloneCount}</div>
+                    <div class="text-2xl font-bold text-[#22C55E]">${perfectCount}</div>
                     <div class="text-gray-600">Perfect</div>
                 </div>
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-[#3B82F6]">${solvedWithHintsOnlyCount}</div>
+                    <div class="text-2xl font-bold text-[#3B82F6]">${withHintsCount}</div>
                     <div class="text-gray-600">With Hints</div>
                 </div>
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-[#EF4444]">${mistakesCount}</div>
+                    <div class="text-2xl font-bold text-[#EF4444]">${withMistakesCount}</div>
                     <div class="text-gray-600">With Mistakes</div>
                 </div>
                 <div class="text-center">
@@ -753,7 +751,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="mb-8">
                 <h3 class="text-xl font-bold text-gray-800 mb-4">Session Analysis</h3>
-                <div class="max-w-xs mx-auto">
+                <div class="mx-auto" style="position: relative; height: 250px; width: 100%; max-width: 400px;">
                     <canvas id="session-chart"></canvas>
                 </div>
             </div>
@@ -786,28 +784,36 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Chart.js Implementation ---
         const ctx = document.getElementById('session-chart').getContext('2d');
         new Chart(ctx, {
-            type: 'pie',
+            type: 'bar',
             data: {
                 labels: ['Perfect', 'With Hints', 'With Mistakes'],
                 datasets: [{
-                    data: [solvedAloneCount, solvedWithHintsOnlyCount, mistakesCount],
+                    data: [perfectCount, withHintsCount, withMistakesCount],
                     backgroundColor: [
                         '#22C55E',  // Green for perfect
                         '#3B82F6',  // Blue for hints
                         '#EF4444'   // Red for mistakes
                     ],
-                    hoverOffset: 4
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'top',
+                        display: false
                     },
                     title: {
                         display: false,
                         text: 'Session Performance'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
                     }
                 }
             }
