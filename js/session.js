@@ -114,42 +114,42 @@ export function showStatisticsPage() {
     // Create statistics display
     const statsContainer = document.createElement('div');
     statsContainer.id = 'statistics-container';
-    statsContainer.className = 'card rounded-lg p-8 text-center';
+    statsContainer.className = 'card p-8 text-center';
 
     statsContainer.innerHTML = `
-        <h2 class="text-3xl font-bold text-gray-800 mb-6">Session Complete! 🎉</h2>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-            <div class="text-center">
-                <div class="text-2xl font-bold text-[#22C55E]">${solvedAloneCount}</div>
-                <div class="text-gray-600">Perfect</div>
+        <h2 class="page-title mb-6">Session Complete! 🎉</h2>
+        <div class="history-summary mb-8">
+            <div class="summary-box">
+                <div class="summary-value" style="color: #22C55E;">${solvedAloneCount}</div>
+                <div class="summary-label">Perfect</div>
             </div>
-            <div class="text-center">
-                <div class="text-2xl font-bold text-[#3B82F6]">${solvedWithHintsOnlyCount}</div>
-                <div class="text-gray-600">With Hints</div>
+            <div class="summary-box">
+                <div class="summary-value" style="color: #3B82F6;">${solvedWithHintsOnlyCount}</div>
+                <div class="summary-label">With Hints</div>
             </div>
-            <div class="text-center">
-                <div class="text-2xl font-bold text-[#EF4444]">${mistakesCount}</div>
-                <div class="text-gray-600">With Mistakes</div>
+            <div class="summary-box">
+                <div class="summary-value" style="color: #EF4444;">${mistakesCount}</div>
+                <div class="summary-label">With Mistakes</div>
             </div>
-            <div class="text-center">
-                <div class="text-2xl font-bold text-[#A58D78]">${state.sessionTime}s</div>
-                <div class="text-gray-600">Total Time</div>
+            <div class="summary-box">
+                <div class="summary-value" style="color: #A58D78;">${state.sessionTime}s</div>
+                <div class="summary-label">Total Time</div>
             </div>
         </div>
         <div class="mb-8">
-            <h3 class="text-xl font-bold text-gray-800 mb-4">Session Analysis</h3>
-            <div class="max-w-xs mx-auto">
+            <h3 class="section-title mb-4">Session Analysis</h3>
+            <div class="mx-auto" style="max-width: 20rem;">
                 <canvas id="session-chart"></canvas>
             </div>
         </div>
-        <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <button id="new-session-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold text-lg">
+        <div class="flex flex-wrap gap-4 justify-center">
+            <button id="new-session-btn" class="btn-primary">
                 New Practice Session
             </button>
-            <button id="same-exercises-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold text-lg">
+            <button id="same-exercises-btn" class="btn-primary">
                 Retry These Exercises
             </button>
-            ${state.isLoggedIn ? '<button id="view-progress-btn" class="btn-primary px-6 py-3 rounded-lg font-semibold text-lg">View Your Progress</button>' : ''}
+            ${state.isLoggedIn ? '<button id="view-progress-btn" class="btn-primary">View Your Progress</button>' : ''}
         </div>
     `;
 

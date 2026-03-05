@@ -216,14 +216,15 @@ export function updateAudioToggleUI() {
     dom.audioToggleBtn.setAttribute('title', isEnabled ? 'Sound: on' : 'Sound: off');
     dom.audioToggleBtn.setAttribute('aria-label', isEnabled ? 'Disable sound' : 'Enable sound');
 
-    dom.audioToggleBtn.classList.toggle('opacity-70', !isEnabled);
-    dom.audioToggleBtn.classList.toggle('border-red-400', !isEnabled);
-    dom.audioToggleBtn.classList.toggle('text-red-500', !isEnabled);
-    dom.audioToggleBtn.classList.toggle('hover:text-red-600', !isEnabled);
+    if (!isEnabled) {
+        dom.audioToggleBtn.classList.add('is-audio-off');
+        dom.replayAudioBtn.classList.add('is-audio-off');
+    } else {
+        dom.audioToggleBtn.classList.remove('is-audio-off');
+        dom.replayAudioBtn.classList.remove('is-audio-off');
+    }
 
     dom.replayAudioBtn.disabled = !isEnabled;
-    dom.replayAudioBtn.classList.toggle('opacity-60', !isEnabled);
-    dom.replayAudioBtn.classList.toggle('cursor-not-allowed', !isEnabled);
 }
 
 export function setAudioEnabled(isEnabled) {

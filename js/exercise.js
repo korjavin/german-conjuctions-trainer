@@ -81,7 +81,6 @@ export function renderExercise() {
         state.userSentence.forEach(w => {
             const span = document.createElement('span');
             span.textContent = w;
-            span.className = 'px-3 py-2 bg-white/80 backdrop-blur-sm rounded-lg mr-2 font-medium text-gray-700 shadow-sm';
             dom.constructedSentenceEl.appendChild(span);
         });
     } else {
@@ -111,7 +110,7 @@ export function renderExercise() {
         button.appendChild(hotkeySpan);
         button.appendChild(wordSpan);
 
-        button.className = 'btn-word px-4 py-2 rounded-md font-medium';
+        button.className = 'btn-word';
         button.dataset.hotkey = hotkey;
         button.dataset.word = word;
 
@@ -148,7 +147,6 @@ export function handleWordClick(word, button) {
         state.userSentence.forEach(w => {
             const span = document.createElement('span');
             span.textContent = w;
-            span.className = 'px-3 py-2 bg-white/80 backdrop-blur-sm rounded-lg mr-2 font-medium text-gray-700 shadow-sm';
             dom.constructedSentenceEl.appendChild(span);
         });
 
@@ -368,11 +366,13 @@ export function updateFavoriteButtonState(isFavorite) {
     if (isFavorite) {
         dom.favoriteBtnText.textContent = 'Remove from Favorites';
         dom.toggleFavoriteBtn.classList.remove('btn-secondary');
-        dom.toggleFavoriteBtn.classList.add('btn-primary', 'bg-yellow-500', 'hover:bg-yellow-600', 'border-yellow-600');
+        dom.toggleFavoriteBtn.classList.add('btn-primary');
+        dom.toggleFavoriteBtn.classList.add('filter-active-yellow');
         svg.setAttribute('fill', 'currentColor');
     } else {
         dom.favoriteBtnText.textContent = 'Add to Favorites';
-        dom.toggleFavoriteBtn.classList.remove('btn-primary', 'bg-yellow-500', 'hover:bg-yellow-600', 'border-yellow-600');
+        dom.toggleFavoriteBtn.classList.remove('filter-active-yellow');
+        dom.toggleFavoriteBtn.classList.remove('btn-primary');
         dom.toggleFavoriteBtn.classList.add('btn-secondary');
         svg.setAttribute('fill', 'none');
     }
