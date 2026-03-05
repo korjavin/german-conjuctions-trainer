@@ -67,11 +67,11 @@ initSession({ renderExercise });
 // Settings modal
 dom.settingsBtn.addEventListener('click', () => {
     loadTopics(); // Refresh topics when opening settings
-    dom.settingsModal.classList.remove('hidden');
+    dom.settingsModal.showModal();
 });
 
 dom.settingsCloseBtn.addEventListener('click', () => {
-    dom.settingsModal.classList.add('hidden');
+    dom.settingsModal.close();
     hideAddTopicForm();
     hidePromptEditor();
     dom.versionHistory.classList.add('hidden');
@@ -116,7 +116,7 @@ document.addEventListener('keydown', handleKeyPress);
 // Observability
 dom.viewLastRefinedPromptBtn.addEventListener('click', showLastRefinedPrompt);
 dom.lastRefinedPromptCloseBtn.addEventListener('click', () => {
-    dom.lastRefinedPromptModal.classList.add('hidden');
+    dom.lastRefinedPromptModal.close();
 });
 
 // Topic combobox
@@ -183,14 +183,14 @@ dom.logoutBtn.addEventListener('click', () => {
 dom.statsBtn.addEventListener('click', showUserExerciseStats);
 
 dom.statsCloseBtn.addEventListener('click', () => {
-    dom.statsModal.classList.add('hidden');
+    dom.statsModal.close();
 });
 
 // History
 dom.historyBtn.addEventListener('click', showExerciseHistory);
 
 dom.historyCloseBtn.addEventListener('click', () => {
-    dom.historyModal.classList.add('hidden');
+    dom.historyModal.close();
 });
 
 dom.historyFilterReady.addEventListener('click', () => {

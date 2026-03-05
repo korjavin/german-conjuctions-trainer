@@ -15,139 +15,137 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body class="antialiased flex flex-col min-h-screen">
+<body class="app-body">
 
-    <header class="bg-white/10 backdrop-blur-lg border-b border-white/20 shadow-lg">
-        <nav class="container mx-auto px-3 py-3 lg:px-4 lg:py-4">
+    <header class="app-header">
+        <nav class="container header-nav">
             <!-- Top row: Title and buttons -->
-            <div class="header-top-row flex justify-between items-center">
-                <h1 class="text-xl lg:text-2xl font-bold text-white drop-shadow-lg">German Grammar Trainer</h1>
-                <div class="header-actions flex items-center space-x-2 lg:space-x-3">
-                    <button id="login-btn" class="btn-primary px-3 py-2 lg:px-4 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm">
-                        <span class="hidden sm:inline">Login with Google</span>
-                        <span class="sm:hidden">Login</span>
+            <div class="header-top-row">
+                <h1 class="header-title">German Grammar Trainer</h1>
+                <div class="header-actions">
+                    <button id="login-btn" class="btn-primary header-btn">
+                        <span class="desktop-only">Login with Google</span>
+                        <span class="mobile-only">Login</span>
                     </button>
-                    <button id="stats-btn" class="btn-primary px-3 py-2 lg:px-4 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm hidden">
-                        <span class="hidden sm:inline">Stats</span>
-                        <span class="sm:hidden">📊</span>
+                    <button id="stats-btn" class="btn-primary header-btn hidden">
+                        <span class="desktop-only">Stats</span>
+                        <span class="mobile-only">📊</span>
                     </button>
-                    <button id="history-btn" class="btn-primary px-3 py-2 lg:px-4 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm hidden">
-                        <span class="hidden sm:inline">History</span>
-                        <span class="sm:hidden">📜</span>
+                    <button id="history-btn" class="btn-primary header-btn hidden">
+                        <span class="desktop-only">History</span>
+                        <span class="mobile-only">📜</span>
                     </button>
-                    <button id="logout-btn" class="btn-primary px-3 py-2 lg:px-4 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm hidden">
-                        <span class="hidden sm:inline">Logout</span>
-                        <span class="sm:hidden">👋</span>
+                    <button id="logout-btn" class="btn-primary header-btn hidden">
+                        <span class="desktop-only">Logout</span>
+                        <span class="mobile-only">👋</span>
                     </button>
-                    <button id="settings-btn" class="btn-primary px-3 py-2 lg:px-4 lg:py-2 rounded-lg font-semibold text-xs lg:text-sm">
-                        <span class="hidden sm:inline">Settings</span>
-                        <span class="sm:hidden">⚙️</span>
+                    <button id="settings-btn" class="btn-primary header-btn">
+                        <span class="desktop-only">Settings</span>
+                        <span class="mobile-only">⚙️</span>
                     </button>
-                    <a href="/privacy.html" class="text-white/60 hover:text-white/90 text-xs hidden sm:inline">Privacy</a>
+                    <a href="/privacy.html" class="header-privacy-link desktop-only">Privacy</a>
                 </div>
             </div>
             <!-- Bottom row: Topic selector and Start button -->
-            <div id="topic-selection-section" class="flex items-center gap-3 mt-3 pt-3 border-t border-white/20">
-                <div id="topic-selector-container" class="relative flex-1 max-w-md">
-                    <input type="text" id="topic-search" class="w-full px-3 py-2 lg:px-4 lg:py-2.5 border-2 border-white/40 rounded-lg shadow-md focus:ring-2 focus:ring-white/30 focus:border-white/60 focus:outline-none text-sm lg:text-base bg-white/95 backdrop-blur-sm" placeholder="Select topic...">
-                    <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div id="topic-selection-section" class="topic-selection-row">
+                <div id="topic-selector-container" class="topic-selector-container relative">
+                    <input type="text" id="topic-search" class="topic-search-input w-full" placeholder="Select topic...">
+                    <svg class="search-icon absolute top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
                 </div>
-                <button id="generate-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-2.5 rounded-lg font-bold text-sm lg:text-base shadow-lg hover:shadow-xl transition-all hover:scale-105 whitespace-nowrap">
+                <button id="generate-btn" class="btn-primary generate-btn whitespace-nowrap">
                     Start Practice
                 </button>
-                <button id="audio-toggle-btn" class="btn-primary px-3 py-2 lg:px-3 lg:py-2.5 rounded-lg font-bold text-sm lg:text-base shadow-lg whitespace-nowrap" title="Sound: on" aria-label="Disable sound">
+                <button id="audio-toggle-btn" class="btn-primary audio-toggle-btn whitespace-nowrap" title="Sound: on" aria-label="Disable sound">
                     <span id="audio-toggle-icon" aria-hidden="true">🔊</span>
                 </button>
             </div>
         </nav>
     </header>
 
-    <main class="container mx-auto px-3 py-6 lg:px-6 lg:py-12">
-        <div id="app" class="max-w-3xl mx-auto">
+    <main class="container main-content">
+        <div id="app" class="app-wrapper max-w-3xl mx-auto">
 
             <!-- Exercise Display -->
-            <div id="exercise-container" class="card rounded-lg p-4 lg:p-8 mb-8">
-                <div class="flex flex-col sm:flex-row justify-between items-center mb-4 lg:mb-6 gap-3">
-                    <div id="exercise-counter" class="text-sm lg:text-lg font-semibold text-gray-700 bg-white/50 backdrop-blur-sm rounded-lg px-3 py-1 lg:px-4 lg:py-2 w-full sm:w-auto text-center"></div>
-                    <div id="progress-bar-container" class="flex-1 w-full sm:mx-6">
-                        <div class="bg-gray-200/50 rounded-full h-2 lg:h-3 overflow-hidden">
-                            <div id="progress-bar" class="bg-gradient-to-r from-green-400 to-blue-500 h-full rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
-                        </div>
+            <div id="exercise-container" class="card exercise-container mb-8">
+                <div class="exercise-header mb-6">
+                    <div id="exercise-counter" class="exercise-counter text-center"></div>
+                    <div id="progress-bar-container" class="progress-bar-container w-full mx-6">
+                        <progress id="progress-bar" class="progress-bar w-full rounded-full" value="0" max="100"></progress>
                     </div>
-                    <div class="text-xs lg:text-sm font-medium text-gray-600 bg-white/50 backdrop-blur-sm rounded-lg px-2 py-1 lg:px-3 lg:py-1">
+                    <div class="progress-percentage-container text-sm">
                         <span id="progress-percentage">0%</span>
                     </div>
                 </div>
                 <div id="loading-spinner" class="text-center hidden">
-                    <div class="flex flex-col items-center space-y-4">
-                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-                        <p class="text-xl font-semibold text-gray-700">Loading your practice session...</p>
-                        <div class="flex items-center space-x-2 bg-white/80 backdrop-blur-sm rounded-lg px-4 py-2">
-                            <svg class="w-5 h-5 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
+                    <div class="loading-wrapper">
+                        <div class="loading-spinner animate-spin rounded-full"></div>
+                        <p class="loading-text">Loading your practice session...</p>
+                        <div class="timer-container">
+                            <svg class="timer-icon" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
                             </svg>
-                            <p id="timer" class="text-lg font-bold text-gray-700"></p>
-                            <span class="text-sm text-gray-600">seconds</span>
+                            <p id="timer" class="timer-value"></p>
+                            <span class="timer-label">seconds</span>
                         </div>
                     </div>
                 </div>
                 <div id="empty-state-container" class="text-center hidden">
-                    <p class="text-lg text-gray-600 mb-2">Ready to practice?</p>
-                    <p class="text-gray-500">Select a topic above and click "Start Practice" to begin.</p>
+                    <p class="empty-state-title mb-2">Ready to practice?</p>
+                    <p class="empty-state-subtitle">Select a topic above and click "Start Practice" to begin.</p>
                 </div>
 
                 <div id="exercise-content">
-                    <p class="text-sm lg:text-lg text-gray-600 mb-2">English Hint:</p>
-                    <p id="english-hint" class="text-lg lg:text-2xl font-semibold text-gray-800 mb-4 lg:mb-6">Loading exercise...</p>
+                    <p class="hint-label mb-2">English Hint:</p>
+                    <p id="english-hint" class="english-hint mb-6">Loading exercise...</p>
 
-                    <div id="answer-area" class="bg-gradient-to-r from-blue-50/50 to-purple-50/50 backdrop-blur-sm rounded-xl p-4 lg:p-6 mb-6 lg:mb-8 min-h-[60px] lg:min-h-[80px] border-2 border-blue-200/50 flex items-center justify-center transition-all duration-300">
-                        <p id="answer-prompt" class="text-gray-600 font-medium text-sm lg:text-lg">Click the words below to form the sentence.</p>
-                        <div id="constructed-sentence" class="flex flex-wrap gap-2 lg:gap-3"></div>
+                    <div id="answer-area" class="answer-area mb-8 flex items-center justify-center transition-all duration-300">
+                        <p id="answer-prompt" class="answer-prompt">Click the words below to form the sentence.</p>
+                        <div id="constructed-sentence" class="constructed-sentence flex flex-wrap gap-3"></div>
                     </div>
 
-                    <div class="flex justify-between items-center mb-4 lg:mb-6">
-                        <p class="text-base lg:text-xl font-semibold text-gray-700">Scrambled Words:</p>
-                        <div class="flex items-center gap-2">
-                            <button id="skip-exercise-btn" class="btn-secondary px-4 py-2 lg:px-6 lg:py-3 rounded-xl font-bold text-xs lg:text-sm flex items-center space-x-2" title="Skip this exercise for the current session">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="scrambled-words-header flex justify-between items-center mb-6">
+                        <p class="scrambled-words-label">Scrambled Words:</p>
+                        <div class="exercise-actions flex items-center gap-2">
+                            <button id="skip-exercise-btn" class="btn-secondary exercise-action-btn flex items-center space-x-2" title="Skip this exercise for the current session">
+                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
                                 </svg>
                                 <span>Skip</span>
                             </button>
-                            <button id="hide-exercise-btn" class="btn-secondary px-4 py-2 lg:px-6 lg:py-3 rounded-xl font-bold text-xs lg:text-sm flex items-center space-x-2 text-red-500" title="Remove this exercise (you won't see it again)">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <button id="hide-exercise-btn" class="btn-secondary exercise-action-btn action-danger flex items-center space-x-2" title="Remove this exercise (you won't see it again)">
+                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
                                 </svg>
                                 <span>Remove</span>
                             </button>
-                            <button id="hint-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-3 rounded-xl font-bold text-xs lg:text-sm flex items-center space-x-2">
-                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <button id="hint-btn" class="btn-primary exercise-action-btn flex items-center space-x-2">
+                                <svg class="action-icon" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path>
                                 </svg>
                                 <span>Hint</span>
                             </button>
                         </div>
                     </div>
-                    <div id="scrambled-words-container" class="flex flex-wrap gap-3 justify-center">
+                    <div id="scrambled-words-container" class="scrambled-words-container flex flex-wrap gap-3 justify-center">
                         <!-- Word buttons will be dynamically inserted here -->
                     </div>
 
                     <!-- Control buttons (shown after correct answer) -->
-                    <div id="exercise-controls" class="flex flex-wrap gap-2 lg:gap-3 justify-center mt-4 hidden">
-                        <button id="toggle-favorite-btn" class="btn-secondary px-4 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-sm lg:text-base flex items-center gap-2">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div id="exercise-controls" class="exercise-controls flex flex-wrap gap-3 justify-center mt-4 hidden">
+                        <button id="toggle-favorite-btn" class="btn-secondary toggle-favorite-btn flex items-center gap-2">
+                            <svg class="favorite-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
                             </svg>
                             <span id="favorite-btn-text">Add to Favorites</span>
                         </button>
-                        <button id="replay-audio-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-sm lg:text-base">🔊 Replay Audio</button>
-                        <button id="next-exercise-btn" class="btn-primary px-4 py-2 lg:px-6 lg:py-3 rounded-lg font-semibold text-sm lg:text-base">Next Exercise →</button>
+                        <button id="replay-audio-btn" class="btn-primary replay-audio-btn">🔊 Replay Audio</button>
+                        <button id="next-exercise-btn" class="btn-primary next-exercise-btn">Next Exercise →</button>
                     </div>
 
-                    <div id="feedback-area" class="mt-4 lg:mt-6 text-center min-h-[24px]">
-                        <p id="correct-sentence-display" class="text-base lg:text-lg correct-answer-feedback font-semibold"></p>
+                    <div id="feedback-area" class="feedback-area mt-6 text-center">
+                        <p id="correct-sentence-display" class="correct-answer-feedback"></p>
                     </div>
                 </div>
             </div>
@@ -156,39 +154,37 @@
     </main>
 
     <!-- Settings Modal -->
-    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden overflow-y-auto z-50">
-        <div class="card rounded-lg p-8 w-full max-w-4xl max-h-screen overflow-y-auto m-4">
-            <h2 class="text-2xl font-bold mb-6 text-gray-800">Topics Management</h2>
-
-            <!-- Current Topic Selection (removed, now in header) -->
+    <dialog id="settings-modal" class="modal-backdrop">
+        <div class="card modal-content modal-lg">
+            <h2 class="modal-title mb-6">Topics Management</h2>
 
             <!-- Observability -->
-            <div class="mb-6 pt-4 border-t">
-                <h3 class="text-lg font-semibold text-gray-700 mb-2">Observability</h3>
+            <div class="observability-section mb-6">
+                <h3 class="section-title mb-2">Observability</h3>
                 <div class="flex justify-between items-center">
-                    <p class="text-sm text-gray-600">Inspect the prompt that was last used to generate exercises.</p>
-                    <button id="view-last-refined-prompt-btn" class="btn-secondary text-sm px-3 py-1">View Last Refined Prompt</button>
+                    <p class="section-desc">Inspect the prompt that was last used to generate exercises.</p>
+                    <button id="view-last-refined-prompt-btn" class="btn-secondary btn-sm">View Last Refined Prompt</button>
                 </div>
             </div>
 
             <!-- Topics List -->
             <div class="mb-6">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold text-gray-800">All Topics</h3>
+                    <h3 class="section-title">All Topics</h3>
                     <div class="flex items-center space-x-4">
                         <div class="flex items-center space-x-2">
-                            <label for="topic-sort" class="text-sm text-gray-600">Sort by:</label>
-                            <select id="topic-sort" class="border rounded-md px-3 py-1 text-sm">
+                            <label for="topic-sort" class="text-label">Sort by:</label>
+                            <select id="topic-sort" class="form-select">
                                 <option value="name-asc">Name (A-Z)</option>
                                 <option value="name-desc">Name (Z-A)</option>
                                 <option value="date-newest">Newest First</option>
                                 <option value="date-oldest">Oldest First</option>
                             </select>
                         </div>
-                        <button id="add-topic-btn" class="btn-primary px-4 py-2 rounded-md text-sm">Add New Topic</button>
+                        <button id="add-topic-btn" class="btn-primary btn-sm">Add New Topic</button>
                     </div>
                 </div>
-                <div id="topics-list" class="space-y-4 max-h-60 overflow-y-auto">
+                <div id="topics-list" class="topics-list">
                     <!-- Topics will be loaded here -->
                 </div>
             </div>
@@ -196,114 +192,114 @@
             <!-- Prompt Editor (shown when topic is selected) -->
             <div id="prompt-editor" class="mb-6 hidden">
                 <div class="flex justify-between items-center mb-2">
-                    <label class="block text-sm font-medium text-gray-700">Edit Prompt for: <span id="current-topic-name" class="font-semibold"></span></label>
-                    <button id="view-versions-btn" class="text-blue-600 hover:text-blue-800 text-sm">View Version History</button>
+                    <label class="text-label">Edit Prompt for: <span id="current-topic-name" class="font-semibold"></span></label>
+                    <button id="view-versions-btn" class="text-link">View Version History</button>
                 </div>
-                <textarea id="prompt-textarea" rows="10" class="w-full p-2 border rounded-md mb-2"></textarea>
+                <textarea id="prompt-textarea" rows="10" class="form-textarea w-full mb-2"></textarea>
                 <div class="flex justify-end space-x-2">
-                    <button id="cancel-edit-btn" class="px-4 py-2 rounded-md border">Cancel</button>
-                    <button id="save-prompt-btn" class="btn-primary px-4 py-2 rounded-md">Save Changes</button>
+                    <button id="cancel-edit-btn" class="btn-secondary">Cancel</button>
+                    <button id="save-prompt-btn" class="btn-primary">Save Changes</button>
                 </div>
             </div>
 
             <!-- Version History Modal Content (shown within settings modal) -->
             <div id="version-history" class="hidden">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold text-gray-800">Version History for: <span id="version-topic-name"></span></h3>
-                    <button id="close-versions-btn" class="text-gray-500 hover:text-gray-700">&times;</button>
+                    <h3 class="section-title">Version History for: <span id="version-topic-name"></span></h3>
+                    <button id="close-versions-btn" class="close-btn">&times;</button>
                 </div>
-                <div id="versions-list" class="space-y-2 max-h-40 overflow-y-auto mb-4">
+                <div id="versions-list" class="versions-list mb-4">
                     <!-- Versions will be loaded here -->
                 </div>
             </div>
 
             <!-- Add Topic Form (hidden by default) -->
             <div id="add-topic-form" class="mb-6 hidden">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4">Add New Topic</h3>
+                <h3 class="section-title mb-4">Add New Topic</h3>
                 <div class="mb-4">
-                    <label for="new-topic-name" class="block text-sm font-medium text-gray-700 mb-1">Topic Name</label>
-                    <input type="text" id="new-topic-name" class="w-full p-2 border rounded-md" placeholder="e.g., Conjunctions, Verb + Preposition">
+                    <label for="new-topic-name" class="text-label mb-1">Topic Name</label>
+                    <input type="text" id="new-topic-name" class="form-input w-full" placeholder="e.g., Conjunctions, Verb + Preposition">
                 </div>
                 <div class="mb-4">
-                    <label for="new-topic-prompt" class="block text-sm font-medium text-gray-700 mb-1">Prompt</label>
-                    <textarea id="new-topic-prompt" rows="8" class="w-full p-2 border rounded-md" placeholder="Enter the prompt for generating exercises..."></textarea>
+                    <label for="new-topic-prompt" class="text-label mb-1">Prompt</label>
+                    <textarea id="new-topic-prompt" rows="8" class="form-textarea w-full" placeholder="Enter the prompt for generating exercises..."></textarea>
                 </div>
                 <div class="flex justify-end space-x-2">
-                    <button id="cancel-add-btn" class="px-4 py-2 rounded-md border">Cancel</button>
-                    <button id="save-topic-btn" class="btn-primary px-4 py-2 rounded-md">Create Topic</button>
+                    <button id="cancel-add-btn" class="btn-secondary">Cancel</button>
+                    <button id="save-topic-btn" class="btn-primary">Create Topic</button>
                 </div>
             </div>
 
             <div class="flex justify-end">
-                <button id="settings-close-btn" class="px-4 py-2 rounded-md border">Close</button>
+                <button id="settings-close-btn" class="btn-secondary">Close</button>
             </div>
         </div>
-    </div>
+    </dialog>
 
     <!-- Last Refined Prompt Modal -->
-    <div id="last-refined-prompt-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden overflow-y-auto">
-        <div class="card rounded-lg p-8 w-full max-w-4xl max-h-screen overflow-y-auto m-4">
+    <dialog id="last-refined-prompt-modal" class="modal-backdrop">
+        <div class="card modal-content modal-lg">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold text-gray-800">Last Refined Prompt</h2>
-                <button id="last-refined-prompt-close-btn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                <h2 class="modal-title">Last Refined Prompt</h2>
+                <button id="last-refined-prompt-close-btn" class="close-btn">&times;</button>
             </div>
-            <pre id="last-refined-prompt-content" class="bg-gray-100 p-4 rounded-md text-sm whitespace-pre-wrap font-mono"></pre>
+            <pre id="last-refined-prompt-content" class="code-block"></pre>
         </div>
-    </div>
+    </dialog>
 
     <!-- User Stats Modal -->
-    <div id="stats-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
-        <div class="card rounded-lg p-8 w-full max-w-md">
+    <dialog id="stats-modal" class="modal-backdrop">
+        <div class="card modal-content modal-md">
             <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-bold text-gray-800">Your Progress</h2>
-                <button id="stats-close-btn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                <h2 class="modal-title">Your Progress</h2>
+                <button id="stats-close-btn" class="close-btn">&times;</button>
             </div>
             <div class="space-y-4">
-                <div class="flex justify-between items-center p-4 bg-blue-100 rounded-lg">
-                    <span class="font-semibold text-blue-800">Ready to Repeat</span>
-                    <span id="stats-ready-to-repeat" class="text-2xl font-bold text-blue-800">0</span>
+                <div class="stat-row stat-row-blue">
+                    <span class="stat-label">Ready to Repeat</span>
+                    <span id="stats-ready-to-repeat" class="stat-value">0</span>
                 </div>
-                <div class="flex justify-between items-center p-4 bg-green-100 rounded-lg">
-                    <span class="font-semibold text-green-800">Trained (Strengthening)</span>
-                    <span id="stats-trained" class="text-2xl font-bold text-green-800">0</span>
+                <div class="stat-row stat-row-green">
+                    <span class="stat-label">Trained (Strengthening)</span>
+                    <span id="stats-trained" class="stat-value">0</span>
                 </div>
             </div>
         </div>
-    </div>
+    </dialog>
 
     <!-- Exercise History Modal -->
-    <div id="history-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden overflow-y-auto">
-        <div class="card rounded-lg p-8 w-full max-w-6xl max-h-screen overflow-y-auto m-4">
+    <dialog id="history-modal" class="modal-backdrop">
+        <div class="card modal-content modal-xl">
             <div class="flex justify-between items-center mb-6">
                 <div>
-                    <h2 class="text-2xl font-bold text-gray-800">Practice History</h2>
-                    <p id="history-topic-name" class="text-sm text-gray-600 mt-1">All Topics</p>
+                    <h2 class="modal-title">Practice History</h2>
+                    <p id="history-topic-name" class="modal-subtitle">All Topics</p>
                 </div>
-                <button id="history-close-btn" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+                <button id="history-close-btn" class="close-btn">&times;</button>
             </div>
 
-            <div id="history-summary" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 hidden">
-                <div class="bg-blue-100 rounded-lg p-4 text-center">
-                    <div class="text-2xl font-bold text-blue-800" id="history-total-count">0</div>
-                    <div class="text-sm text-blue-600">Total Practiced</div>
+            <div id="history-summary" class="history-summary hidden">
+                <div class="summary-box summary-box-blue">
+                    <div class="summary-value" id="history-total-count">0</div>
+                    <div class="summary-label">Total Practiced</div>
                 </div>
-                <div id="history-filter-ready" class="bg-green-100 rounded-lg p-4 text-center cursor-pointer transition-all hover:ring-2 hover:ring-green-400 select-none">
-                    <div class="text-2xl font-bold text-green-800" id="history-ready-count">0</div>
-                    <div class="text-sm text-green-600">Ready to Practice (Filter)</div>
+                <div id="history-filter-ready" class="summary-box summary-box-green filter-clickable">
+                    <div class="summary-value" id="history-ready-count">0</div>
+                    <div class="summary-label">Ready to Practice (Filter)</div>
                 </div>
-                <div class="bg-purple-100 rounded-lg p-4 text-center">
-                    <div class="text-2xl font-bold text-purple-800" id="history-success-rate">0%</div>
-                    <div class="text-sm text-purple-600">Success Rate</div>
+                <div class="summary-box summary-box-purple">
+                    <div class="summary-value" id="history-success-rate">0%</div>
+                    <div class="summary-label">Success Rate</div>
                 </div>
-                <div class="bg-orange-100 rounded-lg p-4 text-center">
-                    <div class="text-2xl font-bold text-orange-800" id="history-total-attempts">0</div>
-                    <div class="text-sm text-orange-600">Total Attempts</div>
+                <div class="summary-box summary-box-orange">
+                    <div class="summary-value" id="history-total-attempts">0</div>
+                    <div class="summary-label">Total Attempts</div>
                 </div>
             </div>
 
             <div id="history-loading" class="text-center py-8 hidden">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
-                <p class="mt-4 text-gray-600">Loading history...</p>
+                <div class="loading-spinner mx-auto mb-4"></div>
+                <p class="text-gray-600">Loading history...</p>
             </div>
 
             <div id="history-empty" class="text-center py-8 hidden">
@@ -311,32 +307,68 @@
             </div>
 
             <div id="history-filters" class="flex justify-end mb-4">
-                <button id="history-filter-favorites" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 flex items-center gap-2 transition-colors">
-                    <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button id="history-filter-favorites" class="btn-filter flex items-center gap-2">
+                    <svg class="favorite-icon w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
                     </svg>
                     <span>Favorites Only</span>
                 </button>
             </div>
 
-            <div id="history-content" class="space-y-3">
+            <div id="history-content" class="history-content space-y-3">
                 <!-- History items will be dynamically inserted here -->
             </div>
 
-            <div id="history-pagination" class="flex justify-center items-center space-x-4 mt-6 hidden">
-                <button id="history-prev-btn" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
-                    Previous
-                </button>
-                <span id="history-page-info" class="text-gray-600">Page 1</span>
-                <button id="history-next-btn" class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
-                    Next
-                </button>
+            <div id="history-pagination" class="history-pagination flex justify-center items-center space-x-4 mt-6 hidden">
+                <button id="history-prev-btn" class="btn-pagination">Previous</button>
+                <span id="history-page-info" class="pagination-info">Page 1</span>
+                <button id="history-next-btn" class="btn-pagination">Next</button>
             </div>
         </div>
-    </div>
+    </dialog>
+
+    <!-- Templates for JS dynamic rendering -->
+    <template id="history-item-template">
+        <div class="history-item card">
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex-1">
+                    <h3 class="history-item-title flex items-center"></h3>
+                    <p class="history-item-hint mt-1"></p>
+                </div>
+                <div class="history-item-status-container ml-4"></div>
+            </div>
+            <div class="history-item-footer flex items-center justify-between mt-3 pt-3">
+                <div class="flex space-x-4 history-item-meta">
+                    <span class="history-item-topic"></span>
+                    <span>•</span>
+                    <span class="history-item-date"></span>
+                </div>
+                <div class="flex space-x-4 history-item-stats">
+                    <span class="history-item-success" title="Successful attempts"></span>
+                    <span class="history-item-failed" title="Failed attempts"></span>
+                    <span class="history-item-hints" title="Hints used"></span>
+                    <span class="history-item-total" title="Total attempts"></span>
+                    <span class="history-item-rate" title="Success rate"></span>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <template id="topic-item-template">
+        <div class="topic-list-item flex justify-between items-center p-3">
+            <div>
+                <div class="topic-item-name"></div>
+                <div class="topic-item-date"></div>
+            </div>
+            <div class="flex space-x-2">
+                <button class="edit-topic-btn text-link">Edit</button>
+                <button class="delete-topic-btn text-danger">Delete</button>
+            </div>
+        </div>
+    </template>
 
     <!-- Topic Dropdown - positioned outside stacking contexts -->
-    <div id="topic-dropdown" class="fixed w-full mt-1 bg-white/95 backdrop-blur-md border border-gray-200 rounded-lg shadow-2xl hidden max-h-64 overflow-y-auto" style="z-index: 9999 !important; position: fixed !important;">
+    <div id="topic-dropdown" class="topic-dropdown hidden">
         <!-- Topic items will be dynamically inserted here -->
     </div>
 

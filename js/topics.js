@@ -66,19 +66,22 @@ export function renderTopicsList() {
     const sortedTopics = sortTopics(state.topics, state.topicSortOrder);
 
     sortedTopics.forEach(topic => {
-        const topicDiv = document.createElement('div');
-        topicDiv.className = 'flex justify-between items-center p-3 border rounded-md bg-gray-50';
+        const template = document.getElementById('topic-item-template');
+        if (!template) {
+            console.error("Missing template: topic-item-template");
+            return;
+        }
+        const fragment = template.content.cloneNode(true);
+        const topicDiv = fragment.querySelector('.topic-list-item');
 
-        topicDiv.innerHTML = `
-            <div>
-                <div class="font-medium">${topic.name}</div>
-                <div class="text-sm text-gray-500">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
-            </div>
-            <div class="flex space-x-2">
-                <button class="edit-topic-btn text-blue-600 hover:text-blue-800 text-sm" data-topic-id="${topic.id}">Edit</button>
-                <button class="delete-topic-btn text-red-600 hover:text-red-800 text-sm" data-topic-id="${topic.id}">Delete</button>
-            </div>
-        `;
+        topicDiv.querySelector('.topic-item-name').textContent = topic.name;
+        topicDiv.querySelector('.topic-item-date').textContent = `Created: ${new Date(topic.created_at).toLocaleDateString()}`;
+
+        const editBtn = topicDiv.querySelector('.edit-topic-btn');
+        editBtn.dataset.topicId = topic.id;
+
+        const deleteBtn = topicDiv.querySelector('.delete-topic-btn');
+        deleteBtn.dataset.topicId = topic.id;
 
         dom.topicsList.appendChild(topicDiv);
     });
@@ -181,14 +184,14 @@ export async function showVersionHistory(topicId) {
 
         versions.reverse().forEach(version => {
             const versionDiv = document.createElement('div');
-            versionDiv.className = 'flex justify-between items-center p-2 border rounded text-sm';
+            versionDiv.className = 'topic-list-item flex justify-between items-center p-3';
 
             versionDiv.innerHTML = `
                 <div>
-                    <div class="font-medium">Version ${version.version}</div>
-                    <div class="text-gray-500">${new Date(version.created_at).toLocaleString()}</div>
+                    <div class="topic-item-name">Version ${version.version}</div>
+                    <div class="topic-item-date">${new Date(version.created_at).toLocaleString()}</div>
                 </div>
-                <button class="restore-version-btn text-blue-600 hover:text-blue-800"
+                <button class="restore-version-btn text-link"
                         data-topic-id="${topicId}" data-version-id="${version.id}">
                     Restore
                 </button>
@@ -256,7 +259,7 @@ export async function showLastRefinedPrompt() {
         }
 
         dom.lastRefinedPromptContent.textContent = promptText;
-        dom.lastRefinedPromptModal.classList.remove('hidden');
+        dom.lastRefinedPromptModal.showModal();
 
     } catch (error) {
         console.error('Error fetching last refined prompt:', error);

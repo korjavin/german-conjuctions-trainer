@@ -9,7 +9,7 @@ export async function showExerciseHistory() {
     }
 
     // Show modal and loading state
-    dom.historyModal.classList.remove('hidden');
+    dom.historyModal.showModal();
     dom.historyLoading.classList.remove('hidden');
     dom.historyEmpty.classList.add('hidden');
     dom.historyContent.classList.add('hidden');
@@ -62,7 +62,7 @@ export async function showExerciseHistory() {
         dom.historySummary.classList.add('hidden');
         if (error.status === 401) {
             alert("Your session has expired. Please log in again.");
-            dom.historyModal.classList.add('hidden');
+            dom.historyModal.close();
             return;
         }
         alert('Could not load exercise history. Please try again later.');
@@ -125,60 +125,60 @@ function createHistoryItem(item) {
     const daysAgo = Math.floor((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60 * 24));
     const timeText = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`;
 
-    // Determine status badge
-    let statusBadge = '';
-    if (item.ready_to_repeat) {
-        statusBadge = '<span class="inline-block px-3 py-1 text-sm font-semibold text-white bg-green-500 rounded-full">Ready to Practice</span>';
-    } else {
-        const daysUntilReady = Math.ceil(item.next_review_days - ((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60 * 24)));
-        if (daysUntilReady > 0) {
-            statusBadge = `<span class="inline-block px-3 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full">Ready in ${daysUntilReady}d</span>`;
-        }
+    const template = document.getElementById('history-item-template');
+    if (!template) {
+        console.error("Missing template: history-item-template");
+        return document.createElement('div');
     }
+    const fragment = template.content.cloneNode(true);
+    const container = fragment.querySelector('.history-item');
 
     // Success rate calculation
     const successRate = item.total_attempts > 0
         ? Math.round((item.successful_attempts / item.total_attempts) * 100)
         : 0;
 
-    // Favorite icon
-    const favoriteIcon = item.is_favorite ?
-        `<span class="text-yellow-500 mr-2" title="Favorite">
+    // Title and favorite icon
+    const titleEl = container.querySelector('.history-item-title');
+    if (item.is_favorite) {
+        const svgHTML = `<span class="text-yellow-500 mr-2" title="Favorite">
             <svg class="w-5 h-5 inline" fill="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
             </svg>
-        </span>` : '';
+        </span>`;
+        titleEl.innerHTML = svgHTML + escapeHtml(item.german_sentence);
+    } else {
+        titleEl.textContent = item.german_sentence;
+    }
 
-    div.innerHTML = `
-        <div class="flex justify-between items-start mb-2">
-            <div class="flex-1">
-                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
-                    ${favoriteIcon}
-                    ${escapeHtml(item.german_sentence)}
-                </h3>
-                <p class="text-sm text-gray-600 mt-1">${escapeHtml(item.english_hint)}</p>
-            </div>
-            <div class="ml-4">
-                ${statusBadge}
-            </div>
-        </div>
-        <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
-            <div class="flex space-x-4 text-sm text-gray-600">
-                <span class="font-medium">${item.topic_name}</span>
-                <span>•</span>
-                <span>${timeText}</span>
-            </div>
-            <div class="flex space-x-4 text-sm">
-                <span class="text-green-600" title="Successful attempts">✓ ${item.successful_attempts}</span>
-                <span class="text-red-600" title="Failed attempts">✗ ${item.failed_attempts}</span>
-                <span class="text-blue-600" title="Hints used">💡 ${item.hints_used}</span>
-                <span class="text-gray-600" title="Total attempts">Σ ${item.total_attempts}</span>
-                <span class="font-semibold ${successRate >= 75 ? 'text-green-600' : successRate >= 50 ? 'text-yellow-600' : 'text-red-600'}" title="Success rate">${successRate}%</span>
-            </div>
-        </div>
-    `;
+    container.querySelector('.history-item-hint').textContent = item.english_hint;
 
-    return div;
+    // Status Badge
+    const statusContainer = container.querySelector('.history-item-status-container');
+    if (item.ready_to_repeat) {
+        statusContainer.innerHTML = '<span class="badge-success">Ready to Practice</span>';
+    } else {
+        const daysUntilReady = Math.ceil(item.next_review_days - ((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60 * 24)));
+        if (daysUntilReady > 0) {
+            statusContainer.innerHTML = `<span class="badge-info">Ready in ${daysUntilReady}d</span>`;
+        }
+    }
+
+    container.querySelector('.history-item-topic').textContent = item.topic_name;
+    container.querySelector('.history-item-date').textContent = timeText;
+
+    container.querySelector('.history-item-success').textContent = `✓ ${item.successful_attempts}`;
+    container.querySelector('.history-item-failed').textContent = `✗ ${item.failed_attempts}`;
+    container.querySelector('.history-item-hints').textContent = `💡 ${item.hints_used}`;
+    container.querySelector('.history-item-total').textContent = `Σ ${item.total_attempts}`;
+
+    const rateEl = container.querySelector('.history-item-rate');
+    rateEl.textContent = `${successRate}%`;
+    if (successRate >= 75) rateEl.style.color = '#16a34a'; // text-green-600
+    else if (successRate >= 50) rateEl.style.color = '#ca8a04'; // text-yellow-600
+    else rateEl.style.color = '#dc2626'; // text-red-600
+
+    return container;
 }
 
 function escapeHtml(text) {
@@ -190,22 +190,18 @@ function escapeHtml(text) {
 export function updateHistoryFilterUI() {
     // Update Ready to Practice filter UI
     if (state.historyFilterReady) {
-        dom.historyFilterReady.classList.add('ring-2', 'ring-green-400', 'bg-green-200');
-        dom.historyFilterReady.classList.remove('bg-green-100');
+        dom.historyFilterReady.classList.add('filter-active-green');
     } else {
-        dom.historyFilterReady.classList.remove('ring-2', 'ring-green-400', 'bg-green-200');
-        dom.historyFilterReady.classList.add('bg-green-100');
+        dom.historyFilterReady.classList.remove('filter-active-green');
     }
 
     // Update Favorites filter UI
     const favoritesSvg = dom.historyFilterFavorites.querySelector('svg');
     if (state.historyFilterFavorites) {
-        dom.historyFilterFavorites.classList.add('bg-yellow-50', 'border-yellow-400', 'text-yellow-700');
-        dom.historyFilterFavorites.classList.remove('hover:bg-gray-100', 'border-gray-300');
+        dom.historyFilterFavorites.classList.add('filter-active-yellow');
         favoritesSvg.setAttribute('fill', 'currentColor');
     } else {
-        dom.historyFilterFavorites.classList.remove('bg-yellow-50', 'border-yellow-400', 'text-yellow-700');
-        dom.historyFilterFavorites.classList.add('hover:bg-gray-100', 'border-gray-300');
+        dom.historyFilterFavorites.classList.remove('filter-active-yellow');
         favoritesSvg.setAttribute('fill', 'none');
     }
 }
