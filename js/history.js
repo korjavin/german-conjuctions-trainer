@@ -9,7 +9,7 @@ export async function showExerciseHistory() {
     }
 
     // Show modal and loading state
-    dom.historyModal.classList.remove('hidden');
+    dom.historyModal.showModal();
     dom.historyLoading.classList.remove('hidden');
     dom.historyEmpty.classList.add('hidden');
     dom.historyContent.classList.add('hidden');
@@ -62,7 +62,7 @@ export async function showExerciseHistory() {
         dom.historySummary.classList.add('hidden');
         if (error.status === 401) {
             alert("Your session has expired. Please log in again.");
-            dom.historyModal.classList.add('hidden');
+            dom.historyModal.close();
             return;
         }
         alert('Could not load exercise history. Please try again later.');

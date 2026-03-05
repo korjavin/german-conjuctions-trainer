@@ -606,7 +606,7 @@ progress.progress-bar::-moz-progress-bar {
 }
 
 .topic-dropdown {
-    position: absolute;
+    position: fixed;
     background: rgba(255, 250, 243, 0.95);
     backdrop-filter: blur(16px);
     border: 2px solid rgba(175, 83, 36, 0.23);

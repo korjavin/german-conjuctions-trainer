@@ -71,7 +71,7 @@ export async function showUserExerciseStats() {
         const stats = await loadExerciseStatsAPI();
         dom.statsReadyToRepeatEl.textContent = stats.ready_to_repeat;
         dom.statsTrainedEl.textContent = stats.trained;
-        dom.statsModal.classList.remove('hidden');
+        dom.statsModal.showModal();
     } catch (error) {
         console.error('Error fetching exercise stats:', error);
         if (error.status === 401) {

@@ -63,7 +63,7 @@ export function renderExercise() {
     // Update progress bar
     const progress = ((state.currentExerciseIndex + 1) / state.exercises.length) * 100;
     if (dom.progressBar) {
-        dom.progressBar.style.width = `${progress}%`;
+        dom.progressBar.value = progress;
     }
     if (dom.progressPercentage) {
         dom.progressPercentage.textContent = `${Math.round(progress)}%`;

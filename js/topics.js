@@ -259,7 +259,7 @@ export async function showLastRefinedPrompt() {
         }
 
         dom.lastRefinedPromptContent.textContent = promptText;
-        dom.lastRefinedPromptModal.classList.remove('hidden');
+        dom.lastRefinedPromptModal.showModal();
 
     } catch (error) {
         console.error('Error fetching last refined prompt:', error);
