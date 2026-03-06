@@ -141,23 +141,61 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPut:
 		a.adminOnly(func(w http.ResponseWriter, r *http.Request) {
-			var req UpdateTopicRequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			// Fetch the existing topic to use as a fallback for missing/omitted fields
+			existingTopic, err := a.DB.GetTopic(topicID)
+			if err != nil {
+				http.Error(w, "Topic not found", http.StatusNotFound)
+				return
+			}
+
+			// By default, assume the user might not send parent_id or sort_order (e.g. older clients).
+			// If not sent, we want to retain the existing values.
+			// The json decoder will leave missing fields as zero values. For ParentID, which is a pointer, it stays nil.
+			// But nil actually means "root", so we need to know if it was *omitted* or explicitly set to null.
+			// It's safer to read the raw request map to check for presence.
+			var rawReq map[string]interface{}
+
+			// To be robust and simple, we decode twice. Or just decode into the struct and rely on frontend sending it.
+			// Since the feedback asked to fallback: "fallback to current topic before calling storage".
+			if err := json.NewDecoder(r.Body).Decode(&rawReq); err != nil {
 				http.Error(w, "Invalid request body", http.StatusBadRequest)
 				return
 			}
 
-			if req.Prompt == "" {
+			name := existingTopic.Name
+			if val, ok := rawReq["name"].(string); ok {
+				name = val
+			}
+			prompt := existingTopic.Prompt
+			if val, ok := rawReq["prompt"].(string); ok {
+				prompt = val
+			}
+
+			parentID := existingTopic.ParentID
+			if _, exists := rawReq["parent_id"]; exists {
+				if val, ok := rawReq["parent_id"].(string); ok && val != "" {
+					parentID = &val
+				} else {
+					parentID = nil
+				}
+			}
+
+			sortOrder := existingTopic.SortOrder
+			if val, ok := rawReq["sort_order"].(float64); ok { // JSON numbers decode to float64
+				sortOrder = int(val)
+			}
+
+			if prompt == "" {
 				http.Error(w, "Prompt is required", http.StatusBadRequest)
 				return
 			}
 
-			if err := a.validateTopicTree(&topicID, req.ParentID); err != nil {
+			if err := a.validateTopicTree(&topicID, parentID); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 
-			topic, err := a.DB.UpdateTopic(topicID, req.Name, req.Prompt, req.ParentID, req.SortOrder)
+			topic, err := a.DB.UpdateTopic(topicID, name, prompt, parentID, sortOrder)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to update topic: %v", err), http.StatusInternalServerError)
 				return
@@ -171,7 +209,11 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 		a.adminOnly(func(w http.ResponseWriter, r *http.Request) {
 			err := a.DB.DeleteTopic(topicID)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to delete topic: %v", err), http.StatusInternalServerError)
+				if err.Error() == storage.ErrTopicHasChildren.Error() {
+					http.Error(w, err.Error(), http.StatusConflict) // 409 Conflict for business rule violation
+				} else {
+					http.Error(w, fmt.Sprintf("Failed to delete topic: %v", err), http.StatusInternalServerError)
+				}
 				return
 			}
 

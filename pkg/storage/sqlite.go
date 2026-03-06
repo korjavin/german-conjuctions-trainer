@@ -283,6 +283,9 @@ func (s *SQLiteStorage) UpdateTopic(topicID, name, prompt string, parentID *stri
 	return topic, tx.Commit()
 }
 
+// ErrTopicHasChildren is returned when attempting to delete a topic that has child topics.
+var ErrTopicHasChildren = fmt.Errorf("topic has children and cannot be deleted")
+
 func (s *SQLiteStorage) DeleteTopic(topicID string) error {
 	// Check if topic has children
 	var count int
@@ -291,7 +294,7 @@ func (s *SQLiteStorage) DeleteTopic(topicID string) error {
 		return err
 	}
 	if count > 0 {
-		return fmt.Errorf("topic has children and cannot be deleted")
+		return ErrTopicHasChildren
 	}
 
 	stmt, err := s.db.Prepare("DELETE FROM topics WHERE id = ?")
