@@ -94,6 +94,9 @@ func TestHandleTopicByID_PutValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// To isolate state, we reset the topic before each test
+			app.DB.UpdateTopic(root.ID, "Root", "prompt", nil, 5)
+
 			req, _ := http.NewRequest("PUT", "/api/topics/"+root.ID, bytes.NewBufferString(tt.payload))
 			req.Header.Set("Content-Type", "application/json")
 			req = req.WithContext(context.WithValue(req.Context(), userContextKey, adminUser.ID))
@@ -103,6 +106,23 @@ func TestHandleTopicByID_PutValidation(t *testing.T) {
 
 			if rr.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d. Body: %s", tt.expectedStatus, rr.Code, rr.Body.String())
+			}
+
+			// For the "Omitted fields preserve existing" test, let's verify storage
+			if tt.name == "Omitted fields preserve existing" && rr.Code == http.StatusOK {
+				updatedTopic, _ := app.DB.GetTopic(root.ID)
+				if updatedTopic.Name != "New Name" {
+					t.Errorf("Expected name 'New Name', got '%s'", updatedTopic.Name)
+				}
+				if updatedTopic.Prompt != "prompt" {
+					t.Errorf("Expected prompt 'prompt', got '%s'", updatedTopic.Prompt)
+				}
+				if updatedTopic.ParentID != nil {
+					t.Errorf("Expected ParentID to remain nil, got %v", updatedTopic.ParentID)
+				}
+				if updatedTopic.SortOrder != 5 {
+					t.Errorf("Expected SortOrder to remain 5, got %d", updatedTopic.SortOrder)
+				}
 			}
 		})
 	}

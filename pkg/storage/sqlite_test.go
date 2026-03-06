@@ -91,6 +91,13 @@ func TestMigrationIdempotency(t *testing.T) {
 		t.Fatalf("Expected 2 columns to be added, got %d. Err: %v", count, err)
 	}
 
+	// Verify index was added
+	var indexName string
+	err = store.db.QueryRow("SELECT name FROM pragma_index_list('topics') WHERE name='idx_topics_parent'").Scan(&indexName)
+	if err != nil || indexName != "idx_topics_parent" {
+		t.Fatalf("Expected index 'idx_topics_parent' to be created. Err: %v", err)
+	}
+
 	// Re-run migrations (should not fail on already-migrated db)
 	err = store.runMigrations()
 	if err != nil {
