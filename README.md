@@ -98,10 +98,12 @@ To use Airtable (legacy), set `STORAGE_TYPE=airtable` and configure the followin
 
 ### Default Topics
 
-On first startup, the application will create three default topics:
+On first startup, the application will create two default topics:
 - **Conjunctions**: Focus on German conjunctions (weil, obwohl, etc.)
 - **Verb + Preposition**: Verb-preposition combinations
-- **Preterite vs Perfect**: Practice with German tenses
+
+### Topic Hierarchy
+Topics can be organized hierarchically in a tree structure. You can assign a parent topic to any new or existing topic to keep your exercises neatly categorized (e.g., "Grammar" -> "Verbs" -> "Verb + Preposition"). Deleting a topic that has children is prevented with a HTTP 409 Conflict to ensure data integrity.
 
 ## Custom API Providers
 
@@ -168,42 +170,3 @@ The backend includes rate limiting to prevent abuse. By default, it allows one r
 MIT License - see LICENSE file for details.
 
 ---
-
-## CLI for Exercise Generation
-
-This project includes a command-line interface (CLI) to pre-generate exercises for a specific topic and save them to your database. This is useful for populating your database with content without using the web interface.
-
-### Usage
-
-To run the CLI, use the following command from the root of the project:
-
-```bash
-go run cmd/generator/main.go "<topic_name>"
-```
-
-Replace `<topic_name>` with the exact name of the topic you want to generate exercises for. The topic name is case-insensitive.
-
-### Required Environment Variables
-
-The CLI requires the same environment variables as the main application to connect to the database and the OpenAI API.
-
-- `OPENAI_API_KEY`: Your OpenAI API key.
-
-Make sure these variables are exported in your shell session before running the command.
-
-### Example
-
-If you have a topic named "Verb + Preposition", you can generate new exercises for it by running:
-
-```bash
-export OPENAI_API_KEY="sk-..."
-
-go run cmd/generator/main.go "Verb + Preposition"
-```
-
-The script will then:
-1. Find the topic in your database.
-2. Fetch all existing exercises for that topic to prevent duplicates.
-3. Call the OpenAI API to generate a new set of exercises.
-4. Filter out any exercises that are already in your database.
-5. Save the new, unique exercises to the database.

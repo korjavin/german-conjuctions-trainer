@@ -2,7 +2,9 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -172,17 +174,33 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 			}
 
 			parentID := existingTopic.ParentID
-			if _, exists := rawReq["parent_id"]; exists {
-				if val, ok := rawReq["parent_id"].(string); ok && val != "" {
-					parentID = &val
-				} else {
+			if parentVal, exists := rawReq["parent_id"]; exists {
+				if parentVal == nil {
 					parentID = nil
+				} else if strVal, ok := parentVal.(string); ok {
+					if strVal == "" {
+						parentID = nil
+					} else {
+						parentID = &strVal
+					}
+				} else {
+					http.Error(w, "parent_id must be a string or null", http.StatusBadRequest)
+					return
 				}
 			}
 
 			sortOrder := existingTopic.SortOrder
-			if val, ok := rawReq["sort_order"].(float64); ok { // JSON numbers decode to float64
-				sortOrder = int(val)
+			if sortVal, exists := rawReq["sort_order"]; exists {
+				if floatVal, ok := sortVal.(float64); ok {
+					if floatVal < 0 || floatVal != math.Trunc(floatVal) {
+						http.Error(w, "sort_order must be a non-negative integer", http.StatusBadRequest)
+						return
+					}
+					sortOrder = int(floatVal)
+				} else {
+					http.Error(w, "sort_order must be a number", http.StatusBadRequest)
+					return
+				}
 			}
 
 			if prompt == "" {
@@ -209,7 +227,7 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 		a.adminOnly(func(w http.ResponseWriter, r *http.Request) {
 			err := a.DB.DeleteTopic(topicID)
 			if err != nil {
-				if err.Error() == storage.ErrTopicHasChildren.Error() {
+				if errors.Is(err, storage.ErrTopicHasChildren) {
 					http.Error(w, err.Error(), http.StatusConflict) // 409 Conflict for business rule violation
 				} else {
 					http.Error(w, fmt.Sprintf("Failed to delete topic: %v", err), http.StatusInternalServerError)
