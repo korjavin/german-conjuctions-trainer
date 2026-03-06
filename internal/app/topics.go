@@ -165,12 +165,23 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 			}
 
 			name := existingTopic.Name
-			if val, ok := rawReq["name"].(string); ok {
-				name = val
+			if val, exists := rawReq["name"]; exists {
+				if strVal, ok := val.(string); ok {
+					name = strVal
+				} else {
+					http.Error(w, "name must be a string", http.StatusBadRequest)
+					return
+				}
 			}
+
 			prompt := existingTopic.Prompt
-			if val, ok := rawReq["prompt"].(string); ok {
-				prompt = val
+			if val, exists := rawReq["prompt"]; exists {
+				if strVal, ok := val.(string); ok {
+					prompt = strVal
+				} else {
+					http.Error(w, "prompt must be a string", http.StatusBadRequest)
+					return
+				}
 			}
 
 			parentID := existingTopic.ParentID

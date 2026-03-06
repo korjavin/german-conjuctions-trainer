@@ -1,9 +1,12 @@
 package app
 
 import (
+	"bytes"
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"os"
-
 	"german-conjunctions-trainer/pkg/storage"
 )
 
@@ -25,9 +28,6 @@ func TestValidateTopicTreeCycle(t *testing.T) {
 	app := setupTestApp(t)
 	defer cleanupTestApp(app)
 
-	// Clean DB
-	app.DB.(*storage.SQLiteStorage).DeleteTopic("A") // Rough clean
-
 	a, _ := app.DB.CreateTopic("A", "prompt", nil, 0)
 	b, _ := app.DB.CreateTopic("B", "prompt", &a.ID, 0)
 	c, _ := app.DB.CreateTopic("C", "prompt", &b.ID, 0)
@@ -42,5 +42,68 @@ func TestValidateTopicTreeCycle(t *testing.T) {
 	err = app.validateTopicTree(&a.ID, &c.ID)
 	if err == nil || err.Error() != "cannot create a cycle in the topic tree" {
 		t.Errorf("Expected cycle error, got %v", err)
+	}
+}
+
+func TestHandleTopicByID_PutValidation(t *testing.T) {
+	app := setupTestApp(t)
+	defer cleanupTestApp(app)
+
+	// Mock admin setup
+	app.AdminGoogleID = "admin123"
+	adminUser, _ := app.DB.CreateUser("admin123")
+
+	root, _ := app.DB.CreateTopic("Root", "prompt", nil, 5)
+
+	tests := []struct {
+		name           string
+		payload        string
+		expectedStatus int
+	}{
+		{
+			name:           "Invalid parent_id type (number)",
+			payload:        `{"name": "test", "prompt": "test", "parent_id": 123}`,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Invalid sort_order type (string)",
+			payload:        `{"name": "test", "prompt": "test", "sort_order": "first"}`,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Invalid sort_order negative",
+			payload:        `{"name": "test", "prompt": "test", "sort_order": -5}`,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Invalid sort_order fractional",
+			payload:        `{"name": "test", "prompt": "test", "sort_order": 1.5}`,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Valid explicit null parent_id and zero sort",
+			payload:        `{"name": "test", "prompt": "test", "parent_id": null, "sort_order": 0}`,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Omitted fields preserve existing",
+			payload:        `{"name": "New Name"}`, // omitted prompt, parent, sort
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, _ := http.NewRequest("PUT", "/api/topics/"+root.ID, bytes.NewBufferString(tt.payload))
+			req.Header.Set("Content-Type", "application/json")
+			req = req.WithContext(context.WithValue(req.Context(), userContextKey, adminUser.ID))
+
+			rr := httptest.NewRecorder()
+			app.handleTopicByID(rr, req)
+
+			if rr.Code != tt.expectedStatus {
+				t.Errorf("Expected status %d, got %d. Body: %s", tt.expectedStatus, rr.Code, rr.Body.String())
+			}
+		})
 	}
 }
