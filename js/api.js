@@ -70,7 +70,12 @@ export async function createTopicAPI(name, prompt, parentId = null, sortOrder = 
 
 export async function deleteTopicAPI(topicId) {
     const response = await fetch(`/api/topics/${topicId}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error('Failed to delete topic');
+    if (!response.ok) {
+        if (response.status === 409) {
+            throw new Error('Topic has children and cannot be deleted.');
+        }
+        throw new Error('Failed to delete topic.');
+    }
 }
 
 export async function updateTopicAPI(topicId, name, prompt, parentId = null, sortOrder = 0) {

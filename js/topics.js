@@ -175,7 +175,7 @@ async function deleteTopic(topicId) {
         await loadTopics(); // Refresh the topics list
     } catch (error) {
         console.error('Error deleting topic:', error);
-        alert('Failed to delete topic. Please try again.');
+        alert(error.message || 'Failed to delete topic. Please try again.');
     }
 }
 
