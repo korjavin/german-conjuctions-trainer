@@ -40,6 +40,7 @@ import {
     renderHistoryPage,
     updateHistoryFilterUI,
 } from './history.js';
+import { getTopicPath } from './topics.js';
 
 const sampleExercises = {
     "exercises": [
@@ -77,15 +78,7 @@ dom.settingsCloseBtn.addEventListener('click', () => {
     dom.versionHistory.classList.add('hidden');
 });
 
-// Topic sorting
-dom.topicSort.value = state.topicSortOrder; // Set initial value
-dom.topicSort.addEventListener('change', (e) => {
-    state.topicSortOrder = e.target.value;
-    localStorage.setItem('topicSortOrder', state.topicSortOrder);
-    renderTopicsList();
-});
-
-dom.addTopicBtn.addEventListener('click', showAddTopicForm);
+dom.addTopicBtn.addEventListener('click', () => showAddTopicForm(null));
 dom.cancelAddBtn.addEventListener('click', hideAddTopicForm);
 dom.saveTopicBtn.addEventListener('click', saveTopic);
 dom.cancelEditBtn.addEventListener('click', hidePromptEditor);
@@ -133,7 +126,7 @@ dom.topicSearch.addEventListener('blur', () => {
         // If the search input doesn't match a topic name, reset it
         const currentTopic = state.topics.find(t => t.id === state.currentTopicId);
         if (currentTopic) {
-            dom.topicSearch.value = currentTopic.name;
+            dom.topicSearch.value = getTopicPath(currentTopic.id, state.topics);
         } else {
             dom.topicSearch.value = '';
         }
@@ -142,9 +135,10 @@ dom.topicSearch.addEventListener('blur', () => {
 
 dom.topicSearch.addEventListener('input', () => {
     const searchTerm = dom.topicSearch.value.toLowerCase();
-    const filteredTopics = state.topics.filter(topic =>
-        topic.name.toLowerCase().includes(searchTerm)
-    );
+    const filteredTopics = state.topics.filter(topic => {
+        const fullPath = getTopicPath(topic.id, state.topics).toLowerCase();
+        return fullPath.includes(searchTerm);
+    });
     renderTopicDropdown(filteredTopics);
     if (!dom.topicDropdown.classList.contains('hidden')) {
         positionDropdown();

@@ -2,7 +2,9 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -10,13 +12,51 @@ import (
 )
 
 type TopicRequest struct {
-	Name   string `json:"name"`
-	Prompt string `json:"prompt"`
+	Name      string  `json:"name"`
+	Prompt    string  `json:"prompt"`
+	ParentID  *string `json:"parent_id"`
+	SortOrder int     `json:"sort_order"`
 }
 
 type UpdateTopicRequest struct {
-	Name   string `json:"name"`
-	Prompt string `json:"prompt"`
+	Name      string  `json:"name"`
+	Prompt    string  `json:"prompt"`
+	ParentID  *string `json:"parent_id"`
+	SortOrder int     `json:"sort_order"`
+}
+
+// validateTopicTree ensures we don't create cycles and the parent exists
+func (a *App) validateTopicTree(topicID *string, parentID *string) error {
+	if parentID == nil {
+		return nil
+	}
+
+	if topicID != nil && *parentID == *topicID {
+		return fmt.Errorf("a topic cannot be its own parent")
+	}
+
+	// Check if parent exists
+	parent, err := a.DB.GetTopic(*parentID)
+	if err != nil {
+		return fmt.Errorf("parent topic not found")
+	}
+
+	// Check for cycles
+	if topicID != nil {
+		currentParent := parent.ParentID
+		for currentParent != nil {
+			if *currentParent == *topicID {
+				return fmt.Errorf("cannot create a cycle in the topic tree")
+			}
+			p, err := a.DB.GetTopic(*currentParent)
+			if err != nil {
+				return fmt.Errorf("invalid parent reference in tree")
+			}
+			currentParent = p.ParentID
+		}
+	}
+
+	return nil
 }
 
 func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +93,12 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			topic, err := a.DB.CreateTopic(req.Name, req.Prompt)
+			if err := a.validateTopicTree(nil, req.ParentID); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			topic, err := a.DB.CreateTopic(req.Name, req.Prompt, req.ParentID, req.SortOrder)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to create topic: %v", err), http.StatusInternalServerError)
 				return
@@ -98,18 +143,88 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPut:
 		a.adminOnly(func(w http.ResponseWriter, r *http.Request) {
-			var req UpdateTopicRequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			// Fetch the existing topic to use as a fallback for missing/omitted fields
+			existingTopic, err := a.DB.GetTopic(topicID)
+			if err != nil {
+				http.Error(w, "Topic not found", http.StatusNotFound)
+				return
+			}
+
+			// By default, assume the user might not send parent_id or sort_order (e.g. older clients).
+			// If not sent, we want to retain the existing values.
+			// The json decoder will leave missing fields as zero values. For ParentID, which is a pointer, it stays nil.
+			// But nil actually means "root", so we need to know if it was *omitted* or explicitly set to null.
+			// It's safer to read the raw request map to check for presence.
+			var rawReq map[string]interface{}
+
+			// To be robust and simple, we decode twice. Or just decode into the struct and rely on frontend sending it.
+			// Since the feedback asked to fallback: "fallback to current topic before calling storage".
+			if err := json.NewDecoder(r.Body).Decode(&rawReq); err != nil {
 				http.Error(w, "Invalid request body", http.StatusBadRequest)
 				return
 			}
 
-			if req.Prompt == "" {
+			name := existingTopic.Name
+			if val, exists := rawReq["name"]; exists {
+				if strVal, ok := val.(string); ok {
+					name = strVal
+				} else {
+					http.Error(w, "name must be a string", http.StatusBadRequest)
+					return
+				}
+			}
+
+			prompt := existingTopic.Prompt
+			if val, exists := rawReq["prompt"]; exists {
+				if strVal, ok := val.(string); ok {
+					prompt = strVal
+				} else {
+					http.Error(w, "prompt must be a string", http.StatusBadRequest)
+					return
+				}
+			}
+
+			parentID := existingTopic.ParentID
+			if parentVal, exists := rawReq["parent_id"]; exists {
+				if parentVal == nil {
+					parentID = nil
+				} else if strVal, ok := parentVal.(string); ok {
+					if strVal == "" {
+						parentID = nil
+					} else {
+						parentID = &strVal
+					}
+				} else {
+					http.Error(w, "parent_id must be a string or null", http.StatusBadRequest)
+					return
+				}
+			}
+
+			sortOrder := existingTopic.SortOrder
+			if sortVal, exists := rawReq["sort_order"]; exists {
+				if floatVal, ok := sortVal.(float64); ok {
+					if floatVal < 0 || floatVal != math.Trunc(floatVal) {
+						http.Error(w, "sort_order must be a non-negative integer", http.StatusBadRequest)
+						return
+					}
+					sortOrder = int(floatVal)
+				} else {
+					http.Error(w, "sort_order must be a number", http.StatusBadRequest)
+					return
+				}
+			}
+
+			if prompt == "" {
 				http.Error(w, "Prompt is required", http.StatusBadRequest)
 				return
 			}
 
-			topic, err := a.DB.UpdateTopic(topicID, req.Name, req.Prompt)
+			if err := a.validateTopicTree(&topicID, parentID); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			topic, err := a.DB.UpdateTopic(topicID, name, prompt, parentID, sortOrder)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to update topic: %v", err), http.StatusInternalServerError)
 				return
@@ -123,7 +238,11 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 		a.adminOnly(func(w http.ResponseWriter, r *http.Request) {
 			err := a.DB.DeleteTopic(topicID)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to delete topic: %v", err), http.StatusInternalServerError)
+				if errors.Is(err, storage.ErrTopicHasChildren) {
+					http.Error(w, err.Error(), http.StatusConflict) // 409 Conflict for business rule violation
+				} else {
+					http.Error(w, fmt.Sprintf("Failed to delete topic: %v", err), http.StatusInternalServerError)
+				}
 				return
 			}
 
@@ -190,7 +309,7 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			topic, err := a.DB.UpdateTopic(topicID, currentTopic.Name, versionToRestore.Prompt)
+			topic, err := a.DB.UpdateTopic(topicID, currentTopic.Name, versionToRestore.Prompt, currentTopic.ParentID, currentTopic.SortOrder)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to restore version: %v", err), http.StatusInternalServerError)
 				return

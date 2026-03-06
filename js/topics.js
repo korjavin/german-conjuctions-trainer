@@ -29,7 +29,7 @@ export async function loadTopics() {
 
         const currentTopic = state.topics.find(t => t.id === state.currentTopicId);
         if (currentTopic) {
-            dom.topicSearch.value = currentTopic.name;
+            dom.topicSearch.value = getTopicPath(currentTopic.id, state.topics);
         }
 
     } catch (error) {
@@ -38,73 +38,118 @@ export async function loadTopics() {
     }
 }
 
-export function sortTopics(topics, sortOrder) {
+export function getTopicPath(topicId, allTopics = state.topics) {
+    const topic = allTopics.find(t => t.id === topicId);
+    if (!topic) return "";
+    if (!topic.parent_id) return topic.name;
+    return getTopicPath(topic.parent_id, allTopics) + " / " + topic.name;
+}
+
+export function sortTopics(topics) {
     const sorted = [...topics]; // Create a copy to avoid mutating original
-
-    switch (sortOrder) {
-        case 'name-asc':
-            sorted.sort((a, b) => a.name.localeCompare(b.name));
-            break;
-        case 'name-desc':
-            sorted.sort((a, b) => b.name.localeCompare(a.name));
-            break;
-        case 'date-newest':
-            sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            break;
-        case 'date-oldest':
-            sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            break;
-    }
-
+    sorted.sort((a, b) => {
+        if (a.sort_order !== b.sort_order) {
+            return a.sort_order - b.sort_order;
+        }
+        return a.name.localeCompare(b.name);
+    });
     return sorted;
+}
+
+function buildTopicTree(topics) {
+    const map = new Map();
+    const roots = [];
+
+    // Initialize all nodes
+    topics.forEach(topic => {
+        map.set(topic.id, { ...topic, children: [] });
+    });
+
+    // Build the tree
+    topics.forEach(topic => {
+        const node = map.get(topic.id);
+        if (topic.parent_id && map.has(topic.parent_id)) {
+            map.get(topic.parent_id).children.push(node);
+        } else {
+            roots.push(node);
+        }
+    });
+
+    return roots;
 }
 
 export function renderTopicsList() {
     dom.topicsList.innerHTML = '';
 
-    // Apply sorting
-    const sortedTopics = sortTopics(state.topics, state.topicSortOrder);
+    if (state.topics.length === 0) {
+        dom.topicsList.innerHTML = `<div class="p-4 text-gray-500 text-center">No topics available. Add one to get started.</div>`;
+        return;
+    }
 
-    sortedTopics.forEach(topic => {
-        const template = document.getElementById('topic-item-template');
-        if (!template) {
-            console.error("Missing template: topic-item-template");
-            return;
+    const tree = buildTopicTree(state.topics);
+
+    function renderNode(node, depth) {
+        const div = document.createElement('div');
+        div.className = 'topic-list-item flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 mb-2 rounded border border-gray-200';
+        div.style.marginLeft = `${depth * 20}px`;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'font-semibold topic-item-name';
+        nameSpan.textContent = node.name;
+
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'flex flex-col';
+        infoDiv.appendChild(nameSpan);
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'flex gap-2 mt-2 sm:mt-0';
+
+        const addChildBtn = document.createElement('button');
+        addChildBtn.className = 'px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn';
+        addChildBtn.textContent = 'Add child';
+        addChildBtn.dataset.topicId = node.id;
+        addChildBtn.addEventListener('click', () => {
+            showAddTopicForm(node.id);
+        });
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 edit-topic-btn';
+        editBtn.textContent = 'Edit';
+        editBtn.dataset.topicId = node.id;
+        editBtn.addEventListener('click', () => {
+            showPromptEditor(node.id);
+        });
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.dataset.topicId = node.id;
+        deleteBtn.addEventListener('click', () => {
+            deleteTopic(node.id);
+        });
+
+        actionsDiv.appendChild(addChildBtn);
+        actionsDiv.appendChild(editBtn);
+        actionsDiv.appendChild(deleteBtn);
+
+        div.appendChild(infoDiv);
+        div.appendChild(actionsDiv);
+
+        dom.topicsList.appendChild(div);
+
+        if (node.children && node.children.length > 0) {
+            const sortedChildren = sortTopics(node.children);
+            sortedChildren.forEach(child => renderNode(child, depth + 1));
         }
-        const fragment = template.content.cloneNode(true);
-        const topicDiv = fragment.querySelector('.topic-list-item');
+    }
 
-        topicDiv.querySelector('.topic-item-name').textContent = topic.name;
-        topicDiv.querySelector('.topic-item-date').textContent = `Created: ${new Date(topic.created_at).toLocaleDateString()}`;
-
-        const editBtn = topicDiv.querySelector('.edit-topic-btn');
-        editBtn.dataset.topicId = topic.id;
-
-        const deleteBtn = topicDiv.querySelector('.delete-topic-btn');
-        deleteBtn.dataset.topicId = topic.id;
-
-        dom.topicsList.appendChild(topicDiv);
-    });
-
-    // Add event listeners for edit and delete buttons
-    dom.topicsList.querySelectorAll('.edit-topic-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const topicId = e.target.dataset.topicId;
-            showPromptEditor(topicId);
-        });
-    });
-
-    dom.topicsList.querySelectorAll('.delete-topic-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const topicId = e.target.dataset.topicId;
-            deleteTopic(topicId);
-        });
-    });
+    const sortedRoots = sortTopics(tree);
+    sortedRoots.forEach(rootNode => renderNode(rootNode, 0));
 }
 
-async function createTopic(name, prompt) {
+async function createTopic(name, prompt, parentId = null, sortOrder = 0) {
     try {
-        await createTopicAPI(name, prompt);
+        await createTopicAPI(name, prompt, parentId, sortOrder);
         await loadTopics(); // Refresh the topics list
         hideAddTopicForm();
     } catch (error) {
@@ -130,25 +175,43 @@ async function deleteTopic(topicId) {
         await loadTopics(); // Refresh the topics list
     } catch (error) {
         console.error('Error deleting topic:', error);
-        alert('Failed to delete topic. Please try again.');
+        alert(error.message || 'Failed to delete topic. Please try again.');
     }
 }
 
-async function updateTopicPrompt(topicId, name, prompt) {
+async function updateTopicDetails(topicId, name, prompt, parentId, sortOrder) {
     try {
-        await updateTopicAPI(topicId, name, prompt);
+        await updateTopicAPI(topicId, name, prompt, parentId, sortOrder);
         await loadTopics(); // Refresh the topics list
         hidePromptEditor();
     } catch (error) {
-        console.error('Error updating prompt:', error);
-        alert('Failed to update prompt. Please try again.');
+        console.error('Error updating topic:', error);
+        alert('Failed to update topic. Please try again.');
     }
 }
 
-export function showAddTopicForm() {
+export function showAddTopicForm(parentId = null) {
     dom.addTopicForm.classList.remove('hidden');
     dom.newTopicName.value = '';
     dom.newTopicPrompt.value = '';
+
+    // Check if the dropdown exists in dom.js, if not create/use it
+    const parentSelect = document.getElementById('new-topic-parent');
+    if (parentSelect) {
+        parentSelect.innerHTML = '<option value="">(Root Topic)</option>';
+        state.topics.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = getTopicPath(t.id, state.topics);
+            parentSelect.appendChild(opt);
+        });
+        if (parentId) {
+            parentSelect.value = parentId;
+        } else {
+            parentSelect.value = "";
+        }
+    }
+
     dom.newTopicName.focus();
 }
 
@@ -163,6 +226,25 @@ export function showPromptEditor(topicId) {
     state.editingTopicId = topicId;
     dom.currentTopicName.textContent = topic.name;
     dom.promptTextarea.value = topic.prompt;
+
+    const editParentSelect = document.getElementById('edit-topic-parent');
+    if (editParentSelect) {
+        editParentSelect.innerHTML = '<option value="">(Root Topic)</option>';
+        state.topics.forEach(t => {
+            // Cannot be parent of itself or its children, but for UI simplicity we will just list all and server handles cycle rejection, or just exclude self.
+            if (t.id === topicId) return;
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = getTopicPath(t.id, state.topics);
+            editParentSelect.appendChild(opt);
+        });
+        if (topic.parent_id) {
+            editParentSelect.value = topic.parent_id;
+        } else {
+            editParentSelect.value = "";
+        }
+    }
+
     dom.promptEditor.classList.remove('hidden');
     dom.versionHistory.classList.add('hidden');
 }
@@ -267,28 +349,29 @@ export async function showLastRefinedPrompt() {
     }
 }
 
-export function renderTopicDropdown(topics) {
+export function renderTopicDropdown(topicsToRender) {
     dom.topicDropdown.innerHTML = '';
-    if (topics.length === 0) {
+    if (topicsToRender.length === 0) {
         dom.topicDropdown.innerHTML = `<div class="p-2 text-gray-500">No topics found.</div>`;
         return;
     }
-    topics.forEach(topic => {
+    topicsToRender.forEach(topic => {
         const item = document.createElement('div');
         item.className = 'topic-item';
-        item.textContent = topic.name;
+        const fullPath = getTopicPath(topic.id, state.topics);
+        item.textContent = fullPath;
         item.dataset.topicId = topic.id;
         item.addEventListener('click', () => {
-            selectTopic(topic.id, topic.name);
+            selectTopic(topic.id, fullPath);
         });
         dom.topicDropdown.appendChild(item);
     });
 }
 
-export function selectTopic(topicId, topicName) {
+export function selectTopic(topicId, fullPath) {
     state.currentTopicId = topicId;
     localStorage.setItem('selectedTopicId', topicId);
-    dom.topicSearch.value = topicName;
+    dom.topicSearch.value = fullPath;
     dom.topicDropdown.classList.add('hidden');
     if (state.isLoggedIn) {
         saveUserSettingsAPI(state.currentTopicId).catch(err => {
@@ -308,22 +391,38 @@ export function saveTopic() {
     const name = dom.newTopicName.value.trim();
     const prompt = dom.newTopicPrompt.value.trim();
 
+    let parentId = null;
+    const parentSelect = document.getElementById('new-topic-parent');
+    if (parentSelect && parentSelect.value) {
+        parentId = parentSelect.value;
+    }
+
     if (!name || !prompt) {
         alert('Please provide both a name and a prompt.');
         return;
     }
 
-    createTopic(name, prompt);
+    createTopic(name, prompt, parentId, 0);
 }
 
 export function savePrompt() {
     const prompt = dom.promptTextarea.value.trim();
     const name = dom.currentTopicName.textContent.trim();
 
+    let parentId = null;
+    const editParentSelect = document.getElementById('edit-topic-parent');
+    if (editParentSelect && editParentSelect.value) {
+        parentId = editParentSelect.value;
+    }
+
     if (!prompt) {
         alert('Prompt cannot be empty.');
         return;
     }
 
-    updateTopicPrompt(state.editingTopicId, name, prompt);
+    // Preserve existing sort order if available
+    const existingTopic = state.topics.find(t => t.id === state.editingTopicId);
+    const sortOrder = existingTopic ? existingTopic.sort_order : 0;
+
+    updateTopicDetails(state.editingTopicId, name, prompt, parentId, sortOrder);
 }

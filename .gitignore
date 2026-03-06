@@ -28,6 +28,7 @@ logs/
 
 # Build artifacts
 /german-grammar-trainer
+/server
 /audio_cache
 /german.db*
 node_modules
