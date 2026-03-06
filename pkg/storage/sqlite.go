@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -139,8 +140,7 @@ func (s *SQLiteStorage) runMigrations() error {
 
 // isColumnExistsError checks if the error is due to column already existing
 func isColumnExistsError(err error) bool {
-	return err != nil && (
-		err.Error() == "duplicate column name: total_attempts" ||
+	return err != nil && (err.Error() == "duplicate column name: total_attempts" ||
 		err.Error() == "duplicate column name: successful_attempts" ||
 		err.Error() == "duplicate column name: failed_attempts" ||
 		err.Error() == "duplicate column name: hints_used" ||
@@ -305,6 +305,226 @@ func (s *SQLiteStorage) DeleteTopic(topicID string) error {
 
 	_, err = stmt.Exec(topicID)
 	return err
+}
+
+func (s *SQLiteStorage) MoveTopic(topicID, parentID string, position *int) (*Topic, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	topic, err := s.getTopic(tx, topicID)
+	if err != nil {
+		return nil, err
+	}
+
+	normalizedParentID := normalizeParentID(parentID)
+	if normalizedParentID != nil {
+		if *normalizedParentID == topicID {
+			return nil, fmt.Errorf("invalid parent: topic cannot be its own parent")
+		}
+
+		if _, err := s.getTopic(tx, *normalizedParentID); err != nil {
+			return nil, fmt.Errorf("parent topic not found")
+		}
+
+		if err := s.ensureNoHierarchyCycle(tx, topicID, normalizedParentID); err != nil {
+			return nil, err
+		}
+	}
+
+	oldParentID := topic.ParentID
+	targetPosition := -1
+	if position != nil {
+		targetPosition = *position
+		if parentIDsEqual(normalizedParentID, oldParentID) {
+			oldIndex, err := s.getTopicIndexInSiblings(tx, oldParentID, topicID)
+			if err != nil {
+				return nil, err
+			}
+			if targetPosition > oldIndex {
+				targetPosition--
+			}
+		}
+	}
+
+	var destinationSiblings []string
+	if parentIDsEqual(normalizedParentID, oldParentID) {
+		destinationSiblings, err = s.getSiblingTopicIDs(tx, normalizedParentID, topicID)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		oldSiblings, err := s.getSiblingTopicIDs(tx, oldParentID, topicID)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.setSiblingOrder(tx, oldParentID, oldSiblings); err != nil {
+			return nil, err
+		}
+
+		destinationSiblings, err = s.getSiblingTopicIDs(tx, normalizedParentID, topicID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	insertAt := clampTopicPosition(targetPosition, len(destinationSiblings))
+	destinationSiblings = insertTopicIDAt(destinationSiblings, topicID, insertAt)
+	if err := s.setSiblingOrder(tx, normalizedParentID, destinationSiblings); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	_, err = tx.Exec(
+		"UPDATE topics SET parent_id = ?, sort_order = ?, updated_at = ? WHERE id = ?",
+		parentIDToDBValue(normalizedParentID),
+		insertAt,
+		now,
+		topicID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	updatedTopic, err := s.getTopic(tx, topicID)
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedTopic, tx.Commit()
+}
+
+func (s *SQLiteStorage) getSiblingTopicIDs(tx *sql.Tx, parentID *string, excludeTopicID string) ([]string, error) {
+	query := "SELECT id FROM topics WHERE 1=1"
+	args := []interface{}{}
+
+	if strings.TrimSpace(excludeTopicID) != "" {
+		query += " AND id != ?"
+		args = append(args, excludeTopicID)
+	}
+
+	if parentID == nil {
+		query += " AND parent_id IS NULL"
+	} else {
+		query += " AND parent_id = ?"
+		args = append(args, *parentID)
+	}
+
+	query += " ORDER BY sort_order ASC, name ASC, created_at ASC, id ASC"
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, nil
+}
+
+func (s *SQLiteStorage) getTopicIndexInSiblings(tx *sql.Tx, parentID *string, topicID string) (int, error) {
+	siblings, err := s.getSiblingTopicIDs(tx, parentID, "")
+	if err != nil {
+		return -1, err
+	}
+
+	for i, siblingID := range siblings {
+		if siblingID == topicID {
+			return i, nil
+		}
+	}
+
+	return -1, fmt.Errorf("topic not found in siblings")
+}
+
+func (s *SQLiteStorage) setSiblingOrder(tx *sql.Tx, parentID *string, orderedTopicIDs []string) error {
+	parentValue := parentIDToDBValue(parentID)
+	for sortOrder, topicID := range orderedTopicIDs {
+		_, err := tx.Exec(
+			"UPDATE topics SET parent_id = ?, sort_order = ? WHERE id = ?",
+			parentValue,
+			sortOrder,
+			topicID,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *SQLiteStorage) ensureNoHierarchyCycle(q querier, topicID string, potentialParentID *string) error {
+	currentParentID := potentialParentID
+	visited := map[string]struct{}{}
+
+	for currentParentID != nil {
+		currentID := *currentParentID
+		if currentID == topicID {
+			return fmt.Errorf("invalid parent: this move would create a cycle")
+		}
+		if _, seen := visited[currentID]; seen {
+			return fmt.Errorf("invalid topic hierarchy: cycle already exists")
+		}
+		visited[currentID] = struct{}{}
+
+		parentTopic, err := s.getTopic(q, currentID)
+		if err != nil {
+			return fmt.Errorf("parent topic not found")
+		}
+		currentParentID = parentTopic.ParentID
+	}
+
+	return nil
+}
+
+func normalizeParentID(parentID string) *string {
+	trimmed := strings.TrimSpace(parentID)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func parentIDToDBValue(parentID *string) interface{} {
+	if parentID == nil {
+		return nil
+	}
+	return *parentID
+}
+
+func parentIDsEqual(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func clampTopicPosition(position, siblingCount int) int {
+	if position < 0 || position > siblingCount {
+		return siblingCount
+	}
+	return position
+}
+
+func insertTopicIDAt(siblings []string, topicID string, index int) []string {
+	result := make([]string, 0, len(siblings)+1)
+	result = append(result, siblings[:index]...)
+	result = append(result, topicID)
+	result = append(result, siblings[index:]...)
+	return result
 }
 
 func (s *SQLiteStorage) GetVersions(topicID string) ([]*PromptVersion, error) {

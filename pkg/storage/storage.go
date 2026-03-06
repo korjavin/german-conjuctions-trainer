@@ -41,13 +41,13 @@ type UserExerciseView struct {
 	ExerciseID         string    `json:"exercise_id"`
 	LastViewed         time.Time `json:"last_viewed"`
 	RepetitionCounter  int       `json:"repetition_counter"`
-	TotalAttempts      int       `json:"total_attempts"`       // Total number of times attempted
-	SuccessfulAttempts int       `json:"successful_attempts"`  // Perfect attempts (no hints, no mistakes)
-	FailedAttempts     int       `json:"failed_attempts"`      // Attempts with mistakes
-	HintsUsed          int       `json:"hints_used"`           // Total hints used
-	MistakesMade       int       `json:"mistakes_made"`        // Total mistakes made
-	IsFavorite         bool      `json:"is_favorite"`          // User marked as favorite
-	IsHidden           bool      `json:"is_hidden"`            // User hid this exercise (soft delete for this user)
+	TotalAttempts      int       `json:"total_attempts"`      // Total number of times attempted
+	SuccessfulAttempts int       `json:"successful_attempts"` // Perfect attempts (no hints, no mistakes)
+	FailedAttempts     int       `json:"failed_attempts"`     // Attempts with mistakes
+	HintsUsed          int       `json:"hints_used"`          // Total hints used
+	MistakesMade       int       `json:"mistakes_made"`       // Total mistakes made
+	IsFavorite         bool      `json:"is_favorite"`         // User marked as favorite
+	IsHidden           bool      `json:"is_hidden"`           // User hid this exercise (soft delete for this user)
 }
 
 type User struct {
@@ -95,6 +95,7 @@ type Storage interface {
 	GetAllTopics() ([]*Topic, error)
 	GetTopic(topicID string) (*Topic, error)
 	UpdateTopic(topicID, name, prompt string, parentID *string, sortOrder int) (*Topic, error)
+	MoveTopic(topicID, parentID string, position *int) (*Topic, error)
 	DeleteTopic(topicID string) error
 
 	// Versions

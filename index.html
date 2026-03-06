@@ -172,9 +172,20 @@
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="section-title">All Topics</h3>
                     <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <label for="topic-sort" class="text-label">Sort by:</label>
+                            <select id="topic-sort" class="form-select">
+                                <option value="tree">Tree Order (Manual)</option>
+                                <option value="name-asc">Name (A-Z)</option>
+                                <option value="name-desc">Name (Z-A)</option>
+                                <option value="date-newest">Newest First</option>
+                                <option value="date-oldest">Oldest First</option>
+                            </select>
+                        </div>
                         <button id="add-topic-btn" class="btn-primary btn-sm">Add New Topic</button>
                     </div>
                 </div>
+                <p class="section-desc mb-2">Drop on a topic to make it a child, or drop between topics to reorder siblings.</p>
                 <div id="topics-list" class="topics-list">
                     <!-- Topics will be loaded here -->
                 </div>

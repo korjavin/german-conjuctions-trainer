@@ -586,7 +586,7 @@ progress.progress-bar::-moz-progress-bar {
     color: #991b1b;
 }
 
-.topics-list > div, .versions-list > div {
+.topics-list > div:not(.topic-gap-drop-zone), .versions-list > div {
     border-color: rgba(163, 63, 17, 0.15);
     background: rgba(255, 249, 239, 0.85);
     border: 1px solid rgba(163, 63, 17, 0.15);
@@ -595,6 +595,27 @@ progress.progress-bar::-moz-progress-bar {
 
 .topic-list-item {
     border-radius: var(--radius-md);
+}
+
+.topic-tree-item {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.topic-tree-item.topic-dragging {
+    opacity: 0.6;
+}
+
+.topic-gap-drop-zone {
+    height: 0.5rem;
+    border-radius: 9999px;
+    margin-top: 0.15rem;
+    margin-bottom: 0.15rem;
+}
+
+.topic-drop-active {
+    border: 1px dashed #2563eb !important;
+    background-color: #eff6ff !important;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
 .topic-item-name {

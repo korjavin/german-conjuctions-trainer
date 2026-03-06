@@ -59,6 +59,11 @@ func (a *App) validateTopicTree(topicID *string, parentID *string) error {
 	return nil
 }
 
+type MoveTopicRequest struct {
+	ParentID string `json:"parent_id"`
+	Position *int   `json:"position"`
+}
+
 func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -124,9 +129,57 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	topicID := strings.TrimPrefix(r.URL.Path, "/api/topics/")
-	if topicID == "" {
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/topics/"), "/")
+	if path == "" {
 		http.Error(w, "Topic ID required", http.StatusBadRequest)
+		return
+	}
+	pathParts := strings.Split(path, "/")
+	topicID := pathParts[0]
+	subresource := ""
+	if len(pathParts) > 1 {
+		subresource = pathParts[1]
+	}
+	if len(pathParts) > 2 {
+		http.Error(w, "Invalid topic path", http.StatusBadRequest)
+		return
+	}
+
+	if subresource == "move" {
+		if r.Method != http.MethodPut {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		a.adminOnly(func(w http.ResponseWriter, r *http.Request) {
+			var req MoveTopicRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				return
+			}
+
+			topic, err := a.DB.MoveTopic(topicID, req.ParentID, req.Position)
+			if err != nil {
+				errMsg := err.Error()
+				switch {
+				case strings.Contains(errMsg, "not found"):
+					http.Error(w, errMsg, http.StatusNotFound)
+				case strings.Contains(errMsg, "invalid"):
+					http.Error(w, errMsg, http.StatusBadRequest)
+				default:
+					http.Error(w, fmt.Sprintf("Failed to move topic: %v", err), http.StatusInternalServerError)
+				}
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(topic)
+		}).ServeHTTP(w, r)
+		return
+	}
+
+	if subresource != "" {
+		http.Error(w, "Invalid topic path", http.StatusBadRequest)
 		return
 	}
 

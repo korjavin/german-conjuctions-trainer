@@ -26,6 +26,7 @@ export const dom = {
     emptyStateContainer: document.getElementById('empty-state-container'),
 
     topicsList: document.getElementById('topics-list'),
+    topicSort: document.getElementById('topic-sort'),
     addTopicBtn: document.getElementById('add-topic-btn'),
     addTopicForm: document.getElementById('add-topic-form'),
     newTopicName: document.getElementById('new-topic-name'),

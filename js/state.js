@@ -53,6 +53,7 @@ export const state = {
     activeAudio: null,
     currentTopicId: '',
     topics: [],
+    topicSortOrder: localStorage.getItem('topicSortOrder') || 'tree',
     exercises: [],
     exerciseIds: [],
     currentExerciseIndex: 0,

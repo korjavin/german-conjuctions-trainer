@@ -5,12 +5,16 @@ import {
     createTopicAPI,
     deleteTopicAPI,
     updateTopicAPI,
+    moveTopicAPI,
     fetchVersionsAPI,
     restoreVersionAPI,
     fetchLastGenerationDebugAPI,
     fetchLastRefinedPromptAPI,
     saveUserSettingsAPI,
 } from './api.js';
+
+let draggedTopicId = null;
+let isMoveInProgress = false;
 
 export async function loadTopics() {
     try {
@@ -19,7 +23,6 @@ export async function loadTopics() {
 
         renderTopicsList();
 
-        // Load selected topic from localStorage or use first available
         const savedTopicId = localStorage.getItem('selectedTopicId');
         if (savedTopicId && state.topics.find(t => t.id === savedTopicId)) {
             state.currentTopicId = savedTopicId;
@@ -31,51 +34,119 @@ export async function loadTopics() {
         if (currentTopic) {
             dom.topicSearch.value = getTopicPath(currentTopic.id, state.topics);
         }
-
     } catch (error) {
         console.error('Error loading topics:', error);
         alert('Failed to load topics. Please refresh the page.');
     }
 }
 
-export function getTopicPath(topicId, allTopics = state.topics) {
+export function getTopicPath(topicId, allTopics = state.topics, visited = new Set()) {
+    if (!topicId || visited.has(topicId)) return '';
+    visited.add(topicId);
+
     const topic = allTopics.find(t => t.id === topicId);
-    if (!topic) return "";
+    if (!topic) return '';
+
     if (!topic.parent_id) return topic.name;
-    return getTopicPath(topic.parent_id, allTopics) + " / " + topic.name;
+    const parentPath = getTopicPath(topic.parent_id, allTopics, visited);
+    return parentPath ? `${parentPath} / ${topic.name}` : topic.name;
 }
 
-export function sortTopics(topics) {
-    const sorted = [...topics]; // Create a copy to avoid mutating original
-    sorted.sort((a, b) => {
-        if (a.sort_order !== b.sort_order) {
-            return a.sort_order - b.sort_order;
+function compareTopics(a, b, sortOrder) {
+    switch (sortOrder) {
+        case 'tree': {
+            const aSort = Number.isFinite(a.sort_order) ? a.sort_order : 0;
+            const bSort = Number.isFinite(b.sort_order) ? b.sort_order : 0;
+            if (aSort !== bSort) return aSort - bSort;
+            return a.name.localeCompare(b.name);
         }
-        return a.name.localeCompare(b.name);
-    });
+        case 'name-asc':
+            return a.name.localeCompare(b.name);
+        case 'name-desc':
+            return b.name.localeCompare(a.name);
+        case 'date-newest':
+            return new Date(b.created_at) - new Date(a.created_at);
+        case 'date-oldest':
+            return new Date(a.created_at) - new Date(b.created_at);
+        default:
+            return a.name.localeCompare(b.name);
+    }
+}
+
+export function sortTopics(topics, sortOrder = state.topicSortOrder || 'tree') {
+    const sorted = [...topics];
+    sorted.sort((a, b) => compareTopics(a, b, sortOrder));
     return sorted;
 }
 
-function buildTopicTree(topics) {
-    const map = new Map();
-    const roots = [];
+function buildTopicTree(topics, sortOrder = state.topicSortOrder || 'tree') {
+    const nodesById = new Map();
 
-    // Initialize all nodes
     topics.forEach(topic => {
-        map.set(topic.id, { ...topic, children: [] });
+        nodesById.set(topic.id, {
+            ...topic,
+            parent_id: topic.parent_id || '',
+            children: []
+        });
     });
 
-    // Build the tree
-    topics.forEach(topic => {
-        const node = map.get(topic.id);
-        if (topic.parent_id && map.has(topic.parent_id)) {
-            map.get(topic.parent_id).children.push(node);
-        } else {
-            roots.push(node);
+    const roots = [];
+    nodesById.forEach(node => {
+        if (node.parent_id && node.parent_id !== node.id && nodesById.has(node.parent_id)) {
+            nodesById.get(node.parent_id).children.push(node);
+            return;
+        }
+        roots.push(node);
+    });
+
+    sortTreeNodes(roots, sortOrder);
+    return { roots, nodesById };
+}
+
+function sortTreeNodes(nodes, sortOrder) {
+    nodes.sort((a, b) => compareTopics(a, b, sortOrder));
+    nodes.forEach(node => {
+        if (node.children.length > 0) {
+            sortTreeNodes(node.children, sortOrder);
+        }
+    });
+}
+
+function flattenTopicTree(roots, nodesById) {
+    const flattened = [];
+    const visited = new Set();
+
+    const visitSiblings = (siblings, depth, parentId) => {
+        siblings.forEach((node, indexInParent) => {
+            visitNode(node, depth, parentId, indexInParent, siblings.length);
+        });
+    };
+
+    const visitNode = (node, depth, parentId, indexInParent, totalSiblings) => {
+        if (visited.has(node.id)) return;
+        visited.add(node.id);
+
+        flattened.push({
+            topic: node,
+            depth,
+            parentId,
+            indexInParent,
+            totalSiblings,
+        });
+
+        if (node.children.length > 0) {
+            visitSiblings(node.children, depth + 1, node.id);
+        }
+    };
+
+    visitSiblings(roots, 0, '');
+    nodesById.forEach(node => {
+        if (!visited.has(node.id)) {
+            visitNode(node, 0, node.parent_id || '', 0, 1);
         }
     });
 
-    return roots;
+    return flattened;
 }
 
 export function renderTopicsList() {
@@ -86,71 +157,194 @@ export function renderTopicsList() {
         return;
     }
 
-    const tree = buildTopicTree(state.topics);
+    const { roots, nodesById } = buildTopicTree(state.topics, state.topicSortOrder || 'tree');
+    const flattenedNodes = flattenTopicTree(roots, nodesById);
 
-    function renderNode(node, depth) {
-        const div = document.createElement('div');
-        div.className = 'topic-list-item flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 mb-2 rounded border border-gray-200';
-        div.style.marginLeft = `${depth * 20}px`;
+    flattenedNodes.forEach(({ topic, depth, parentId, indexInParent, totalSiblings }) => {
+        const beforeZone = createSiblingDropZone(depth, parentId, indexInParent, nodesById);
+        dom.topicsList.appendChild(beforeZone);
 
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'font-semibold topic-item-name';
-        nameSpan.textContent = node.name;
+        const topicDiv = document.createElement('div');
+        topicDiv.className = 'topic-list-item topic-tree-item flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 mb-2 rounded border border-gray-200';
+        topicDiv.draggable = true;
+        topicDiv.dataset.topicId = topic.id;
+        topicDiv.style.marginLeft = `${depth * 20}px`;
 
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'flex flex-col';
-        infoDiv.appendChild(nameSpan);
+        const hasChildren = topic.children.length > 0;
+        const childBadge = hasChildren ? `<span class="text-xs text-gray-500 ml-2">(${topic.children.length})</span>` : '';
 
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'flex gap-2 mt-2 sm:mt-0';
+        topicDiv.innerHTML = `
+            <div class="flex flex-col min-w-0">
+                <div class="font-semibold topic-item-name flex items-center">
+                    <span class="text-gray-400 mr-2 select-none">::</span>
+                    <span class="truncate">${topic.name}</span>
+                    ${childBadge}
+                </div>
+                <div class="topic-item-date">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
+            </div>
+            <div class="flex gap-2 mt-2 sm:mt-0">
+                <button class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn" data-topic-id="${topic.id}">Add child</button>
+                <button class="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 edit-topic-btn" data-topic-id="${topic.id}">Edit</button>
+                <button class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn" data-topic-id="${topic.id}">Delete</button>
+            </div>
+        `;
 
-        const addChildBtn = document.createElement('button');
-        addChildBtn.className = 'px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn';
-        addChildBtn.textContent = 'Add child';
-        addChildBtn.dataset.topicId = node.id;
-        addChildBtn.addEventListener('click', () => {
-            showAddTopicForm(node.id);
+        dom.topicsList.appendChild(topicDiv);
+
+        const addChildBtn = topicDiv.querySelector('.add-child-btn');
+        const editBtn = topicDiv.querySelector('.edit-topic-btn');
+        const deleteBtn = topicDiv.querySelector('.delete-topic-btn');
+
+        addChildBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showAddTopicForm(e.currentTarget.dataset.topicId);
         });
 
-        const editBtn = document.createElement('button');
-        editBtn.className = 'px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 edit-topic-btn';
-        editBtn.textContent = 'Edit';
-        editBtn.dataset.topicId = node.id;
-        editBtn.addEventListener('click', () => {
-            showPromptEditor(node.id);
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showPromptEditor(e.currentTarget.dataset.topicId);
         });
 
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn';
-        deleteBtn.textContent = 'Delete';
-        deleteBtn.dataset.topicId = node.id;
-        deleteBtn.addEventListener('click', () => {
-            deleteTopic(node.id);
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteTopic(e.currentTarget.dataset.topicId);
         });
 
-        actionsDiv.appendChild(addChildBtn);
-        actionsDiv.appendChild(editBtn);
-        actionsDiv.appendChild(deleteBtn);
+        topicDiv.addEventListener('dragstart', (event) => {
+            draggedTopicId = topic.id;
+            topicDiv.classList.add('topic-dragging');
+            if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', topic.id);
+            }
+        });
 
-        div.appendChild(infoDiv);
-        div.appendChild(actionsDiv);
+        topicDiv.addEventListener('dragend', () => {
+            draggedTopicId = null;
+            topicDiv.classList.remove('topic-dragging');
+            clearDropHighlights();
+        });
 
-        dom.topicsList.appendChild(div);
+        attachDropHandlers(topicDiv, {
+            targetParentId: topic.id,
+            targetPosition: null,
+            nodesById,
+            isChildDrop: true,
+        });
 
-        if (node.children && node.children.length > 0) {
-            const sortedChildren = sortTopics(node.children);
-            sortedChildren.forEach(child => renderNode(child, depth + 1));
+        if (indexInParent === totalSiblings - 1) {
+            const afterZone = createSiblingDropZone(depth, parentId, totalSiblings, nodesById);
+            dom.topicsList.appendChild(afterZone);
         }
+    });
+}
+
+function createSiblingDropZone(depth, targetParentId, targetPosition, nodesById) {
+    const zone = document.createElement('div');
+    zone.className = 'topic-gap-drop-zone';
+    zone.style.marginLeft = `${depth * 20}px`;
+    attachDropHandlers(zone, {
+        targetParentId,
+        targetPosition,
+        nodesById,
+        isChildDrop: false,
+    });
+    return zone;
+}
+
+function attachDropHandlers(element, options) {
+    const { targetParentId, targetPosition, nodesById, isChildDrop } = options;
+
+    element.addEventListener('dragover', (event) => {
+        if (!draggedTopicId || isMoveInProgress) return;
+        event.preventDefault();
+    });
+
+    element.addEventListener('dragenter', (event) => {
+        if (!draggedTopicId || isMoveInProgress) return;
+        event.preventDefault();
+        element.classList.add('topic-drop-active');
+    });
+
+    element.addEventListener('dragleave', () => {
+        element.classList.remove('topic-drop-active');
+    });
+
+    element.addEventListener('drop', async (event) => {
+        event.preventDefault();
+        element.classList.remove('topic-drop-active');
+
+        if (!draggedTopicId || isMoveInProgress) return;
+        if (draggedTopicId === targetParentId && isChildDrop) return;
+        if (targetParentId && wouldCreateCycle(nodesById, draggedTopicId, targetParentId)) {
+            alert('Cannot move a topic into itself or one of its descendants.');
+            return;
+        }
+
+        isMoveInProgress = true;
+        try {
+            await moveTopic(draggedTopicId, targetParentId || null, targetPosition);
+        } finally {
+            isMoveInProgress = false;
+        }
+    });
+}
+
+function wouldCreateCycle(nodesById, draggedId, targetParentId) {
+    let cursor = targetParentId;
+    const visited = new Set();
+
+    while (cursor) {
+        if (cursor === draggedId) {
+            return true;
+        }
+        if (visited.has(cursor)) {
+            return true;
+        }
+        visited.add(cursor);
+
+        const cursorNode = nodesById.get(cursor);
+        if (!cursorNode || !cursorNode.parent_id) {
+            return false;
+        }
+        cursor = cursorNode.parent_id;
     }
 
-    const sortedRoots = sortTopics(tree);
-    sortedRoots.forEach(rootNode => renderNode(rootNode, 0));
+    return false;
+}
+
+function clearDropHighlights() {
+    dom.topicsList.querySelectorAll('.topic-drop-active').forEach(el => {
+        el.classList.remove('topic-drop-active');
+    });
+}
+
+function getNextSortOrder(parentId) {
+    const normalizedParentId = parentId || null;
+    const siblings = state.topics.filter(topic => {
+        const topicParentId = topic.parent_id || null;
+        return topicParentId === normalizedParentId;
+    });
+
+    if (siblings.length === 0) {
+        return 0;
+    }
+
+    let maxSortOrder = -1;
+    siblings.forEach(topic => {
+        const sortValue = Number.isFinite(topic.sort_order) ? topic.sort_order : 0;
+        if (sortValue > maxSortOrder) {
+            maxSortOrder = sortValue;
+        }
+    });
+
+    return maxSortOrder + 1;
 }
 
 async function createTopic(name, prompt, parentId = null, sortOrder = 0) {
     try {
         await createTopicAPI(name, prompt, parentId, sortOrder);
-        await loadTopics(); // Refresh the topics list
+        await loadTopics();
         hideAddTopicForm();
     } catch (error) {
         console.error('Error creating topic:', error);
@@ -166,13 +360,12 @@ async function deleteTopic(topicId) {
     try {
         await deleteTopicAPI(topicId);
 
-        // If this was the selected topic, clear selection
         if (state.currentTopicId === topicId) {
             state.currentTopicId = '';
             localStorage.removeItem('selectedTopicId');
         }
 
-        await loadTopics(); // Refresh the topics list
+        await loadTopics();
     } catch (error) {
         console.error('Error deleting topic:', error);
         alert(error.message || 'Failed to delete topic. Please try again.');
@@ -182,11 +375,21 @@ async function deleteTopic(topicId) {
 async function updateTopicDetails(topicId, name, prompt, parentId, sortOrder) {
     try {
         await updateTopicAPI(topicId, name, prompt, parentId, sortOrder);
-        await loadTopics(); // Refresh the topics list
+        await loadTopics();
         hidePromptEditor();
     } catch (error) {
         console.error('Error updating topic:', error);
         alert('Failed to update topic. Please try again.');
+    }
+}
+
+async function moveTopic(topicId, parentId, position = null) {
+    try {
+        await moveTopicAPI(topicId, parentId, position);
+        await loadTopics();
+    } catch (error) {
+        console.error('Error moving topic:', error);
+        alert(`Failed to move topic. ${error.message || ''}`.trim());
     }
 }
 
@@ -195,7 +398,6 @@ export function showAddTopicForm(parentId = null) {
     dom.newTopicName.value = '';
     dom.newTopicPrompt.value = '';
 
-    // Check if the dropdown exists in dom.js, if not create/use it
     const parentSelect = document.getElementById('new-topic-parent');
     if (parentSelect) {
         parentSelect.innerHTML = '<option value="">(Root Topic)</option>';
@@ -205,11 +407,7 @@ export function showAddTopicForm(parentId = null) {
             opt.textContent = getTopicPath(t.id, state.topics);
             parentSelect.appendChild(opt);
         });
-        if (parentId) {
-            parentSelect.value = parentId;
-        } else {
-            parentSelect.value = "";
-        }
+        parentSelect.value = parentId || '';
     }
 
     dom.newTopicName.focus();
@@ -231,18 +429,13 @@ export function showPromptEditor(topicId) {
     if (editParentSelect) {
         editParentSelect.innerHTML = '<option value="">(Root Topic)</option>';
         state.topics.forEach(t => {
-            // Cannot be parent of itself or its children, but for UI simplicity we will just list all and server handles cycle rejection, or just exclude self.
             if (t.id === topicId) return;
             const opt = document.createElement('option');
             opt.value = t.id;
             opt.textContent = getTopicPath(t.id, state.topics);
             editParentSelect.appendChild(opt);
         });
-        if (topic.parent_id) {
-            editParentSelect.value = topic.parent_id;
-        } else {
-            editParentSelect.value = "";
-        }
+        editParentSelect.value = topic.parent_id || '';
     }
 
     dom.promptEditor.classList.remove('hidden');
@@ -282,7 +475,6 @@ export async function showVersionHistory(topicId) {
             dom.versionsList.appendChild(versionDiv);
         });
 
-        // Add event listeners for restore buttons
         dom.versionsList.querySelectorAll('.restore-version-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const tId = e.target.dataset.topicId;
@@ -293,7 +485,6 @@ export async function showVersionHistory(topicId) {
 
         dom.promptEditor.classList.add('hidden');
         dom.versionHistory.classList.remove('hidden');
-
     } catch (error) {
         console.error('Error loading version history:', error);
         alert('Failed to load version history.');
@@ -307,7 +498,7 @@ async function restoreVersion(topicId, versionId) {
 
     try {
         await restoreVersionAPI(topicId, versionId);
-        await loadTopics(); // Refresh topics
+        await loadTopics();
         dom.versionHistory.classList.add('hidden');
         alert('Version restored successfully!');
     } catch (error) {
@@ -342,7 +533,6 @@ export async function showLastRefinedPrompt() {
 
         dom.lastRefinedPromptContent.textContent = promptText;
         dom.lastRefinedPromptModal.showModal();
-
     } catch (error) {
         console.error('Error fetching last refined prompt:', error);
         alert('Could not fetch the last refined prompt. Please try generating some exercises first.');
@@ -391,38 +581,41 @@ export function saveTopic() {
     const name = dom.newTopicName.value.trim();
     const prompt = dom.newTopicPrompt.value.trim();
 
-    let parentId = null;
     const parentSelect = document.getElementById('new-topic-parent');
-    if (parentSelect && parentSelect.value) {
-        parentId = parentSelect.value;
-    }
+    const parentId = parentSelect && parentSelect.value ? parentSelect.value : null;
 
     if (!name || !prompt) {
         alert('Please provide both a name and a prompt.');
         return;
     }
 
-    createTopic(name, prompt, parentId, 0);
+    const sortOrder = getNextSortOrder(parentId);
+    createTopic(name, prompt, parentId, sortOrder);
 }
 
 export function savePrompt() {
     const prompt = dom.promptTextarea.value.trim();
     const name = dom.currentTopicName.textContent.trim();
 
-    let parentId = null;
     const editParentSelect = document.getElementById('edit-topic-parent');
-    if (editParentSelect && editParentSelect.value) {
-        parentId = editParentSelect.value;
-    }
+    const parentId = editParentSelect && editParentSelect.value ? editParentSelect.value : null;
 
     if (!prompt) {
         alert('Prompt cannot be empty.');
         return;
     }
 
-    // Preserve existing sort order if available
     const existingTopic = state.topics.find(t => t.id === state.editingTopicId);
-    const sortOrder = existingTopic ? existingTopic.sort_order : 0;
+    if (!existingTopic) {
+        alert('Topic not found. Please refresh and try again.');
+        return;
+    }
+
+    let sortOrder = Number.isFinite(existingTopic.sort_order) ? existingTopic.sort_order : 0;
+    const existingParentId = existingTopic.parent_id || null;
+    if (existingParentId !== parentId) {
+        sortOrder = getNextSortOrder(parentId);
+    }
 
     updateTopicDetails(state.editingTopicId, name, prompt, parentId, sortOrder);
 }

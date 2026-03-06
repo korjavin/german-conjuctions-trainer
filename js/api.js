@@ -87,6 +87,24 @@ export async function updateTopicAPI(topicId, name, prompt, parentId = null, sor
     if (!response.ok) throw new Error('Failed to update prompt');
 }
 
+export async function moveTopicAPI(topicId, parentId, position = null) {
+    const payload = { parent_id: parentId || '' };
+    if (typeof position === 'number' && Number.isFinite(position)) {
+        payload.position = position;
+    }
+
+    const response = await fetch(`/api/topics/${topicId}/move`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(errorText || 'Failed to move topic');
+    }
+    return response.json();
+}
+
 export async function fetchExercisesFromAPI(topicId) {
     const response = await apiFetch('/api/exercises', {
         method: 'POST',

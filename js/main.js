@@ -78,6 +78,15 @@ dom.settingsCloseBtn.addEventListener('click', () => {
     dom.versionHistory.classList.add('hidden');
 });
 
+if (dom.topicSort) {
+    dom.topicSort.value = state.topicSortOrder;
+    dom.topicSort.addEventListener('change', (e) => {
+        state.topicSortOrder = e.target.value;
+        localStorage.setItem('topicSortOrder', state.topicSortOrder);
+        renderTopicsList();
+    });
+}
+
 dom.addTopicBtn.addEventListener('click', () => showAddTopicForm(null));
 dom.cancelAddBtn.addEventListener('click', hideAddTopicForm);
 dom.saveTopicBtn.addEventListener('click', saveTopic);
