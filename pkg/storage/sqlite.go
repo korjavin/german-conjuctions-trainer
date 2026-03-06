@@ -120,6 +120,9 @@ func (s *SQLiteStorage) runMigrations() error {
 		`ALTER TABLE user_exercise_views ADD COLUMN mistakes_made INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE user_exercise_views ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT 0`,
 		`ALTER TABLE user_exercise_views ADD COLUMN is_hidden BOOLEAN NOT NULL DEFAULT 0`,
+		`ALTER TABLE topics ADD COLUMN parent_id TEXT NULL`,
+		`ALTER TABLE topics ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`,
+		`CREATE INDEX IF NOT EXISTS idx_topics_parent ON topics(parent_id, sort_order, created_at)`,
 	}
 
 	for _, migration := range migrations {
@@ -143,7 +146,10 @@ func isColumnExistsError(err error) bool {
 		err.Error() == "duplicate column name: hints_used" ||
 		err.Error() == "duplicate column name: mistakes_made" ||
 		err.Error() == "duplicate column name: is_favorite" ||
-		err.Error() == "duplicate column name: is_hidden")
+		err.Error() == "duplicate column name: is_hidden" ||
+		err.Error() == "duplicate column name: parent_id" ||
+		err.Error() == "duplicate column name: sort_order" ||
+		err.Error() == "index idx_topics_parent already exists")
 }
 
 // querier is an interface that can be a *sql.DB or *sql.Tx
@@ -153,7 +159,7 @@ type querier interface {
 
 // Implement the Storage interface methods below...
 
-func (s *SQLiteStorage) CreateTopic(name, prompt string) (*Topic, error) {
+func (s *SQLiteStorage) CreateTopic(name, prompt string, parentID *string, sortOrder int) (*Topic, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -165,17 +171,19 @@ func (s *SQLiteStorage) CreateTopic(name, prompt string) (*Topic, error) {
 		ID:        uuid.NewString(),
 		Name:      name,
 		Prompt:    prompt,
+		ParentID:  parentID,
+		SortOrder: sortOrder,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO topics(id, name, prompt, created_at, updated_at) VALUES(?, ?, ?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO topics(id, name, prompt, parent_id, sort_order, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(topic.ID, topic.Name, topic.Prompt, topic.CreatedAt, topic.UpdatedAt)
+	_, err = stmt.Exec(topic.ID, topic.Name, topic.Prompt, topic.ParentID, topic.SortOrder, topic.CreatedAt, topic.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +201,7 @@ func (s *SQLiteStorage) CreateTopic(name, prompt string) (*Topic, error) {
 }
 
 func (s *SQLiteStorage) GetAllTopics() ([]*Topic, error) {
-	rows, err := s.db.Query("SELECT id, name, prompt, created_at, updated_at FROM topics ORDER BY created_at ASC")
+	rows, err := s.db.Query("SELECT id, name, prompt, parent_id, sort_order, created_at, updated_at FROM topics ORDER BY sort_order ASC, name ASC, created_at ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +210,7 @@ func (s *SQLiteStorage) GetAllTopics() ([]*Topic, error) {
 	var topics []*Topic
 	for rows.Next() {
 		var topic Topic
-		if err := rows.Scan(&topic.ID, &topic.Name, &topic.Prompt, &topic.CreatedAt, &topic.UpdatedAt); err != nil {
+		if err := rows.Scan(&topic.ID, &topic.Name, &topic.Prompt, &topic.ParentID, &topic.SortOrder, &topic.CreatedAt, &topic.UpdatedAt); err != nil {
 			return nil, err
 		}
 		topics = append(topics, &topic)
@@ -216,16 +224,16 @@ func (s *SQLiteStorage) GetTopic(topicID string) (*Topic, error) {
 
 // getTopic is a helper to get a topic within a transaction or from the db
 func (s *SQLiteStorage) getTopic(q querier, topicID string) (*Topic, error) {
-	row := q.QueryRow("SELECT id, name, prompt, created_at, updated_at FROM topics WHERE id = ?", topicID)
+	row := q.QueryRow("SELECT id, name, prompt, parent_id, sort_order, created_at, updated_at FROM topics WHERE id = ?", topicID)
 	var topic Topic
-	err := row.Scan(&topic.ID, &topic.Name, &topic.Prompt, &topic.CreatedAt, &topic.UpdatedAt)
+	err := row.Scan(&topic.ID, &topic.Name, &topic.Prompt, &topic.ParentID, &topic.SortOrder, &topic.CreatedAt, &topic.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("topic not found")
 	}
 	return &topic, err
 }
 
-func (s *SQLiteStorage) UpdateTopic(topicID, name, prompt string) (*Topic, error) {
+func (s *SQLiteStorage) UpdateTopic(topicID, name, prompt string, parentID *string, sortOrder int) (*Topic, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -243,13 +251,13 @@ func (s *SQLiteStorage) UpdateTopic(topicID, name, prompt string) (*Topic, error
 		name = currentTopic.Name
 	}
 
-	stmt, err := tx.Prepare("UPDATE topics SET name = ?, prompt = ?, updated_at = ? WHERE id = ?")
+	stmt, err := tx.Prepare("UPDATE topics SET name = ?, prompt = ?, parent_id = ?, sort_order = ?, updated_at = ? WHERE id = ?")
 	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(name, prompt, now, topicID)
+	_, err = stmt.Exec(name, prompt, parentID, sortOrder, now, topicID)
 	if err != nil {
 		return nil, err
 	}
@@ -276,6 +284,16 @@ func (s *SQLiteStorage) UpdateTopic(topicID, name, prompt string) (*Topic, error
 }
 
 func (s *SQLiteStorage) DeleteTopic(topicID string) error {
+	// Check if topic has children
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM topics WHERE parent_id = ?", topicID).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("topic has children and cannot be deleted")
+	}
+
 	stmt, err := s.db.Prepare("DELETE FROM topics WHERE id = ?")
 	if err != nil {
 		return err
@@ -388,7 +406,7 @@ Return ONLY the JSON object, with no other text or explanations.`,
 	}
 
 	for _, dt := range defaultTopics {
-		if _, err := s.CreateTopic(dt.name, dt.prompt); err != nil {
+		if _, err := s.CreateTopic(dt.name, dt.prompt, nil, 0); err != nil {
 			log.Printf("Error creating default topic '%s' in SQLite: %v", dt.name, err)
 		}
 	}

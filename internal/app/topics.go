@@ -10,13 +10,51 @@ import (
 )
 
 type TopicRequest struct {
-	Name   string `json:"name"`
-	Prompt string `json:"prompt"`
+	Name      string  `json:"name"`
+	Prompt    string  `json:"prompt"`
+	ParentID  *string `json:"parent_id"`
+	SortOrder int     `json:"sort_order"`
 }
 
 type UpdateTopicRequest struct {
-	Name   string `json:"name"`
-	Prompt string `json:"prompt"`
+	Name      string  `json:"name"`
+	Prompt    string  `json:"prompt"`
+	ParentID  *string `json:"parent_id"`
+	SortOrder int     `json:"sort_order"`
+}
+
+// validateTopicTree ensures we don't create cycles and the parent exists
+func (a *App) validateTopicTree(topicID *string, parentID *string) error {
+	if parentID == nil {
+		return nil
+	}
+
+	if topicID != nil && *parentID == *topicID {
+		return fmt.Errorf("a topic cannot be its own parent")
+	}
+
+	// Check if parent exists
+	parent, err := a.DB.GetTopic(*parentID)
+	if err != nil {
+		return fmt.Errorf("parent topic not found")
+	}
+
+	// Check for cycles
+	if topicID != nil {
+		currentParent := parent.ParentID
+		for currentParent != nil {
+			if *currentParent == *topicID {
+				return fmt.Errorf("cannot create a cycle in the topic tree")
+			}
+			p, err := a.DB.GetTopic(*currentParent)
+			if err != nil {
+				return fmt.Errorf("invalid parent reference in tree")
+			}
+			currentParent = p.ParentID
+		}
+	}
+
+	return nil
 }
 
 func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +91,12 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			topic, err := a.DB.CreateTopic(req.Name, req.Prompt)
+			if err := a.validateTopicTree(nil, req.ParentID); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			topic, err := a.DB.CreateTopic(req.Name, req.Prompt, req.ParentID, req.SortOrder)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to create topic: %v", err), http.StatusInternalServerError)
 				return
@@ -109,7 +152,12 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			topic, err := a.DB.UpdateTopic(topicID, req.Name, req.Prompt)
+			if err := a.validateTopicTree(&topicID, req.ParentID); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			topic, err := a.DB.UpdateTopic(topicID, req.Name, req.Prompt, req.ParentID, req.SortOrder)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to update topic: %v", err), http.StatusInternalServerError)
 				return
@@ -190,7 +238,7 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			topic, err := a.DB.UpdateTopic(topicID, currentTopic.Name, versionToRestore.Prompt)
+			topic, err := a.DB.UpdateTopic(topicID, currentTopic.Name, versionToRestore.Prompt, currentTopic.ParentID, currentTopic.SortOrder)
 			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to restore version: %v", err), http.StatusInternalServerError)
 				return

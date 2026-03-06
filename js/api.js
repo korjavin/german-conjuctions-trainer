@@ -58,11 +58,11 @@ export async function fetchTopicsAPI() {
     return response.json();
 }
 
-export async function createTopicAPI(name, prompt) {
+export async function createTopicAPI(name, prompt, parentId = null, sortOrder = 0) {
     const response = await fetch('/api/topics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, prompt })
+        body: JSON.stringify({ name, prompt, parent_id: parentId, sort_order: sortOrder })
     });
     if (!response.ok) throw new Error('Failed to create topic');
     return response.json();
@@ -73,11 +73,11 @@ export async function deleteTopicAPI(topicId) {
     if (!response.ok) throw new Error('Failed to delete topic');
 }
 
-export async function updateTopicAPI(topicId, name, prompt) {
+export async function updateTopicAPI(topicId, name, prompt, parentId = null, sortOrder = 0) {
     const response = await fetch(`/api/topics/${topicId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, prompt })
+        body: JSON.stringify({ name, prompt, parent_id: parentId, sort_order: sortOrder })
     });
     if (!response.ok) throw new Error('Failed to update prompt');
 }

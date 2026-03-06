@@ -12,6 +12,8 @@ type Topic struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Prompt    string    `json:"prompt"`
+	ParentID  *string   `json:"parent_id,omitempty"`
+	SortOrder int       `json:"sort_order"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -89,10 +91,10 @@ type ExerciseHistoryItem struct {
 // Storage defines the interface for database operations.
 type Storage interface {
 	// Topics
-	CreateTopic(name, prompt string) (*Topic, error)
+	CreateTopic(name, prompt string, parentID *string, sortOrder int) (*Topic, error)
 	GetAllTopics() ([]*Topic, error)
 	GetTopic(topicID string) (*Topic, error)
-	UpdateTopic(topicID, name, prompt string) (*Topic, error)
+	UpdateTopic(topicID, name, prompt string, parentID *string, sortOrder int) (*Topic, error)
 	DeleteTopic(topicID string) error
 
 	// Versions
