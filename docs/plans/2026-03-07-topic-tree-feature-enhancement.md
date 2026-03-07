@@ -153,18 +153,18 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run all tests - must pass before next task
 
 ### Task 7: Improve settings page usability for create/edit
-- [ ] Improve add topic form UX (better validation feedback, clearer labels)
-- [ ] Add topic preview in add/edit forms showing hierarchy context
-- [ ] Add recently used topics quick-select in parent dropdown
-- [ ] Improve error messages for validation failures
-- [ ] Add loading states for create/update operations
-- [ ] Add confirmation dialogs for destructive operations
-- [ ] Add keyboard shortcuts for form actions (Enter to save, Escape to cancel)
-- [ ] Test improved form validation and feedback
-- [ ] Test topic preview shows correct hierarchy
-- [ ] Test recently used topics quick-select
-- [ ] Test keyboard shortcuts work
-- [ ] Run all tests - must pass before next task
+- [x] Improve add topic form UX (better validation feedback, clearer labels)
+- [x] Add topic preview in add/edit forms showing hierarchy context
+- [x] Add recently used topics quick-select in parent dropdown
+- [x] Improve error messages for validation failures
+- [x] Add loading states for create/update operations
+- [x] Add confirmation dialogs for destructive operations
+- [x] Add keyboard shortcuts for form actions (Enter to save, Escape to cancel)
+- [x] Test improved form validation and feedback
+- [x] Test topic preview shows correct hierarchy
+- [x] Test recently used topics quick-select
+- [x] Test keyboard shortcuts work
+- [x] Run all tests - must pass before next task
 
 ### Task 8: Add accessibility improvements
 - [ ] Add ARIA attributes for tree structure (role="tree", role="treeitem")
