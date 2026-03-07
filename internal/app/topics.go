@@ -99,7 +99,8 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if strings.TrimSpace(req.Name) == "" || req.Prompt == "" {
+			req.Name = strings.TrimSpace(req.Name)
+			if req.Name == "" || req.Prompt == "" {
 				http.Error(w, "Name and prompt are required", http.StatusBadRequest)
 				return
 			}
@@ -185,7 +186,7 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				switch {
 				case strings.Contains(errMsg, "not found"):
 					http.Error(w, errMsg, http.StatusNotFound)
-				case strings.Contains(errMsg, "invalid"):
+				case strings.Contains(errMsg, "invalid parent") || strings.Contains(errMsg, "cycle"):
 					http.Error(w, errMsg, http.StatusBadRequest)
 				default:
 					log.Printf("Failed to move topic: %v", err)
@@ -293,7 +294,8 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			if strings.TrimSpace(name) == "" {
+			name = strings.TrimSpace(name)
+			if name == "" {
 				http.Error(w, "Name is required", http.StatusBadRequest)
 				return
 			}

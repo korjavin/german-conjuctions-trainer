@@ -609,10 +609,13 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
     // Accessibility: Add ARIA attributes (mirrors renderAllTopics)
     topicDiv.setAttribute('role', 'treeitem');
     topicDiv.setAttribute('tabindex', '0');
-    topicDiv.setAttribute('aria-expanded', hasChildren && !isCollapsed ? 'true' : 'false');
+    if (hasChildren) {
+        topicDiv.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+    }
     topicDiv.setAttribute('aria-level', depth + 1);
     topicDiv.setAttribute('aria-selected', 'false');
     topicDiv.setAttribute('aria-label', `${topic.name}${hasChildren ? `, ${isCollapsed ? 'collapsed' : 'expanded'} with ${topic.children.length} children` : ''}`);
+    topicDiv.setAttribute('aria-describedby', `topic-date-${topic.id}`);
 
     const displayName = state.topicsSearchQuery
         ? highlightText(escapeHtml(topic.name), state.topicsSearchQuery)
@@ -680,6 +683,18 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
 
     // Accessibility: Add keyboard navigation handler
     topicDiv.addEventListener('keydown', handleTopicKeyboard);
+
+    // Accessibility: Handle focus events to update aria-selected
+    topicDiv.addEventListener('focus', () => {
+        getVisibleTopicItems().forEach(item => {
+            item.setAttribute('aria-selected', 'false');
+        });
+        topicDiv.setAttribute('aria-selected', 'true');
+    });
+
+    topicDiv.addEventListener('blur', () => {
+        topicDiv.setAttribute('aria-selected', 'false');
+    });
 
     // Drag and drop handlers - use module-level variables
     topicDiv.addEventListener('dragstart', (event) => {
@@ -907,7 +922,6 @@ function getVisibleTopicItems() {
  */
 function handleTopicKeyboard(event) {
     const topicItem = event.currentTarget;
-    const topicId = topicItem.dataset.topicId;
     const allItems = getVisibleTopicItems();
     const currentIndex = allItems.indexOf(topicItem);
 
@@ -942,13 +956,27 @@ function handleTopicKeyboard(event) {
         }
 
         case 'ArrowLeft': {
-            // ARIA tree pattern: collapse expanded node, do nothing if already collapsed/leaf
+            // ARIA tree pattern: collapse expanded node, or move focus to parent if collapsed/leaf
             event.preventDefault();
             const collapseBtnLeft = topicItem.querySelector('.topic-collapse-btn');
             if (collapseBtnLeft) {
                 const isExpanded = collapseBtnLeft.getAttribute('aria-expanded') === 'true';
                 if (isExpanded) {
                     collapseBtnLeft.click();
+                    break;
+                }
+            }
+            // Node is collapsed or is a leaf: move focus to parent treeitem
+            const currentLevel = parseInt(topicItem.getAttribute('aria-level') || '1', 10);
+            if (currentLevel > 1) {
+                // Walk backwards through visible items to find the nearest ancestor at level - 1
+                for (let i = currentIndex - 1; i >= 0; i--) {
+                    const candidate = allItems[i];
+                    const candidateLevel = parseInt(candidate.getAttribute('aria-level') || '1', 10);
+                    if (candidateLevel < currentLevel) {
+                        candidate.focus();
+                        break;
+                    }
                 }
             }
             break;
@@ -1114,7 +1142,9 @@ function renderAllTopics(flattenedNodes, nodesById) {
         // Accessibility: Add ARIA attributes
         topicDiv.setAttribute('role', 'treeitem');
         topicDiv.setAttribute('tabindex', '0');
-        topicDiv.setAttribute('aria-expanded', hasChildren && !isCollapsed ? 'true' : 'false');
+        if (hasChildren) {
+            topicDiv.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+        }
         topicDiv.setAttribute('aria-level', depth + 1);
         topicDiv.setAttribute('aria-selected', 'false');
         topicDiv.setAttribute('aria-label', `${topic.name}${hasChildren ? `, ${isCollapsed ? 'collapsed' : 'expanded'} with ${topic.children.length} children` : ''}`);
