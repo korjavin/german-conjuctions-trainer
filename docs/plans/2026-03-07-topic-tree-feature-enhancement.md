@@ -106,14 +106,14 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run all tests - must pass before next task
 
 ### Task 3: Add topic icons
-- [ ] Add folder icon for topics with children, file icon for leaf topics
-- [ ] Use SVG icons inline or as CSS background (minimal deps approach)
-- [ ] Add icon element to topic rendering in `renderTopicsList()`
-- [ ] Add CSS styles for topic icons
-- [ ] Update icons when children are added/removed
-- [ ] Test icons display correctly for parent and leaf topics
-- [ ] Test icons update dynamically when structure changes
-- [ ] Run all tests - must pass before next task
+- [x] Add folder icon for topics with children, file icon for leaf topics
+- [x] Use SVG icons inline or as CSS background (minimal deps approach)
+- [x] Add icon element to topic rendering in `renderTopicsList()`
+- [x] Add CSS styles for topic icons
+- [x] Update icons when children are added/removed
+- [x] Test icons display correctly for parent and leaf topics
+- [x] Test icons update dynamically when structure changes
+- [x] Run all tests - must pass before next task
 
 ### Task 4: Add tree search/filter functionality
 - [ ] Add search input field to topics section in settings modal

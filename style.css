@@ -668,6 +668,31 @@ progress.progress-bar::-moz-progress-bar {
     transition: transform 0.15s ease;
 }
 
+/* Topic Icons */
+.topic-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.topic-icon-folder,
+.topic-icon-file {
+    display: block;
+}
+
+.topic-icon-folder svg {
+    width: 16px;
+    height: 16px;
+}
+
+.topic-icon-file svg {
+    width: 16px;
+    height: 16px;
+}
+
 .topic-gap-drop-zone {
     height: 0.5rem;
     border-radius: 9999px;
