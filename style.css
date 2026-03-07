@@ -126,28 +126,6 @@ ul {
     backdrop-filter: none;
 }
 
-.header-light .header-title {
-    color: #1f2937;
-    text-shadow: none;
-}
-
-.header-nav {
-    padding: var(--spacing-4);
-}
-
-.header-top-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.header-title {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: white;
-    text-shadow: 0 4px 3px rgba(0, 0, 0, 0.1);
-}
-
 .header-actions {
     display: flex;
     align-items: center;
@@ -162,15 +140,6 @@ ul {
 
 .header-privacy-link:hover {
     color: rgba(255, 255, 255, 0.9);
-}
-
-.topic-selection-row {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-3);
-    margin-top: var(--spacing-3);
-    padding-top: var(--spacing-3);
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .topic-selector-container {
@@ -389,11 +358,6 @@ progress.progress-bar::-moz-progress-bar {
 
 
 /* Exercise Content */
-.hint-label {
-    font-size: 1.125rem;
-    color: #4b5563;
-}
-
 .english-hint {
     font-size: 1.5rem;
     font-weight: 600;
@@ -423,12 +387,6 @@ progress.progress-bar::-moz-progress-bar {
     font-weight: 500;
     color: #374151;
     box-shadow: var(--shadow-sm);
-}
-
-.scrambled-words-label {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #374151;
 }
 
 .exercise-action-btn {
@@ -929,11 +887,6 @@ button:disabled.is-audio-off {
         gap: 0.5rem;
     }
 
-    .topic-selection-row {
-        flex-wrap: wrap;
-        align-items: stretch;
-    }
-
     .topic-selector-container {
         flex: 1 1 100%;
         max-width: none;
@@ -952,17 +905,6 @@ button:disabled.is-audio-off {
     .desktop-only { display: none; }
     .mobile-only { display: inline; }
 
-    .header-top-row {
-        align-items: flex-start;
-        gap: 0.75rem;
-    }
-
-    .header-title {
-        font-size: 1.05rem;
-        line-height: 1.2;
-        max-width: 12ch;
-    }
-
     .header-actions {
         width: 100%;
         justify-content: space-between;
@@ -973,10 +915,6 @@ button:disabled.is-audio-off {
         min-height: 42px;
         padding: 0.55rem 0.5rem;
         font-size: 0.75rem;
-    }
-
-    .topic-selection-row {
-        gap: 0.5rem;
     }
 
     .generate-btn {
