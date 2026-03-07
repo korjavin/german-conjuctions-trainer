@@ -19,6 +19,42 @@ type TopicRequest struct {
 	SortOrder int     `json:"sort_order"`
 }
 
+// validateTopicName checks for duplicate topic names at the same parent level
+func (a *App) validateTopicName(name string, parentID *string, excludeTopicID *string) error {
+	topics, err := a.DB.GetAllTopics()
+	if err != nil {
+		return fmt.Errorf("failed to validate topic name")
+	}
+
+	normalizedParentID := normalizeStringPtr(parentID)
+	normalizedName := strings.TrimSpace(strings.ToLower(name))
+
+	for _, topic := range topics {
+		// Skip the topic being edited (excludeTopicID)
+		if excludeTopicID != nil && topic.ID == *excludeTopicID {
+			continue
+		}
+
+		topicParentID := normalizeStringPtr(topic.ParentID)
+		topicName := strings.TrimSpace(strings.ToLower(topic.Name))
+
+		// Check if topic has same name at same parent level
+		if topicName == normalizedName && topicParentID == normalizedParentID {
+			return fmt.Errorf("a topic with this name already exists at this level")
+		}
+	}
+
+	return nil
+}
+
+// normalizeStringPtr converts *string to comparable value, treating empty string and nil as equivalent
+func normalizeStringPtr(s *string) string {
+	if s == nil || strings.TrimSpace(*s) == "" {
+		return ""
+	}
+	return strings.TrimSpace(*s)
+}
+
 // validateTopicTree ensures we don't create cycles and the parent exists
 func (a *App) validateTopicTree(topicID *string, parentID *string) error {
 	if parentID == nil {
@@ -37,23 +73,22 @@ func (a *App) validateTopicTree(topicID *string, parentID *string) error {
 
 	// Check for cycles and maximum depth
 	const maxTreeDepth = 100
-	if topicID != nil {
-		currentParent := parent.ParentID
-		depth := 0
-		for currentParent != nil {
-			depth++
-			if depth > maxTreeDepth {
-				return fmt.Errorf("topic tree depth exceeds maximum of %d levels", maxTreeDepth)
-			}
-			if *currentParent == *topicID {
-				return fmt.Errorf("cannot create a cycle in the topic tree")
-			}
-			p, err := a.DB.GetTopic(*currentParent)
-			if err != nil {
-				return fmt.Errorf("invalid parent reference in tree")
-			}
-			currentParent = p.ParentID
+	currentParent := parent.ParentID
+	depth := 0
+	for currentParent != nil {
+		depth++
+		if depth > maxTreeDepth {
+			return fmt.Errorf("topic tree depth exceeds maximum of %d levels", maxTreeDepth)
 		}
+		// Only check for cycles when topicID is not nil (new topics can't create cycles)
+		if topicID != nil && *currentParent == *topicID {
+			return fmt.Errorf("cannot create a cycle in the topic tree")
+		}
+		p, err := a.DB.GetTopic(*currentParent)
+		if err != nil {
+			return fmt.Errorf("invalid parent reference in tree")
+		}
+		currentParent = p.ParentID
 	}
 
 	return nil
@@ -128,6 +163,12 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if err := a.validateTopicTree(nil, req.ParentID); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			// Validate no duplicate name at same parent level
+			if err := a.validateTopicName(req.Name, req.ParentID, nil); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -332,6 +373,12 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if err := a.validateTopicTree(&topicID, parentID); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			// Validate no duplicate name at same parent level (exclude the current topic being edited)
+			if err := a.validateTopicName(name, parentID, &topicID); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}

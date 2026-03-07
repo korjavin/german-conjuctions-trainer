@@ -778,12 +778,27 @@ function findMatchingTopics(searchQuery, nodesById) {
 
 function highlightText(text, searchQuery) {
     if (!searchQuery) return text;
-    const regex = new RegExp(`(${escapeRegExp(searchQuery)})`, 'gi');
-    return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+    try {
+        const escaped = escapeRegExp(searchQuery);
+        const regex = new RegExp(`(${escaped})`, 'gi');
+        return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+    } catch (error) {
+        // If regex construction fails, return text without highlighting
+        console.warn('Failed to highlight search text:', error);
+        return text;
+    }
 }
 
 function escapeRegExp(string) {
+    // Escape all regex special characters to prevent RegExp constructor errors
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+        return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+    } catch (error) {
+        // If regex construction fails, return text without highlighting
+        console.warn('Failed to highlight search text:', error);
+        return text;
+    }
 }
 
 function escapeHtml(text) {
@@ -1080,8 +1095,19 @@ export function renderTopicsList() {
     } else {
         state.topicsMatchingIds.clear();
         // Restore the original collapsed state from before search started
+        // Merge manual changes made during search with pre-search state
         if (state.preSearchCollapsedTopicIds) {
-            state.collapsedTopicIds = new Set(state.preSearchCollapsedTopicIds);
+            // Start with pre-search state
+            const mergedCollapsedIds = new Set(state.preSearchCollapsedTopicIds);
+            // Preserve manual changes: if topic was manually collapsed during search, keep it collapsed
+            // (if topic is in current collapsed state but not in searchExpandedIds, it was manually collapsed)
+            for (const topicId of state.collapsedTopicIds) {
+                if (!state.searchExpandedTopicIds.has(topicId)) {
+                    // Topic was manually collapsed during search (not auto-expanded)
+                    mergedCollapsedIds.add(topicId);
+                }
+            }
+            state.collapsedTopicIds = mergedCollapsedIds;
             state.searchExpandedTopicIds.clear();
             state.preSearchCollapsedTopicIds = undefined;
             saveTopicCollapseState();
@@ -1127,6 +1153,11 @@ export function renderTopicsList() {
         // Disable virtual scrolling mode and render all items
         state.virtualScrollEnabled = false;
         dom.topicsList.classList.remove('virtual-scroll-enabled');
+        // Remove scroll event listener to prevent memory leak
+        if (virtualScrollHandler) {
+            dom.topicsList.removeEventListener('scroll', virtualScrollHandler);
+            virtualScrollHandler = null;
+        }
         dom.topicsList.removeAttribute('data-virtual-scroll-setup');
         renderAllTopics(flattenedNodes, nodesById);
     }
@@ -1604,7 +1635,7 @@ async function moveTopic(topicId, parentId, position = null) {
             let maxPosition = 0;
             if (parentId) {
                 const parentNode = state.nodesById.get(parentId);
-                if (parentNode) {
+                if (parentNode && parentNode.children) {
                     maxPosition = parentNode.children.length;
                 }
             } else {
@@ -1622,6 +1653,8 @@ async function moveTopic(topicId, parentId, position = null) {
         await loadTopics();
     } catch (error) {
         console.error('Error moving topic:', error);
+        // Refresh topics to ensure frontend state reflects actual database state
+        await loadTopics();
         alert(`Failed to move topic. ${error.message || ''}`.trim());
     }
 }
