@@ -502,11 +502,94 @@ function removeDragGhost() {
     }
 }
 
+// Accessibility: Track currently focused topic for keyboard navigation
+let currentFocusedTopicId = null;
+
+// Accessibility: Announcer for screen reader messages
+function announceToScreenReader(message) {
+    // Create or get existing live region
+    let announcer = document.getElementById('a11y-announcer');
+    if (!announcer) {
+        announcer = document.createElement('div');
+        announcer.id = 'a11y-announcer';
+        announcer.setAttribute('aria-live', 'polite');
+        announcer.setAttribute('aria-atomic', 'true');
+        announcer.className = 'sr-only';
+        document.body.appendChild(announcer);
+    }
+    announcer.textContent = message;
+}
+
+// Accessibility: Get all visible topic items in order
+function getVisibleTopicItems() {
+    return Array.from(dom.topicsList.querySelectorAll('[data-topic-id]'));
+}
+
+// Accessibility: Handle keyboard navigation for topic tree
+function handleTopicKeyboard(event) {
+    const topicItem = event.currentTarget;
+    const topicId = topicItem.dataset.topicId;
+    const allItems = getVisibleTopicItems();
+    const currentIndex = allItems.indexOf(topicItem);
+
+    switch (event.key) {
+        case 'ArrowDown':
+        case 'ArrowRight':
+            event.preventDefault();
+            if (currentIndex < allItems.length - 1) {
+                allItems[currentIndex + 1].focus();
+            }
+            break;
+
+        case 'ArrowUp':
+        case 'ArrowLeft':
+            event.preventDefault();
+            if (currentIndex > 0) {
+                allItems[currentIndex - 1].focus();
+            }
+            break;
+
+        case 'Home':
+            event.preventDefault();
+            if (allItems.length > 0) {
+                allItems[0].focus();
+            }
+            break;
+
+        case 'End':
+            event.preventDefault();
+            if (allItems.length > 0) {
+                allItems[allItems.length - 1].focus();
+            }
+            break;
+
+        case 'Enter':
+        case ' ':
+            // Toggle expand/collapse on Enter or Space for topics with children
+            event.preventDefault();
+            const collapseBtn = topicItem.querySelector('.topic-collapse-btn');
+            if (collapseBtn) {
+                collapseBtn.click();
+            }
+            break;
+
+        case 'Escape':
+            // Exit tree navigation
+            event.preventDefault();
+            topicItem.blur();
+            break;
+    }
+}
+
 export function renderTopicsList() {
     dom.topicsList.innerHTML = '';
+    // Add ARIA role="tree" to the container
+    dom.topicsList.setAttribute('role', 'tree');
+    dom.topicsList.setAttribute('aria-label', 'Topic tree');
+    dom.topicsList.setAttribute('aria-multiselectable', 'false');
 
     if (state.topics.length === 0) {
-        dom.topicsList.innerHTML = `<div class="p-4 text-gray-500 text-center">No topics available. Add one to get started.</div>`;
+        dom.topicsList.innerHTML = `<div class="p-4 text-gray-500 text-center" role="status">No topics available. Add one to get started.</div>`;
         return;
     }
 
@@ -543,6 +626,14 @@ export function renderTopicsList() {
         topicDiv.draggable = true;
         topicDiv.dataset.topicId = topic.id;
         topicDiv.style.marginLeft = `${depth * 20}px`;
+        // Accessibility: Add ARIA attributes
+        topicDiv.setAttribute('role', 'treeitem');
+        topicDiv.setAttribute('tabindex', '0');
+        topicDiv.setAttribute('aria-expanded', hasChildren && !isCollapsed ? 'true' : 'false');
+        topicDiv.setAttribute('aria-level', depth + 1);
+        topicDiv.setAttribute('aria-selected', 'false');
+        topicDiv.setAttribute('aria-label', `${topic.name}${hasChildren ? `, ${isCollapsed ? 'collapsed' : 'expanded'} with ${topic.children.length} children` : ''}`);
+        topicDiv.setAttribute('aria-describedby', `topic-date-${topic.id}`);
 
         const hasChildren = topic.children.length > 0;
         const isCollapsed = hasChildren && isTopicCollapsed(topic.id);
@@ -557,25 +648,25 @@ export function renderTopicsList() {
         topicDiv.innerHTML = `
             <div class="flex flex-col min-w-0">
                 <div class="font-semibold topic-item-name flex items-center">
-                    ${hasChildren ? `<button class="topic-collapse-btn ${chevronClass} mr-2 p-1 hover:bg-gray-200 rounded" data-topic-id="${topic.id}" aria-label="${isCollapsed ? 'Expand' : 'Collapse'} topic">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    ${hasChildren ? `<button class="topic-collapse-btn ${chevronClass} mr-2 p-1 hover:bg-gray-200 rounded" data-topic-id="${topic.id}" aria-label="${isCollapsed ? 'Expand' : 'Collapse'} ${topic.name}" aria-expanded="${isCollapsed ? 'false' : 'true'}">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <path d="M4 6H8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                             <path d="M6 4V8" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="${chevronClass === 'chevron-right' ? '' : 'hidden'}"/>
                         </svg>
-                    </button>` : '<span class="w-6 mr-2"></span>'}
-                    <span class="topic-icon mr-2" data-topic-id="${topic.id}">
+                    </button>` : '<span class="w-6 mr-2" aria-hidden="true"></span>'}
+                    <span class="topic-icon mr-2" data-topic-id="${topic.id}" aria-hidden="true">
                         ${hasChildren ? getFolderIcon() : getFileIcon()}
                     </span>
-                    <span class="text-gray-400 mr-2 select-none">::</span>
+                    <span class="text-gray-400 mr-2 select-none" aria-hidden="true">::</span>
                     <span class="truncate">${displayName}</span>
                     ${childBadge}
                 </div>
-                <div class="topic-item-date">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
+                <div class="topic-item-date" id="topic-date-${topic.id}" aria-hidden="true">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
             </div>
-            <div class="flex gap-2 mt-2 sm:mt-0">
-                <button class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn" data-topic-id="${topic.id}">Add child</button>
-                <button class="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 edit-topic-btn" data-topic-id="${topic.id}">Edit</button>
-                <button class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn" data-topic-id="${topic.id}">Delete</button>
+            <div class="flex gap-2 mt-2 sm:mt-0" role="toolbar" aria-label="Topic actions">
+                <button class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn" data-topic-id="${topic.id}" aria-label="Add child topic to ${topic.name}">Add child</button>
+                <button class="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 edit-topic-btn" data-topic-id="${topic.id}" aria-label="Edit topic ${topic.name}">Edit</button>
+                <button class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn" data-topic-id="${topic.id}" aria-label="Delete topic ${topic.name}">Delete</button>
             </div>
         `;
 
@@ -592,7 +683,11 @@ export function renderTopicsList() {
         if (collapseBtn) {
             collapseBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                const wasCollapsed = isTopicCollapsed(topic.id);
                 toggleTopicCollapse(topic.id);
+                // Accessibility: Announce the action to screen readers
+                const isNowCollapsed = isTopicCollapsed(topic.id);
+                announceToScreenReader(`${topic.name} ${isNowCollapsed ? 'collapsed' : 'expanded'}`);
                 renderTopicsList();
             });
         }
@@ -614,6 +709,22 @@ export function renderTopicsList() {
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             deleteTopic(e.currentTarget.dataset.topicId);
+        });
+
+        // Accessibility: Add keyboard navigation handler
+        topicDiv.addEventListener('keydown', handleTopicKeyboard);
+
+        // Accessibility: Handle focus events to update aria-selected
+        topicDiv.addEventListener('focus', () => {
+            getVisibleTopicItems().forEach(item => {
+                item.setAttribute('aria-selected', 'false');
+            });
+            topicDiv.setAttribute('aria-selected', 'true');
+            currentFocusedTopicId = topic.id;
+        });
+
+        topicDiv.addEventListener('blur', () => {
+            topicDiv.setAttribute('aria-selected', 'false');
         });
 
         topicDiv.addEventListener('dragstart', (event) => {

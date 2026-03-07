@@ -167,13 +167,13 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run all tests - must pass before next task
 
 ### Task 8: Add accessibility improvements
-- [ ] Add ARIA attributes for tree structure (role="tree", role="treeitem")
-- [ ] Add keyboard navigation (Arrow keys to navigate, Enter/Space to expand/collapse)
-- [ ] Add screen reader announcements for tree actions
-- [ ] Add focus indicators for keyboard navigation
-- [ ] Test keyboard navigation works with Tab, Arrow keys, Enter, Space
-- [ ] Test screen reader compatibility with tree structure
-- [ ] Run all tests - must pass before next task
+- [x] Add ARIA attributes for tree structure (role="tree", role="treeitem")
+- [x] Add keyboard navigation (Arrow keys to navigate, Enter/Space to expand/collapse)
+- [x] Add screen reader announcements for tree actions
+- [x] Add focus indicators for keyboard navigation
+- [x] Test keyboard navigation works with Tab, Arrow keys, Enter, Space
+- [x] Test screen reader compatibility with tree structure
+- [x] Run all tests - must pass before next task
 
 ### Task 9: Add performance optimizations for large trees
 - [ ] Implement virtual scrolling for large topic lists (> 100 topics)

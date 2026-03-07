@@ -222,9 +222,32 @@ ul {
 .btn-word:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+.topic-tree-item:focus-visible {
     outline: 3px solid var(--mr-focus);
     outline-offset: 2px;
+}
+
+/* Stronger focus styles for better visibility across browsers */
+.topic-tree-item:focus,
+.topic-tree-item:focus-within {
+    z-index: 10;
+    box-shadow: 0 0 0 3px var(--mr-focus);
+    border-color: var(--mr-orange-dark) !important;
+}
+
+/* High contrast focus ring for keyboard navigation */
+.topic-tree-item:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px #2563eb, 0 0 0 6px rgba(37, 99, 235, 0.3) !important;
+    border-color: #2563eb !important;
+}
+
+/* Focus states for buttons within topic items */
+.topic-tree-item button:focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .header-btn {
@@ -1304,5 +1327,18 @@ button:disabled.is-audio-off {
     padding: 0 2px;
     border-radius: 2px;
     font-weight: 600;
+}
+
+/* Screen reader only - content visible only to screen readers */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
 }
 }
