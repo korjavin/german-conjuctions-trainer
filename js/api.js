@@ -194,7 +194,17 @@ export async function loadExerciseStatsAPI() {
 
 export async function fetchVersionsAPI(topicId) {
     const response = await fetch(`/api/versions/${topicId}`);
-    if (!response.ok) throw new Error('Failed to load versions');
+    if (!response.ok) {
+        let errorMessage = 'Failed to load versions';
+        try {
+            const errorData = await response.json();
+            if (errorData.error) errorMessage = errorData.error;
+        } catch (e) {
+            // If error response is not JSON, use status text
+            errorMessage = response.statusText || errorMessage;
+        }
+        throw Object.assign(new Error(errorMessage), { status: response.status });
+    }
     return response.json();
 }
 

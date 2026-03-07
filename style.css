@@ -762,20 +762,17 @@ button .loading-spinner {
 
 /* Performance optimization: Reduce layout thrashing */
 .topic-list-item,
-.topic-gap-drop-zone {
-    will-change: transform;
-    contain: layout style paint;
-}
-
 /* Drop zone indicator styling */
 .topic-gap-drop-zone {
-    height: 0.75rem;
+    height: 0.5rem;
     border-radius: 9999px;
-    margin-top: 0.25rem;
-    margin-bottom: 0.25rem;
+    margin-top: 0.15rem;
+    margin-bottom: 0.15rem;
     border: 2px solid transparent;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
+    will-change: transform;
+    contain: layout style paint;
 }
 
 .topic-gap-drop-zone.topic-drop-active {
@@ -920,19 +917,6 @@ button .loading-spinner {
 .topic-icon-file svg {
     width: 16px;
     height: 16px;
-}
-
-.topic-gap-drop-zone {
-    height: 0.5rem;
-    border-radius: 9999px;
-    margin-top: 0.15rem;
-    margin-bottom: 0.15rem;
-}
-
-.topic-drop-active {
-    border: 2px dashed #2563eb !important;
-    background: linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%) !important;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15), 0 4px 12px rgba(37, 99, 235, 0.2) !important;
 }
 
 .topic-item-name {

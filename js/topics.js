@@ -585,6 +585,16 @@ function renderVirtualScrollItems() {
         item.style.width = '100%';
         item.style.height = `${VIRTUAL_SCROLL_ITEM_HEIGHT - DROP_ZONE_HEIGHT}px`;
         fragment.appendChild(item);
+
+        // Add afterZone if this is the last sibling (to allow dropping after it)
+        if (nodeData.indexInParent === nodeData.totalSiblings - 1) {
+            const afterZone = createSiblingDropZone(nodeData.depth, nodeData.parentId, nodeData.totalSiblings, state.nodesById);
+            afterZone.style.position = 'absolute';
+            afterZone.style.top = `${(i + 1) * VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
+            afterZone.style.left = '0';
+            afterZone.style.width = '100%';
+            fragment.appendChild(afterZone);
+        }
     }
 
     container.appendChild(fragment);
@@ -792,13 +802,6 @@ function highlightText(text, searchQuery) {
 function escapeRegExp(string) {
     // Escape all regex special characters to prevent RegExp constructor errors
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-        return text.replace(regex, '<mark class="search-highlight">$1</mark>');
-    } catch (error) {
-        // If regex construction fails, return text without highlighting
-        console.warn('Failed to highlight search text:', error);
-        return text;
-    }
 }
 
 function escapeHtml(text) {
