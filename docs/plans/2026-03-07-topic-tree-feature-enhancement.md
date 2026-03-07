@@ -184,14 +184,14 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run all tests - must pass before next task
 
 ### Task 10: Write comprehensive tests
-- [ ] Write unit tests for new tree line rendering logic
-- [ ] Write unit tests for expand/collapse state management
-- [ ] Write unit tests for tree search/filter functionality
-- [ ] Write unit tests for top-level sorting logic
-- [ ] Write unit tests for improved drag-and-drop handlers
-- [ ] Write unit tests for settings page form improvements
-- [ ] Write integration tests for complete tree workflows
-- [ ] Run all tests - must pass before next task
+- [x] Write unit tests for new tree line rendering logic
+- [x] Write unit tests for expand/collapse state management
+- [x] Write unit tests for tree search/filter functionality
+- [x] Write unit tests for top-level sorting logic
+- [x] Write unit tests for improved drag-and-drop handlers
+- [x] Write unit tests for settings page form improvements
+- [x] Write integration tests for complete tree workflows
+- [x] Run all tests - must pass before next task
 
 ### Task 11: Verify acceptance criteria
 - [ ] Verify tree lines display correctly for all depth levels
