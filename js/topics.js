@@ -19,6 +19,24 @@ const MAX_TOPIC_NAME_LENGTH = 200;
 const MIN_PROMPT_LENGTH = 10;
 const MAX_PROMPT_LENGTH = 10000;
 
+// Performance optimization constants
+const VIRTUAL_SCROLL_THRESHOLD = 100; // Enable virtual scrolling above this many topics
+const VIRTUAL_SCROLL_ITEM_HEIGHT = 80; // Estimated height of each topic item in pixels
+const SEARCH_DEBOUNCE_MS = 300; // Debounce delay for search input in milliseconds
+
+// Debounce utility function
+export function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 // Validation functions with improved error messages
 export function validateTopicName(name) {
     if (!name || name.trim().length === 0) {
@@ -308,22 +326,33 @@ export function sortTopics(topics, sortOrder = state.topicSortOrder || 'tree') {
 export function buildTopicTree(topics, sortOrder = state.topicSortOrder || 'tree') {
     const nodesById = new Map();
 
-    topics.forEach(topic => {
-        nodesById.set(topic.id, {
-            ...topic,
+    // Pre-allocate and populate the map - more efficient than object spread
+    for (let i = 0; i < topics.length; i++) {
+        const topic = topics[i];
+        const node = {
+            id: topic.id,
+            name: topic.name,
+            prompt: topic.prompt,
             parent_id: topic.parent_id || '',
+            sort_order: topic.sort_order,
+            created_at: topic.created_at,
             children: []
-        });
-    });
+        };
+        nodesById.set(topic.id, node);
+    }
 
+    // Build tree structure - more efficient than forEach
     const roots = [];
-    nodesById.forEach(node => {
-        if (node.parent_id && node.parent_id !== node.id && nodesById.has(node.parent_id)) {
-            nodesById.get(node.parent_id).children.push(node);
-            return;
+    for (const node of nodesById.values()) {
+        if (node.parent_id && node.parent_id !== node.id) {
+            const parent = nodesById.get(node.parent_id);
+            if (parent) {
+                parent.children.push(node);
+                continue;
+            }
         }
         roots.push(node);
-    });
+    }
 
     sortTreeNodes(roots, sortOrder);
     return { roots, nodesById };
@@ -350,14 +379,19 @@ function flattenTopicTree(roots, nodesById, searchExpandedIds = new Set()) {
     const flattened = [];
     const visited = new Set();
 
-    const visitSiblings = (siblings, depth, parentId) => {
-        siblings.forEach((node, indexInParent) => {
-            visitNode(node, depth, parentId, indexInParent, siblings.length);
-        });
-    };
+    // Use stack-based iteration instead of recursion for better performance
+    // This reduces call stack overhead and can handle deeper trees
+    const stack = [];
 
-    const visitNode = (node, depth, parentId, indexInParent, totalSiblings) => {
-        if (visited.has(node.id)) return;
+    // Initialize stack with roots (in reverse order for correct processing)
+    for (let i = roots.length - 1; i >= 0; i--) {
+        stack.push({ node: roots[i], depth: 0, parentId: '', indexInParent: i, totalSiblings: roots.length });
+    }
+
+    while (stack.length > 0) {
+        const { node, depth, parentId, indexInParent, totalSiblings } = stack.pop();
+
+        if (visited.has(node.id)) continue;
         visited.add(node.id);
 
         flattened.push({
@@ -372,19 +406,217 @@ function flattenTopicTree(roots, nodesById, searchExpandedIds = new Set()) {
         // During search, topics with matching descendants are automatically expanded
         const shouldShowChildren = node.children.length > 0 &&
             (!isTopicCollapsed(node.id) || searchExpandedIds.has(node.id));
-        if (shouldShowChildren) {
-            visitSiblings(node.children, depth + 1, node.id);
-        }
-    };
 
-    visitSiblings(roots, 0, '');
-    nodesById.forEach(node => {
+        if (shouldShowChildren) {
+            // Add children to stack (in reverse order for correct processing)
+            for (let i = node.children.length - 1; i >= 0; i--) {
+                stack.push({
+                    node: node.children[i],
+                    depth: depth + 1,
+                    parentId: node.id,
+                    indexInParent: i,
+                    totalSiblings: node.children.length
+                });
+            }
+        }
+    }
+
+    // Visit any orphaned nodes (nodes without parents that weren't in roots)
+    for (const node of nodesById.values()) {
         if (!visited.has(node.id)) {
-            visitNode(node, 0, node.parent_id || '', 0, 1);
+            flattened.push({
+                topic: node,
+                depth: 0,
+                parentId: node.parent_id || '',
+                indexInParent: 0,
+                totalSiblings: 1,
+            });
+        }
+    }
+
+    return flattened;
+}
+
+// Virtual scrolling helper functions
+function calculateVisibleRange(containerHeight, scrollTop) {
+    const visibleStart = Math.floor(scrollTop / VIRTUAL_SCROLL_ITEM_HEIGHT);
+    const visibleEnd = Math.ceil((scrollTop + containerHeight) / VIRTUAL_SCROLL_ITEM_HEIGHT);
+
+    // Add buffer for smoother scrolling (render extra items above and below viewport)
+    const buffer = 3;
+    return {
+        startIndex: Math.max(0, visibleStart - buffer),
+        endIndex: visibleEnd + buffer
+    };
+}
+
+function setupVirtualScroll() {
+    // Add scroll event listener for virtual scrolling
+    dom.topicsList.addEventListener('scroll', () => {
+        if (!state.virtualScrollEnabled) return;
+
+        const scrollTop = dom.topicsList.scrollTop;
+        const containerHeight = dom.topicsList.clientHeight;
+
+        const { startIndex, endIndex } = calculateVisibleRange(containerHeight, scrollTop);
+
+        // Only re-render if the visible range has changed
+        if (startIndex !== state.virtualScrollStartIndex || endIndex !== state.virtualScrollEndIndex) {
+            state.virtualScrollStartIndex = startIndex;
+            state.virtualScrollEndIndex = endIndex;
+            renderVirtualScrollItems();
+        }
+    });
+}
+
+function renderVirtualScrollItems() {
+    // Clear current items but keep the container
+    const container = dom.topicsList;
+
+    // Only render items in the visible range
+    const start = state.virtualScrollStartIndex;
+    const end = Math.min(state.virtualScrollEndIndex, state.flattenedTopicNodes.length);
+
+    // Use DocumentFragment for better performance when adding multiple nodes
+    const fragment = document.createDocumentFragment();
+
+    for (let i = start; i < end; i++) {
+        const nodeData = state.flattenedTopicNodes[i];
+        if (!nodeData) continue;
+
+        const item = createTopicItem(nodeData.topic, nodeData.depth, nodeData.parentId,
+                                     nodeData.indexInParent, nodeData.totalSiblings);
+        fragment.appendChild(item);
+    }
+
+    container.appendChild(fragment);
+
+    // Set container height to accommodate all items (for scroll bar)
+    const totalHeight = state.flattenedTopicNodes.length * VIRTUAL_SCROLL_ITEM_HEIGHT;
+    container.style.height = `${totalHeight}px`;
+    container.style.position = 'relative';
+}
+
+function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings) {
+    // Create a single topic item element
+    // This is extracted from renderTopicsList to avoid code duplication
+    const { nodesById } = buildTopicTree(state.topics, state.topicSortOrder || 'tree');
+
+    const topicDiv = document.createElement('div');
+    topicDiv.className = 'topic-list-item topic-tree-item flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 mb-2 rounded border border-gray-200';
+    topicDiv.draggable = true;
+    topicDiv.dataset.topicId = topic.id;
+    topicDiv.style.marginLeft = `${depth * 20}px`;
+
+    const hasChildren = topic.children.length > 0;
+    const isCollapsed = hasChildren && isTopicCollapsed(topic.id);
+    const chevronDirection = isCollapsed ? 'right' : 'down';
+    const chevronClass = isCollapsed ? 'chevron-right' : 'chevron-down';
+    const childBadge = hasChildren ? `<span class="text-xs text-gray-500 ml-2">(${topic.children.length})</span>` : '';
+
+    const displayName = state.topicsSearchQuery
+        ? highlightText(escapeHtml(topic.name), state.topicsSearchQuery)
+        : escapeHtml(topic.name);
+
+    topicDiv.innerHTML = `
+        <div class="flex flex-col min-w-0">
+            <div class="font-semibold topic-item-name flex items-center">
+                ${hasChildren ? `<button class="topic-collapse-btn ${chevronClass} mr-2 p-1 hover:bg-gray-200 rounded" data-topic-id="${topic.id}" aria-label="${isCollapsed ? 'Expand' : 'Collapse'} ${topic.name}" aria-expanded="${isCollapsed ? 'false' : 'true'}">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M4 6H8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M6 4V8" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="${chevronClass === 'chevron-right' ? '' : 'hidden'}"/>
+                    </svg>
+                </button>` : '<span class="w-6 mr-2" aria-hidden="true"></span>'}
+                <span class="topic-icon mr-2" data-topic-id="${topic.id}" aria-hidden="true">
+                    ${hasChildren ? getFolderIcon() : getFileIcon()}
+                </span>
+                <span class="text-gray-400 mr-2 select-none" aria-hidden="true">::</span>
+                <span class="truncate">${displayName}</span>
+                ${childBadge}
+            </div>
+            <div class="topic-item-date">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
+        </div>
+        <div class="flex gap-2 mt-2 sm:mt-0" role="toolbar" aria-label="Topic actions">
+            <button class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn" data-topic-id="${topic.id}" aria-label="Add child topic to ${topic.name}">Add child</button>
+            <button class="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 edit-topic-btn" data-topic-id="${topic.id}" aria-label="Edit topic ${topic.name}">Edit</button>
+            <button class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn" data-topic-id="${topic.id}" aria-label="Delete topic ${topic.name}">Delete</button>
+        </div>
+    `;
+
+    // Add tree lines for visual hierarchy
+    if (depth > 0) {
+        const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings);
+        topicDiv.insertBefore(treeLinesContainer, topicDiv.firstChild);
+    }
+
+    // Add event handlers
+    const collapseBtn = topicDiv.querySelector('.topic-collapse-btn');
+    if (collapseBtn) {
+        collapseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleTopicCollapse(topic.id);
+            renderTopicsList();
+        });
+    }
+
+    const addChildBtn = topicDiv.querySelector('.add-child-btn');
+    const editBtn = topicDiv.querySelector('.edit-topic-btn');
+    const deleteBtn = topicDiv.querySelector('.delete-topic-btn');
+
+    addChildBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showAddTopicForm(e.currentTarget.dataset.topicId);
+    });
+
+    editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showPromptEditor(e.currentTarget.dataset.topicId);
+    });
+
+    deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteTopic(e.currentTarget.dataset.topicId);
+    });
+
+    // Accessibility: Add keyboard navigation handler
+    topicDiv.addEventListener('keydown', handleTopicKeyboard);
+
+    // Drag and drop handlers
+    let draggedTopicId = null;
+    let isMoveInProgress = false;
+    let dragGhostElement = null;
+
+    topicDiv.addEventListener('dragstart', (event) => {
+        draggedTopicId = topic.id;
+        topicDiv.classList.add('topic-dragging');
+
+        dragGhostElement = createDragGhost(topicDiv);
+        updateDragGhostPosition(event);
+
+        if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', topic.id);
+            const emptyImg = new Image();
+            emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+            event.dataTransfer.setDragImage(emptyImg, 0, 0);
         }
     });
 
-    return flattened;
+    topicDiv.addEventListener('dragend', () => {
+        draggedTopicId = null;
+        topicDiv.classList.remove('topic-dragging');
+        clearDropHighlights();
+        removeDragGhost();
+    });
+
+    attachDropHandlers(topicDiv, {
+        targetParentId: topic.id,
+        targetPosition: null,
+        nodesById,
+        isChildDrop: true,
+    });
+
+    return topicDiv;
 }
 
 function findMatchingTopics(searchQuery, nodesById) {
@@ -617,6 +849,42 @@ export function renderTopicsList() {
         return;
     }
 
+    // Cache flattened nodes for virtual scrolling
+    state.flattenedTopicNodes = flattenedNodes;
+
+    // Check if virtual scrolling should be enabled
+    const shouldUseVirtualScroll = state.topics.length >= VIRTUAL_SCROLL_THRESHOLD;
+
+    if (shouldUseVirtualScroll) {
+        // Enable virtual scrolling mode
+        state.virtualScrollEnabled = true;
+
+        // Setup scroll handler if not already set up
+        if (!dom.topicsList.hasAttribute('data-virtual-scroll-setup')) {
+            setupVirtualScroll();
+            dom.topicsList.setAttribute('data-virtual-scroll-setup', 'true');
+        }
+
+        // Reset scroll position and render initial visible items
+        dom.topicsList.scrollTop = 0;
+        state.virtualScrollStartIndex = 0;
+
+        // Calculate initial visible range
+        const containerHeight = dom.topicsList.clientHeight || 600;
+        const { endIndex } = calculateVisibleRange(containerHeight, 0);
+        state.virtualScrollEndIndex = endIndex;
+
+        // Render initial visible items
+        renderVirtualScrollItems();
+
+    } else {
+        // Disable virtual scrolling mode and render all items
+        state.virtualScrollEnabled = false;
+        renderAllTopics(flattenedNodes, nodesById);
+    }
+}
+
+function renderAllTopics(flattenedNodes, nodesById) {
     flattenedNodes.forEach(({ topic, depth, parentId, indexInParent, totalSiblings }) => {
         const beforeZone = createSiblingDropZone(depth, parentId, indexInParent, nodesById);
         dom.topicsList.appendChild(beforeZone);

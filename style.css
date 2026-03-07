@@ -738,6 +738,34 @@ button .loading-spinner {
     transition: transform 0.1s ease;
 }
 
+/* Virtual scrolling styles */
+#topics-list.virtual-scroll-enabled {
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    scroll-behavior: smooth;
+}
+
+#topics-list.virtual-scroll-enabled .topic-list-item {
+    position: absolute;
+    width: 100%;
+    box-sizing: border-box;
+    transition: opacity 0.1s ease;
+}
+
+#topics-list.virtual-scroll-enabled .topic-gap-drop-zone {
+    position: absolute;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Performance optimization: Reduce layout thrashing */
+.topic-list-item,
+.topic-gap-drop-zone {
+    will-change: transform;
+    contain: layout style paint;
+}
+
 /* Drop zone indicator styling */
 .topic-gap-drop-zone {
     height: 0.75rem;

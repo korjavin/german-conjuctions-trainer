@@ -44,6 +44,7 @@ import {
     getFolderIcon,
     getFileIcon,
     getTopicPath,
+    debounce,
 } from './topics.js';
 import {
     checkAuthStatus,
@@ -107,8 +108,8 @@ dom.saveTopicBtn.addEventListener('click', saveTopic);
 dom.cancelEditBtn.addEventListener('click', hidePromptEditor);
 dom.savePromptBtn.addEventListener('click', savePrompt);
 
-// Topics search input
-dom.topicsSearchInput.addEventListener('input', () => {
+// Topics search input with debouncing
+dom.topicsSearchInput.addEventListener('input', debounce(() => {
     state.topicsSearchQuery = dom.topicsSearchInput.value.trim();
     if (state.topicsSearchQuery) {
         dom.topicsSearchClear.classList.remove('hidden');
@@ -116,7 +117,7 @@ dom.topicsSearchInput.addEventListener('input', () => {
         dom.topicsSearchClear.classList.add('hidden');
     }
     renderTopicsList();
-});
+}, 300));
 
 dom.topicsSearchClear.addEventListener('click', () => {
     dom.topicsSearchInput.value = '';

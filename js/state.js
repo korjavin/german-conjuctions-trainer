@@ -142,7 +142,12 @@ export const state = {
     historyPage: 1,
     historyItemsPerPage: 10,
     historyFilterReady: false,
-    historyFilterFavorites: false
+    historyFilterFavorites: false,
+    // Virtual scrolling state
+    virtualScrollEnabled: false,
+    virtualScrollStartIndex: 0,
+    virtualScrollEndIndex: 0,
+    flattenedTopicNodes: [], // Cached flattened nodes for virtual scrolling
 };
 
 export function toggleTopicCollapse(topicId) {

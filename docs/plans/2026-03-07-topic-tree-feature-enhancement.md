@@ -176,12 +176,12 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run all tests - must pass before next task
 
 ### Task 9: Add performance optimizations for large trees
-- [ ] Implement virtual scrolling for large topic lists (> 100 topics)
-- [ ] Optimize tree building and flattening algorithms
-- [ ] Add debouncing for search input
-- [ ] Test performance with 100+ topics
-- [ ] Test virtual scrolling maintains smooth interactions
-- [ ] Run all tests - must pass before next task
+- [x] Implement virtual scrolling for large topic lists (> 100 topics)
+- [x] Optimize tree building and flattening algorithms
+- [x] Add debouncing for search input
+- [x] Test performance with 100+ topics
+- [x] Test virtual scrolling maintains smooth interactions
+- [x] Run all tests - must pass before next task
 
 ### Task 10: Write comprehensive tests
 - [ ] Write unit tests for new tree line rendering logic
