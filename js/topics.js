@@ -185,8 +185,14 @@ export function setFormLoading(formType, isLoading, button) {
     }
 }
 
+// Guards to prevent re-adding form listeners on repeated form opens
+const _formValidationSetup = { add: false, edit: false };
+const _formKeyboardSetup = { add: false, edit: false };
+
 // Real-time validation
 export function setupFormValidation(formType) {
+    if (_formValidationSetup[formType]) return;
+    _formValidationSetup[formType] = true;
     if (formType === 'add') {
         dom.newTopicName.addEventListener('input', () => {
             const parentSelect = document.getElementById('new-topic-parent');
@@ -222,6 +228,8 @@ export function setupFormValidation(formType) {
 
 // Keyboard shortcuts for forms
 export function setupFormKeyboardShortcuts(formType, saveAction, cancelAction) {
+    if (_formKeyboardSetup[formType]) return;
+    _formKeyboardSetup[formType] = true;
     const form = formType === 'add' ? dom.addTopicForm : dom.promptEditor;
 
     form.addEventListener('keydown', (e) => {
@@ -551,23 +559,25 @@ function renderVirtualScrollItems() {
         const nodeData = state.flattenedTopicNodes[i];
         if (!nodeData) continue;
 
-        // Add drop zone before each item (for sibling reordering)
+        // Add drop zone before each item (for sibling reordering).
+        // Allocate the top 12px of each slot for the drop zone; item fills the remainder.
+        const DROP_ZONE_HEIGHT = 12;
         const beforeZone = createSiblingDropZone(nodeData.depth, nodeData.parentId, nodeData.indexInParent, state.nodesById);
         beforeZone.style.position = 'absolute';
         beforeZone.style.top = `${i * VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
         beforeZone.style.left = '0';
         beforeZone.style.width = '100%';
-        beforeZone.style.height = `${VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
+        // Use CSS default height (0.75rem ≈ 12px); do not override to full slot height
         fragment.appendChild(beforeZone);
 
         const item = createTopicItem(nodeData.topic, nodeData.depth, nodeData.parentId,
                                      nodeData.indexInParent, nodeData.totalSiblings, state.nodesById, true);
-        // Position item at its correct scroll offset
+        // Position item below the drop zone within the same slot
         item.style.position = 'absolute';
-        item.style.top = `${i * VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
+        item.style.top = `${i * VIRTUAL_SCROLL_ITEM_HEIGHT + DROP_ZONE_HEIGHT}px`;
         item.style.left = '0';
         item.style.width = '100%';
-        item.style.height = `${VIRTUAL_SCROLL_ITEM_HEIGHT}px`; // Set explicit height for tree lines to work
+        item.style.height = `${VIRTUAL_SCROLL_ITEM_HEIGHT - DROP_ZONE_HEIGHT}px`;
         fragment.appendChild(item);
     }
 
@@ -603,7 +613,7 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
     topicDiv.innerHTML = `
         <div class="flex flex-col min-w-0">
             <div class="font-semibold topic-item-name flex items-center">
-                ${hasChildren ? `<button class="topic-collapse-btn ${chevronClass} mr-2 p-1 hover:bg-gray-200 rounded" data-topic-id="${topic.id}" aria-label="${isCollapsed ? 'Expand' : 'Collapse'} ${topic.name}" aria-expanded="${isCollapsed ? 'false' : 'true'}">
+                ${hasChildren ? `<button class="topic-collapse-btn ${chevronClass} mr-2 p-1 hover:bg-gray-200 rounded" data-topic-id="${topic.id}" aria-label="${isCollapsed ? 'Expand' : 'Collapse'} ${escapeHtml(topic.name)}" aria-expanded="${isCollapsed ? 'false' : 'true'}">
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M4 6H8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                         <path d="M6 4V8" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="${chevronClass === 'chevron-right' ? '' : 'hidden'}"/>
@@ -619,9 +629,9 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
             <div class="topic-item-date">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
         </div>
         <div class="flex gap-2 mt-2 sm:mt-0" role="toolbar" aria-label="Topic actions">
-            <button class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn" data-topic-id="${topic.id}" aria-label="Add child topic to ${topic.name}">Add child</button>
-            <button class="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 edit-topic-btn" data-topic-id="${topic.id}" aria-label="Edit topic ${topic.name}">Edit</button>
-            <button class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn" data-topic-id="${topic.id}" aria-label="Delete topic ${topic.name}">Delete</button>
+            <button class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn" data-topic-id="${topic.id}" aria-label="Add child topic to ${escapeHtml(topic.name)}">Add child</button>
+            <button class="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 edit-topic-btn" data-topic-id="${topic.id}" aria-label="Edit topic ${escapeHtml(topic.name)}">Edit</button>
+            <button class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn" data-topic-id="${topic.id}" aria-label="Delete topic ${escapeHtml(topic.name)}">Delete</button>
         </div>
     `;
 
@@ -1570,9 +1580,12 @@ export function showAddTopicForm(parentId = null) {
         });
         parentSelect.value = parentId || '';
 
-        // Add change listener for hierarchy preview
-        parentSelect.addEventListener('change', () => {
-            updateHierarchyPreview(parentSelect, dom.addTopicPreviewPath, dom.newTopicName.value.trim());
+        // Add change listener for hierarchy preview (clone to remove previous listeners)
+        const freshParentSelect = parentSelect.cloneNode(true);
+        parentSelect.parentNode.replaceChild(freshParentSelect, parentSelect);
+        freshParentSelect.value = parentId || '';
+        freshParentSelect.addEventListener('change', () => {
+            updateHierarchyPreview(freshParentSelect, dom.addTopicPreviewPath, dom.newTopicName.value.trim());
             if (dom.newTopicName.value.trim()) {
                 dom.addTopicHierarchyPreview.classList.remove('hidden');
             }
@@ -1628,9 +1641,11 @@ export function showPromptEditor(topicId) {
         });
         editParentSelect.value = topic.parent_id || '';
 
-        // Add change listener for hierarchy preview
-        editParentSelect.addEventListener('change', () => {
-            const newParentId = editParentSelect.value;
+        // Add change listener for hierarchy preview (clone to remove previous listeners)
+        const freshEditParentSelect = editParentSelect.cloneNode(true);
+        editParentSelect.parentNode.replaceChild(freshEditParentSelect, editParentSelect);
+        freshEditParentSelect.addEventListener('change', () => {
+            const newParentId = freshEditParentSelect.value;
             if (newParentId) {
                 const parentPath = getTopicPath(newParentId, state.topics);
                 dom.editTopicCurrentPath.textContent = `${parentPath} / ${topic.name}`;
@@ -1823,7 +1838,7 @@ export function saveTopic() {
     const promptError = validateTopicPrompt(prompt);
     if (promptError) {
         showFieldError(dom.newTopicPrompt, dom.newTopicPromptError, promptError);
-        dom.promptTextarea.focus();
+        dom.newTopicPrompt.focus();
         return;
     }
 

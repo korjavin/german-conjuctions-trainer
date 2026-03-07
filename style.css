@@ -740,6 +740,7 @@ button .loading-spinner {
 
 /* Virtual scrolling styles */
 #topics-list.virtual-scroll-enabled {
+    height: 400px;
     overflow-y: auto;
     overflow-x: hidden;
     position: relative;
@@ -836,6 +837,13 @@ button .loading-spinner {
     right: 0;
     pointer-events: none;
     z-index: 0;
+}
+
+/* In virtual scroll mode, keep tree lines within item bounds to avoid overflow-x: hidden clipping */
+#topics-list.virtual-scroll-enabled .tree-lines-container {
+    left: 0;
+    padding-left: 20px;
+    box-sizing: border-box;
 }
 
 .tree-line-vertical {
