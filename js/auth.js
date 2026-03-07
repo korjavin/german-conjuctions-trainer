@@ -45,13 +45,13 @@ export function updateAuthUI() {
         dom.logoutBtn.classList.remove('hidden');
         dom.statsBtn.classList.remove('hidden');
         dom.historyBtn.classList.remove('hidden');
-        dom.hideExerciseBtn.classList.remove('hidden');
+        dom.skipRemoveBtn.classList.remove('hidden');
     } else {
         dom.loginBtn.classList.remove('hidden');
         dom.logoutBtn.classList.add('hidden');
         dom.statsBtn.classList.add('hidden');
         dom.historyBtn.classList.add('hidden');
-        dom.hideExerciseBtn.classList.add('hidden');
+        dom.skipRemoveBtn.classList.add('hidden');
     }
 
     if (state.isAdmin) {
