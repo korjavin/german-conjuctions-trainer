@@ -103,7 +103,27 @@ On first startup, the application will create two default topics:
 - **Verb + Preposition**: Verb-preposition combinations
 
 ### Topic Hierarchy
-Topics can be organized hierarchically in a tree structure. You can assign a parent topic to any new or existing topic to keep your exercises neatly categorized (e.g., "Grammar" -> "Verbs" -> "Verb + Preposition"). Deleting a topic that has children is prevented with a HTTP 409 Conflict to ensure data integrity.
+Topics can be organized hierarchically in a tree structure with advanced features:
+
+- **Visual Tree Lines**: Clear visual connectors show parent-child relationships at any depth level
+- **Expand/Collapse**: Collapse branches to reduce clutter, with state persisted across sessions
+- **Topic Icons**: Folder icons for topics with children, file icons for leaf topics
+- **Search & Filter**: Instant search with auto-expansion of parent topics and text highlighting
+- **Top-Level Sorting**: Sort top-level topics by name (A-Z, Z-A), date (newest/oldest), or custom order without affecting nested children
+- **Enhanced Drag-and-Drop**: Improved visual feedback with ghost preview, drop zone indicators, and animations
+- **Better Form UX**: Real-time validation, hierarchy preview, recently-used topics quick-select, and keyboard shortcuts (Ctrl+Enter to save, Escape to cancel)
+- **Accessibility**: Full keyboard navigation (Arrow keys, Home, End, Enter/Space to expand), ARIA attributes, and screen reader announcements
+- **Performance**: Virtual scrolling for large topic lists (100+ topics) and debounced search input
+
+You can assign a parent topic to any new or existing topic to keep your exercises neatly categorized (e.g., "Grammar" -> "Verbs" -> "Verb + Preposition"). Deleting a topic that has children is prevented with a HTTP 409 Conflict to ensure data integrity.
+
+**Keyboard Shortcuts for Topic Tree:**
+- Arrow Up/Down/Left/Right: Navigate between topics
+- Home: Jump to first topic
+- End: Jump to last topic
+- Enter or Space: Toggle expand/collapse for topics with children
+- Escape: Exit tree navigation
+- Ctrl+F or Cmd+F: Focus topic search input
 
 ## Custom API Providers
 

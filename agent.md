@@ -115,7 +115,215 @@ GET /api/last-refined-prompt // Get the most recently used refined prompt
 - **Version Management**: Automatic versioning for topic prompts.
 - **Default Topics**: Auto-creation on first startup if the database is empty.
 
-## Frontend (app.js)
+## Frontend (js/main.js, js/topics.js, js/state.js, js/dom.js)
+
+### File Structure
+The frontend has been reorganized into modular JavaScript files:
+- `js/main.js`: Main application entry point, event handlers, and core logic
+- `js/topics.js`: Topic tree management, including rendering, drag-and-drop, and UI interactions
+- `js/state.js`: Application state management (topics, exercises, user data)
+- `js/dom.js`: DOM element references and caching
+- `js/api.js`: API calls to backend
+- `js/exercise.js`: Exercise rendering and word scrambling logic
+- `js/session.js`: Session management and statistics
+- `js/audio.js`: Text-to-speech functionality
+- `js/history.js`: Version history management for topics
+- `js/auth.js`: Google OAuth authentication
+
+### Topic Tree Features
+
+The application includes a comprehensive topic tree management system with advanced features for organizing, searching, and managing grammar topics.
+
+#### Visual Hierarchy
+- **Tree Lines**: Vertical and horizontal lines connect parent to child topics, making it easy to understand relationships at any depth
+- **Depth-Based Indentation**: Topics are indented 20px per depth level for visual clarity
+- **Topic Icons**: Folder icons (amber) for topics with children, file icons (gray) for leaf topics
+
+#### Expand/Collapse Functionality
+- Topics can be collapsed to reduce clutter in the tree view
+- Collapse state is persisted in localStorage (`topic-collapse-state`)
+- Chevron buttons indicate expand/collapse state with rotation animation
+- When collapsed, child topics are hidden from the view
+
+#### Search and Filter
+- Real-time search with debounced input (300ms delay)
+- Text highlighting shows matching characters in topic names
+- Parent topics are automatically expanded when children match the search
+- Keyboard shortcut: Ctrl+F or Cmd+F focuses the search input
+- Clear button to reset search results
+
+#### Sorting Options
+- Top-level topics can be sorted without affecting nested children
+- Sort options: Tree (custom order), Name (A-Z), Name (Z-A), Date (newest), Date (oldest)
+- Sort preference is persisted in localStorage (`topic-toplevel-sort-order`)
+
+#### Drag and Drop
+- Enhanced visual feedback with ghost element preview during drag
+- Drop zone indicators show exactly where a topic will be dropped
+- Parent drop highlighting indicates when a topic can become a child
+- Smooth CSS transitions and animations for drop actions
+- Prevents invalid operations (e.g., making a topic its own parent)
+
+#### Accessibility Features
+- **ARIA Attributes**: `role="tree"`, `role="treeitem"`, `aria-expanded`, `aria-level`, `aria-selected`
+- **Keyboard Navigation**:
+  - Arrow Up/Down/Left/Right: Navigate between topics
+  - Home: Jump to first visible topic
+  - End: Jump to last visible topic
+  - Enter or Space: Toggle expand/collapse for topics with children
+  - Escape: Exit tree navigation
+  - Ctrl+F or Cmd+F: Focus topic search input
+- **Screen Reader Support**: Live region announcements for expand/collapse actions and drag operations
+- **Focus Indicators**: Clear visual feedback when topics are focused via keyboard
+
+### Keyboard Shortcuts Reference
+
+**Topic Tree Navigation (in Settings Modal):**
+- `Arrow Up` / `Arrow Down`: Navigate to previous/next visible topic
+- `Arrow Right` / `Arrow Left`: Alternative navigation (same as Up/Down)
+- `Home`: Jump to first visible topic
+- `End`: Jump to last visible topic
+- `Enter` / `Space`: Toggle expand/collapse for topics with children
+- `Escape`: Exit keyboard navigation and remove focus
+
+**Topic Search:**
+- `Ctrl+F` / `Cmd+F`: Focus the topic search input
+
+**Form Shortcuts (Add/Edit Topic Forms):**
+- `Ctrl+Enter` / `Cmd+Enter`: Save the form
+- `Escape`: Cancel and close the form
+
+**Exercise Interface:**
+- `1-9`, `a-z`: Select the corresponding word in the scrambled list
+- `Enter`: Submit completed sentence (when all words selected)
+- `?` / `h`: Show hint for the next correct word
+
+### Accessibility Implementation Details
+
+**ARIA Tree Pattern:**
+The topic tree implements the WAI-ARIA tree pattern for accessibility:
+
+- Container element has `role="tree"` and `aria-label="Topic tree"`
+- Each topic item has `role="treeitem"` and `tabindex="0"`
+- Parent topics have `aria-expanded` set to "true" or "false"
+- `aria-level` indicates the depth level (1 = root, 2 = child, etc.)
+- `aria-selected` tracks which topic currently has keyboard focus
+- Collapse buttons have `aria-label` with action description (e.g., "Expand [topic name]")
+
+**Screen Reader Announcements:**
+- Uses a live region (`aria-live="polite"`) to announce dynamic changes
+- Announces expand/collapse actions (e.g., "Verbs collapsed", "Grammar expanded")
+- Announces drag operations (e.g., "Conjunctions moved to Grammar")
+- Provides context for navigation (e.g., "Topic N of M")
+
+**Focus Management:**
+- Topics can receive keyboard focus via Tab
+- Arrow keys move focus between visible topics
+- Focus indicators show clear visual state (blue outline in dark mode)
+- `aria-selected` updates when focus moves between topics
+- Pressing Escape removes focus from the tree
+
+**Visual Accessibility:**
+- Color contrast ratios meet WCAG AA standards
+- Tree lines use adequate contrast for visibility
+- Focus indicators have strong visual feedback
+- Icons have aria-hidden="true" to avoid redundant screen reader output
+- Icons are accompanied by text labels where needed
+
+#### Performance Optimizations
+- **Virtual Scrolling**: Enabled for topic lists with 100+ items, rendering only visible topics
+- **Debounced Search**: Search input is debounced to reduce re-renders
+- **Efficient Tree Building**: Stack-based tree flattening instead of recursion for better performance
+- **Tree Caching**: Flattened tree nodes are cached to avoid repeated calculations
+
+#### Form Improvements
+- **Real-Time Validation**: Immediate feedback on topic name and prompt fields
+- **Hierarchy Preview**: Shows the full path where a topic will be created (e.g., "Grammar / Verbs / New Topic")
+- **Recently Used Topics**: Quick-select badges for recently used parent topics
+- **Loading States**: Visual feedback during create/update operations
+- **Keyboard Shortcuts**: Ctrl+Enter to save, Escape to cancel
+
+### Topic Tree Data Structures
+
+```javascript
+// Topic state structure (from state.js)
+{
+  topics: [],                    // Array of all topic objects
+  currentTopicId: '',            // Currently selected topic
+  topicsSearchQuery: '',         // Current search query
+  topicsMatchingIds: Set<string>, // IDs of matching topics
+  topicSortOrder: 'tree',        // Sort order for top-level topics
+  flattenedTopicNodes: [],        // Cached flattened tree structure
+  virtualScrollEnabled: false,   // Whether virtual scrolling is active
+  recentlyUsedTopics: [],         // Recently used topics for quick-select
+}
+
+// Topic tree node structure (built from API topics)
+{
+  id: string,
+  name: string,
+  prompt: string,
+  parent_id: string | null,
+  sort_order: number,
+  created_at: string,
+  children: array               // Array of child tree nodes
+}
+```
+
+### Key Topic Tree Functions (topics.js)
+
+**Tree Building and Flattening:**
+- `buildTopicTree(topics, sortOrder)`: Converts flat topic array to hierarchical tree structure
+- `flattenTopicTree(roots, nodesById, searchExpandedIds)`: Flattens tree to linear array for rendering, respecting collapse state
+- `sortTreeNodes(nodes, sortOrder, isTopLevel)`: Sorts tree nodes, with special handling for top-level only sorting
+
+**Rendering:**
+- `renderTopicsList()`: Main rendering function, handles search, filtering, and virtual scrolling
+- `createTopicItem(topic, depth, parentId, indexInParent, totalSiblings)`: Creates a single topic item with all features
+- `createTreeLines(depth, indexInParent, totalSiblings)`: Generates tree line connectors for visual hierarchy
+- `renderVirtualScrollItems()`: Renders only visible items when virtual scrolling is enabled
+
+**Search and Filter:**
+- `findMatchingTopics(searchQuery, nodesById)`: Finds topics matching search query and expands parent topics
+- `highlightText(text, searchQuery)`: Highlights matching text with `<mark>` tags
+
+**Drag and Drop:**
+- `createDragGhost(sourceElement)`: Creates a ghost preview element for drag operations
+- `updateDragGhostPosition(event)`: Updates ghost element position during drag
+- `attachDropHandlers(element, config)`: Sets up drop zone handlers for sibling and child drops
+- `clearDropHighlights()`: Removes all drop zone highlight styles
+
+**Accessibility:**
+- `handleTopicKeyboard(event)`: Handles keyboard navigation for the topic tree
+- `announceToScreenReader(message)`: Sends announcements to screen readers via ARIA live region
+
+**Form Helpers:**
+- `validateTopicName(name)`: Validates topic name with detailed error messages
+- `validateTopicPrompt(prompt)`: Validates prompt with detailed error messages
+- `updateHierarchyPreview(parentSelect, previewElement, topicName)`: Updates the hierarchy preview in forms
+- `renderRecentlyUsedTopics(containerId, parentSelectId)`: Renders recently-used topic badges
+
+### Topic Tree Storage (localStorage)
+
+The topic tree uses the following localStorage keys for persistence:
+
+- `topic-collapse-state`: JSON object mapping topic IDs to boolean collapse state
+  - Format: `{"topic-id-1": false, "topic-id-2": true}`
+  - Persisted across page reloads to maintain expanded/collapsed state
+
+- `topic-toplevel-sort-order`: String value for sort order preference
+  - Possible values: `'tree'`, `'name-asc'`, `'name-desc'`, `'date-newest'`, `'date-oldest'`
+  - Default: `'tree'` (custom sort order from sort_order field)
+  - Only affects top-level topics, not nested children
+
+- `recently-used-topics`: Array of recently used topic objects for quick-select in forms
+  - Format: `[{id: "topic-id", name: "Topic Name"}, ...]`
+  - Limited to most recent 5 topics
+  - Updated whenever a user creates a new topic or selects a parent in forms
+
+- `selectedTopicId`: The currently selected topic for exercise generation
+  - Format: `"topic-id"` (string)
+  - Persisted to remember last selected topic across sessions
 ### Application State:
 ```javascript
 state = {

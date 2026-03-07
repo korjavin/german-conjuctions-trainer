@@ -209,11 +209,11 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run linter - all issues must be fixed
 
 ### Task 12: Update documentation
-- [ ] Update README.md with new topic tree features
-- [ ] Update agent.md with new topic tree functionality
-- [ ] Add inline code comments for complex tree logic
-- [ ] Document keyboard shortcuts for tree navigation
-- [ ] Document accessibility features
+- [x] Update README.md with new topic tree features
+- [x] Update agent.md with new topic tree functionality
+- [x] Add inline code comments for complex tree logic
+- [x] Document keyboard shortcuts for tree navigation
+- [x] Document accessibility features
 
 ## Technical Details
 

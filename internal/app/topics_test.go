@@ -3,11 +3,11 @@ package app
 import (
 	"bytes"
 	"context"
+	"german-conjunctions-trainer/pkg/storage"
 	"net/http"
 	"net/http/httptest"
-	"testing"
 	"os"
-	"german-conjunctions-trainer/pkg/storage"
+	"testing"
 )
 
 func setupTestApp(t *testing.T) *App {

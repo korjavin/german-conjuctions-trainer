@@ -323,6 +323,22 @@ export function sortTopics(topics, sortOrder = state.topicSortOrder || 'tree') {
     return sorted;
 }
 
+/**
+ * Builds a hierarchical tree structure from a flat list of topics.
+ * This is a core function that transforms the flat database structure into
+ * a nested tree representation for rendering.
+ *
+ * @param {Array} topics - Flat array of topic objects from API
+ * @param {string} sortOrder - Sort order for top-level topics ('tree', 'name-asc', etc.)
+ * @returns {Object} Object containing { roots: Array, nodesById: Map }
+ *   - roots: Array of top-level topic nodes (those with no parent)
+ *   - nodesById: Map of all nodes by ID for efficient lookups
+ *
+ * Performance notes:
+ * - Uses Map for O(1) node lookups instead of O(n) array searches
+ * - Single pass to create all nodes, then single pass to build relationships
+ * - Significantly faster than recursive approaches for large topic sets
+ */
 export function buildTopicTree(topics, sortOrder = state.topicSortOrder || 'tree') {
     const nodesById = new Map();
 
@@ -375,6 +391,22 @@ function sortTreeNodes(nodes, sortOrder, isTopLevel = true) {
     });
 }
 
+/**
+ * Flattens a hierarchical tree structure into a linear array for rendering.
+ * This is the core function that converts the tree back into a flat list
+ * that can be rendered in the DOM, respecting collapse state and search results.
+ *
+ * @param {Array} roots - Array of top-level tree nodes
+ * @param {Map} nodesById - Map of all nodes by ID
+ * @param {Set} searchExpandedIds - Set of topic IDs that should be expanded due to search
+ * @returns {Array} Flat array of { topic, depth, parentId, indexInParent, totalSiblings }
+ *
+ * Key behaviors:
+ * - Skips children of collapsed topics (unless in searchExpandedIds)
+ * - Uses stack-based iteration to avoid call stack limits on deep trees
+ * - Handles orphaned nodes (topics with missing parent references)
+ * - Maintains depth, parent, and sibling relationship information for rendering
+ */
 function flattenTopicTree(roots, nodesById, searchExpandedIds = new Set()) {
     const flattened = [];
     const visited = new Set();
@@ -619,6 +651,22 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings) {
     return topicDiv;
 }
 
+/**
+ * Finds topics matching a search query and determines which parent topics
+ * should be expanded to show the matching results.
+ *
+ * @param {string} searchQuery - The search text to match (case-insensitive)
+ * @param {Map} nodesById - Map of all topic nodes by ID
+ * @returns {Object} Object containing { matchingIds: Set, expandedIds: Set }
+ *   - matchingIds: Set of topic IDs that match the search query
+ *   - expandedIds: Set of parent topic IDs that should be expanded
+ *
+ * Key behavior:
+ * - Case-insensitive text matching on topic names
+ * - Auto-expands all parent topics of matching results
+ * - This ensures users can see matching topics even if they're deep in the tree
+ * - Uses a simple includes() check for flexibility (partial matches)
+ */
 function findMatchingTopics(searchQuery, nodesById) {
     const matchingIds = new Set();
     const lowerQuery = searchQuery.toLowerCase();
@@ -659,6 +707,25 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+/**
+ * Creates visual tree line connectors to show parent-child relationships.
+ * These lines make it easy to understand the hierarchical structure at any depth.
+ *
+ * @param {number} depth - The depth level of the topic (0 = root, 1 = child, etc.)
+ * @param {number} indexInParent - The index of this topic among its siblings
+ * @param {number} totalSiblings - The total number of siblings this topic has
+ * @returns {HTMLElement} Container div with tree line elements
+ *
+ * Visual structure:
+ * - For each depth level above the topic, a vertical line is drawn
+ * - At the final depth (direct parent), a horizontal line connects to the topic
+ * - Lines are positioned using absolute positioning based on depth * 20px
+ * - This creates a visual "folder tree" effect like file explorers
+ *
+ * Note: This is currently a simple implementation. In a full implementation,
+ * you would need to track whether siblings above the current topic continue
+ * their vertical lines down to avoid gaps in the tree visualization.
+ */
 function createTreeLines(depth, indexInParent, totalSiblings) {
     const container = document.createElement('div');
     container.className = 'tree-lines-container';
@@ -757,7 +824,22 @@ function getVisibleTopicItems() {
     return Array.from(dom.topicsList.querySelectorAll('[data-topic-id]'));
 }
 
-// Accessibility: Handle keyboard navigation for topic tree
+/**
+ * Handles keyboard navigation for the topic tree.
+ * Provides comprehensive keyboard control for users who prefer not to use a mouse
+ * or who use assistive technologies.
+ *
+ * Keyboard shortcuts:
+ * - Arrow Up/Down: Navigate to previous/next visible topic
+ * - Arrow Right: Move to next visible topic (alternative to Down)
+ * - Arrow Left: Move to previous visible topic (alternative to Up)
+ * - Home: Jump to first visible topic in the tree
+ * - End: Jump to last visible topic in the tree
+ * - Enter or Space: Toggle expand/collapse for topics with children
+ * - Escape: Exit keyboard navigation and remove focus from tree
+ *
+ * @param {KeyboardEvent} event - The keyboard event to handle
+ */
 function handleTopicKeyboard(event) {
     const topicItem = event.currentTarget;
     const topicId = topicItem.dataset.topicId;
@@ -813,6 +895,29 @@ function handleTopicKeyboard(event) {
     }
 }
 
+/**
+ * Main rendering function for the topic tree.
+ * This function orchestrates the entire rendering process, handling:
+ * - Tree building from flat data
+ * - Search filtering and highlighting
+ * - Collapse state management
+ * - Virtual scrolling for large trees
+ * - ARIA accessibility attributes
+ *
+ * Rendering flow:
+ * 1. Clear existing tree
+ * 2. Build hierarchical tree structure
+ * 3. Apply search filter if active (auto-expand parents of matches)
+ * 4. Flatten tree respecting collapse state
+ * 5. Choose rendering strategy (virtual scroll vs. full render)
+ * 6. Render topic items with all features (tree lines, icons, actions)
+ *
+ * State dependencies:
+ * - state.topics: Array of all topic objects
+ * - state.topicsSearchQuery: Current search filter text
+ * - state.topicSortOrder: Sort order for top-level topics
+ * - state.flattenedTopicNodes: Cached flattened tree (for virtual scroll)
+ */
 export function renderTopicsList() {
     dom.topicsList.innerHTML = '';
     // Add ARIA role="tree" to the container
@@ -1047,6 +1152,27 @@ function createSiblingDropZone(depth, targetParentId, targetPosition, nodesById)
     return zone;
 }
 
+/**
+ * Attaches drag-and-drop event handlers to a drop zone element.
+ * This function enables users to drag topics to reorder them or make them children of other topics.
+ *
+ * @param {HTMLElement} element - The element to attach handlers to (drop zone or topic item)
+ * @param {Object} options - Configuration for the drop behavior
+ * @param {string|null} options.targetParentId - ID of topic to make dragged topic a child of (null for root level)
+ * @param {number|null} options.targetPosition - Position index for sibling reordering (null for child drops)
+ * @param {Map} options.nodesById - Map of all topic nodes for cycle detection
+ * @param {boolean} options.isChildDrop - True if dropping as child, false if reordering siblings
+ *
+ * Visual feedback:
+ * - .topic-drop-active: Highlights the active drop zone
+ * - .parent-drop-highlight: Highlights parent topic when dropping as child
+ * - .sibling-drop-highlight: Highlights sibling when reordering
+ * - .topic-drop-complete: Animation class after successful drop
+ *
+ * Error handling:
+ * - Prevents dropping a topic into itself or its descendants (cycle detection)
+ * - Shows alert if operation would create invalid tree structure
+ */
 function attachDropHandlers(element, options) {
     const { targetParentId, targetPosition, nodesById, isChildDrop } = options;
     let parentElement = null;
@@ -1135,6 +1261,24 @@ function attachDropHandlers(element, options) {
     });
 }
 
+/**
+ * Detects if moving a topic would create a cycle in the tree structure.
+ * A cycle occurs when a topic becomes a descendant of itself, which would
+ * create an infinite loop when traversing the tree.
+ *
+ * @param {Map} nodesById - Map of all topic nodes by ID
+ * @param {string} draggedId - ID of the topic being dragged
+ * @param {string} targetParentId - ID of the topic being dropped onto (potential new parent)
+ * @returns {boolean} True if creating a cycle (invalid operation), false otherwise
+ *
+ * Examples of cycles:
+ * - Dragging Topic A onto Topic B where B is a child of A
+ * - Dragging Topic A onto Topic C where C is a descendant of A
+ *
+ * This function traverses up the tree from the targetParentId checking if
+ * we ever encounter the draggedId. If we do, moving the topic there would
+ * create a cycle.
+ */
 function wouldCreateCycle(nodesById, draggedId, targetParentId) {
     let cursor = targetParentId;
     const visited = new Set();
