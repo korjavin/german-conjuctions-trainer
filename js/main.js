@@ -93,6 +93,25 @@ dom.saveTopicBtn.addEventListener('click', saveTopic);
 dom.cancelEditBtn.addEventListener('click', hidePromptEditor);
 dom.savePromptBtn.addEventListener('click', savePrompt);
 
+// Topics search input
+dom.topicsSearchInput.addEventListener('input', () => {
+    state.topicsSearchQuery = dom.topicsSearchInput.value.trim();
+    if (state.topicsSearchQuery) {
+        dom.topicsSearchClear.classList.remove('hidden');
+    } else {
+        dom.topicsSearchClear.classList.add('hidden');
+    }
+    renderTopicsList();
+});
+
+dom.topicsSearchClear.addEventListener('click', () => {
+    dom.topicsSearchInput.value = '';
+    state.topicsSearchQuery = '';
+    dom.topicsSearchClear.classList.add('hidden');
+    renderTopicsList();
+    dom.topicsSearchInput.focus();
+});
+
 dom.viewVersionsBtn.addEventListener('click', () => {
     if (state.editingTopicId) {
         showVersionHistory(state.editingTopicId);
@@ -171,6 +190,17 @@ window.addEventListener('scroll', () => {
 document.addEventListener('click', (e) => {
     if (!dom.topicSearch.contains(e.target) && !dom.topicDropdown.contains(e.target)) {
         dom.topicDropdown.classList.add('hidden');
+    }
+});
+
+// Keyboard shortcut for topics search (Ctrl+F / Cmd+F)
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        // Only focus search if settings modal is open
+        if (dom.settingsModal.open && !dom.topicsSearchInput.contains(e.target)) {
+            e.preventDefault();
+            dom.topicsSearchInput.focus();
+        }
     }
 });
 

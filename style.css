@@ -1126,3 +1126,13 @@ button:disabled.is-audio-off {
     border-color: #facc15 !important;
     color: #a16207 !important;
 }
+
+/* Search highlight */
+.search-highlight {
+    background-color: #fef08a;
+    color: #854d0e;
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 600;
+}
+}

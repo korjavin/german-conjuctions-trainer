@@ -185,6 +185,14 @@
                         <button id="add-topic-btn" class="btn-primary btn-sm">Add New Topic</button>
                     </div>
                 </div>
+                <div class="relative mb-3">
+                    <input type="text" id="topics-search-input" class="form-input w-full pr-10" placeholder="Search topics (Ctrl+F / Cmd+F)...">
+                    <button id="topics-search-clear" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden" aria-label="Clear search">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
                 <p class="section-desc mb-2">Drop on a topic to make it a child, or drop between topics to reorder siblings.</p>
                 <div id="topics-list" class="topics-list">
                     <!-- Topics will be loaded here -->

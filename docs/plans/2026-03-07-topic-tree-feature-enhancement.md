@@ -116,18 +116,18 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run all tests - must pass before next task
 
 ### Task 4: Add tree search/filter functionality
-- [ ] Add search input field to topics section in settings modal
-- [ ] Add search/filter state to state management
-- [ ] Implement filtering logic in `renderTopicsList()` to show only matching topics
-- [ ] Auto-expand parent topics when child matches search
-- [ ] Highlight matching text in topic names
-- [ ] Add clear search button
-- [ ] Add keyboard shortcut (Ctrl+F or Cmd+F) to focus search input
-- [ ] Test search finds topics by name at various depths
-- [ ] Test search auto-expands parent topics
-- [ ] Test search highlighting works correctly
-- [ ] Test clear search resets view
-- [ ] Run all tests - must pass before next task
+- [x] Add search input field to topics section in settings modal
+- [x] Add search/filter state to state management
+- [x] Implement filtering logic in `renderTopicsList()` to show only matching topics
+- [x] Auto-expand parent topics when child matches search
+- [x] Highlight matching text in topic names
+- [x] Add clear search button
+- [x] Add keyboard shortcut (Ctrl+F or Cmd+F) to focus search input
+- [x] Test search finds topics by name at various depths
+- [x] Test search auto-expands parent topics
+- [x] Test search highlighting works correctly
+- [x] Test clear search resets view
+- [x] Run all tests - must pass before next task
 
 ### Task 5: Add top-level sibling sorting
 - [ ] Add sort control for top-level topics only (not full tree)

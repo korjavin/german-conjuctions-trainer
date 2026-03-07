@@ -129,7 +129,7 @@ function sortTreeNodes(nodes, sortOrder) {
     });
 }
 
-function flattenTopicTree(roots, nodesById) {
+function flattenTopicTree(roots, nodesById, searchExpandedIds = new Set()) {
     const flattened = [];
     const visited = new Set();
 
@@ -152,7 +152,10 @@ function flattenTopicTree(roots, nodesById) {
         });
 
         // Only visit children if this topic is not collapsed
-        if (node.children.length > 0 && !isTopicCollapsed(node.id)) {
+        // During search, topics with matching descendants are automatically expanded
+        const shouldShowChildren = node.children.length > 0 &&
+            (!isTopicCollapsed(node.id) || searchExpandedIds.has(node.id));
+        if (shouldShowChildren) {
             visitSiblings(node.children, depth + 1, node.id);
         }
     };
@@ -165,6 +168,46 @@ function flattenTopicTree(roots, nodesById) {
     });
 
     return flattened;
+}
+
+function findMatchingTopics(searchQuery, nodesById) {
+    const matchingIds = new Set();
+    const lowerQuery = searchQuery.toLowerCase();
+
+    nodesById.forEach((node) => {
+        if (node.name.toLowerCase().includes(lowerQuery)) {
+            matchingIds.add(node.id);
+        }
+    });
+
+    // Also expand parents of matching topics
+    const expandedIds = new Set();
+    matchingIds.forEach((id) => {
+        let current = nodesById.get(id);
+        while (current && current.parent_id) {
+            const parentId = current.parent_id;
+            expandedIds.add(parentId);
+            current = nodesById.get(parentId);
+        }
+    });
+
+    return { matchingIds, expandedIds };
+}
+
+function highlightText(text, searchQuery) {
+    if (!searchQuery) return text;
+    const regex = new RegExp(`(${escapeRegExp(searchQuery)})`, 'gi');
+    return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+}
+
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function createTreeLines(depth, indexInParent, totalSiblings) {
@@ -219,7 +262,28 @@ export function renderTopicsList() {
     }
 
     const { roots, nodesById } = buildTopicTree(state.topics, state.topicSortOrder || 'tree');
-    const flattenedNodes = flattenTopicTree(roots, nodesById);
+
+    let flattenedNodes;
+    let searchExpandedIds = new Set();
+
+    if (state.topicsSearchQuery) {
+        const { matchingIds, expandedIds } = findMatchingTopics(state.topicsSearchQuery, nodesById);
+        state.topicsMatchingIds = matchingIds;
+        searchExpandedIds = expandedIds;
+        flattenedNodes = flattenTopicTree(roots, nodesById, searchExpandedIds);
+        // Filter to only show matching topics and their parents
+        flattenedNodes = flattenedNodes.filter(({ topic }) => {
+            return matchingIds.has(topic.id) || expandedIds.has(topic.id);
+        });
+    } else {
+        state.topicsMatchingIds.clear();
+        flattenedNodes = flattenTopicTree(roots, nodesById);
+    }
+
+    if (flattenedNodes.length === 0 && state.topicsSearchQuery) {
+        dom.topicsList.innerHTML = `<div class="p-4 text-gray-500 text-center">No topics found matching "${escapeHtml(state.topicsSearchQuery)}".</div>`;
+        return;
+    }
 
     flattenedNodes.forEach(({ topic, depth, parentId, indexInParent, totalSiblings }) => {
         const beforeZone = createSiblingDropZone(depth, parentId, indexInParent, nodesById);
@@ -237,6 +301,10 @@ export function renderTopicsList() {
         const chevronClass = isCollapsed ? 'chevron-right' : 'chevron-down';
         const childBadge = hasChildren ? `<span class="text-xs text-gray-500 ml-2">(${topic.children.length})</span>` : '';
 
+        const displayName = state.topicsSearchQuery
+            ? highlightText(escapeHtml(topic.name), state.topicsSearchQuery)
+            : escapeHtml(topic.name);
+
         topicDiv.innerHTML = `
             <div class="flex flex-col min-w-0">
                 <div class="font-semibold topic-item-name flex items-center">
@@ -250,7 +318,7 @@ export function renderTopicsList() {
                         ${hasChildren ? getFolderIcon() : getFileIcon()}
                     </span>
                     <span class="text-gray-400 mr-2 select-none">::</span>
-                    <span class="truncate">${topic.name}</span>
+                    <span class="truncate">${displayName}</span>
                     ${childBadge}
                 </div>
                 <div class="topic-item-date">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>

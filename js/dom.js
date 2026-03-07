@@ -26,6 +26,8 @@ export const dom = {
     emptyStateContainer: document.getElementById('empty-state-container'),
 
     topicsList: document.getElementById('topics-list'),
+    topicsSearchInput: document.getElementById('topics-search-input'),
+    topicsSearchClear: document.getElementById('topics-search-clear'),
     topicSort: document.getElementById('topic-sort'),
     addTopicBtn: document.getElementById('add-topic-btn'),
     addTopicForm: document.getElementById('add-topic-form'),

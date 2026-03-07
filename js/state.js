@@ -79,6 +79,8 @@ export const state = {
     topics: [],
     topicSortOrder: localStorage.getItem('topicSortOrder') || 'tree',
     collapsedTopicIds: _loadTopicCollapseState(),
+    topicsSearchQuery: '',
+    topicsMatchingIds: new Set(),
     exercises: [],
     exerciseIds: [],
     currentExerciseIndex: 0,
