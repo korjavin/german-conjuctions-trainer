@@ -4,9 +4,14 @@ const TOPIC_COLLAPSE_STATE_STORAGE_KEY = 'topicCollapseState';
 const RECENTLY_USED_TOPICS_STORAGE_KEY = 'recentlyUsedTopics';
 
 function _loadAudioEnabled() {
-    const savedValue = localStorage.getItem(AUDIO_ENABLED_STORAGE_KEY);
-    if (savedValue === null) return true;
-    return savedValue === 'true';
+    try {
+        const savedValue = localStorage.getItem(AUDIO_ENABLED_STORAGE_KEY);
+        if (savedValue === null) return true;
+        return savedValue === 'true';
+    } catch (error) {
+        console.error('Failed to load audio enabled state:', error);
+        return true;
+    }
 }
 
 function _loadTopicCollapseState() {
@@ -111,7 +116,14 @@ export const state = {
     activeAudio: null,
     currentTopicId: '',
     topics: [],
-    topicSortOrder: localStorage.getItem('topicSortOrder') || 'tree',
+    topicSortOrder: (() => {
+        try {
+            return localStorage.getItem('topicSortOrder') || 'tree';
+        } catch (error) {
+            console.error('Failed to load topic sort order:', error);
+            return 'tree';
+        }
+    })(),
     collapsedTopicIds: _loadTopicCollapseState(),
     topicsSearchQuery: '',
     topicsMatchingIds: new Set(),
@@ -148,6 +160,7 @@ export const state = {
     virtualScrollStartIndex: 0,
     virtualScrollEndIndex: 0,
     flattenedTopicNodes: [], // Cached flattened nodes for virtual scrolling
+    nodesById: new Map(), // Cached nodes by ID for tree operations
 };
 
 export function toggleTopicCollapse(topicId) {

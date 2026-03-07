@@ -97,7 +97,11 @@ if (dom.topicSort) {
     dom.topicSort.value = state.topicSortOrder;
     dom.topicSort.addEventListener('change', (e) => {
         state.topicSortOrder = e.target.value;
-        localStorage.setItem('topicSortOrder', state.topicSortOrder);
+        try {
+            localStorage.setItem('topicSortOrder', state.topicSortOrder);
+        } catch (error) {
+            console.error('Failed to save topic sort order:', error);
+        }
         renderTopicsList();
     });
 }

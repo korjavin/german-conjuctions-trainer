@@ -273,11 +273,18 @@ export async function loadTopics() {
 
         renderTopicsList();
 
-        const savedTopicId = localStorage.getItem('selectedTopicId');
-        if (savedTopicId && state.topics.find(t => t.id === savedTopicId)) {
-            state.currentTopicId = savedTopicId;
-        } else if (state.topics.length > 0) {
-            state.currentTopicId = state.topics[0].id;
+        try {
+            const savedTopicId = localStorage.getItem('selectedTopicId');
+            if (savedTopicId && state.topics.find(t => t.id === savedTopicId)) {
+                state.currentTopicId = savedTopicId;
+            } else if (state.topics.length > 0) {
+                state.currentTopicId = state.topics[0].id;
+            }
+        } catch (error) {
+            console.error('Failed to load selected topic ID:', error);
+            if (state.topics.length > 0) {
+                state.currentTopicId = state.topics[0].id;
+            }
         }
 
         const currentTopic = state.topics.find(t => t.id === state.currentTopicId);
@@ -524,12 +531,13 @@ function renderVirtualScrollItems() {
         if (!nodeData) continue;
 
         const item = createTopicItem(nodeData.topic, nodeData.depth, nodeData.parentId,
-                                     nodeData.indexInParent, nodeData.totalSiblings);
+                                     nodeData.indexInParent, nodeData.totalSiblings, state.nodesById);
         // Position item at its correct scroll offset
         item.style.position = 'absolute';
         item.style.top = `${i * VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
         item.style.left = '0';
         item.style.width = '100%';
+        item.style.height = `${VIRTUAL_SCROLL_ITEM_HEIGHT}px`; // Set explicit height for tree lines to work
         fragment.appendChild(item);
     }
 
@@ -541,10 +549,10 @@ function renderVirtualScrollItems() {
     container.style.position = 'relative';
 }
 
-function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings) {
+function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, nodesById) {
     // Create a single topic item element
     // This is extracted from renderTopicsList to avoid code duplication
-    const { nodesById } = buildTopicTree(state.topics, state.topicSortOrder || 'tree');
+    // nodesById is passed as a parameter to avoid rebuilding the tree on every call
 
     const topicDiv = document.createElement('div');
     topicDiv.className = 'topic-list-item topic-tree-item flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 mb-2 rounded border border-gray-200';
@@ -939,6 +947,7 @@ export function renderTopicsList() {
     }
 
     const { roots, nodesById } = buildTopicTree(state.topics, state.topicSortOrder || 'tree');
+    state.nodesById = nodesById;
 
     let flattenedNodes;
     let searchExpandedIds = new Set();
@@ -965,8 +974,8 @@ export function renderTopicsList() {
     // Cache flattened nodes for virtual scrolling
     state.flattenedTopicNodes = flattenedNodes;
 
-    // Check if virtual scrolling should be enabled
-    const shouldUseVirtualScroll = state.topics.length >= VIRTUAL_SCROLL_THRESHOLD;
+    // Check if virtual scrolling should be enabled (use filtered/flattened count, not total topics)
+    const shouldUseVirtualScroll = flattenedNodes.length >= VIRTUAL_SCROLL_THRESHOLD;
 
     if (shouldUseVirtualScroll) {
         // Enable virtual scrolling mode
@@ -1704,7 +1713,11 @@ export function renderTopicDropdown(topicsToRender) {
 
 export function selectTopic(topicId, fullPath) {
     state.currentTopicId = topicId;
-    localStorage.setItem('selectedTopicId', topicId);
+    try {
+        localStorage.setItem('selectedTopicId', topicId);
+    } catch (error) {
+        console.error('Failed to save selected topic ID:', error);
+    }
     dom.topicSearch.value = fullPath;
     dom.topicDropdown.classList.add('hidden');
     if (state.isLoggedIn) {

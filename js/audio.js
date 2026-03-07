@@ -229,7 +229,11 @@ export function updateAudioToggleUI() {
 
 export function setAudioEnabled(isEnabled) {
     state.isAudioEnabled = Boolean(isEnabled);
-    localStorage.setItem(AUDIO_ENABLED_STORAGE_KEY, String(state.isAudioEnabled));
+    try {
+        localStorage.setItem(AUDIO_ENABLED_STORAGE_KEY, String(state.isAudioEnabled));
+    } catch (error) {
+        console.error('Failed to save audio enabled state:', error);
+    }
 
     if (!state.isAudioEnabled && state.activeAudio) {
         state.activeAudio.pause();
