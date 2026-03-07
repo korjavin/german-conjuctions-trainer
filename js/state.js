@@ -90,6 +90,15 @@ export function addRecentlyUsedTopic(topicId, topicName) {
     _saveRecentlyUsedTopics(state.recentlyUsedTopics);
 }
 
+export function removeRecentlyUsedTopic(topicId) {
+    state.recentlyUsedTopics = state.recentlyUsedTopics.filter(t => t.id !== topicId);
+    _saveRecentlyUsedTopics(state.recentlyUsedTopics);
+}
+
+export function saveTopicCollapseState() {
+    _saveTopicCollapseState(state.collapsedTopicIds);
+}
+
 function _loadWordAudioCache() {
     try {
         const rawCache = localStorage.getItem(WORD_AUDIO_CACHE_STORAGE_KEY);
