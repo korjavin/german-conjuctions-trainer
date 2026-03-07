@@ -94,16 +94,16 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run all tests - must pass before next task
 
 ### Task 2: Add expand/collapse functionality
-- [ ] Add `collapsed` state property to each topic in state management
-- [ ] Add expand/collapse button (chevron icon) to topics with children
-- [ ] Modify `flattenTopicTree()` to respect collapsed state and skip collapsed children
-- [ ] Add click handler to toggle collapse state
-- [ ] Persist collapse state in localStorage
-- [ ] Add CSS styles for collapsed state (hide children, rotate chevron)
-- [ ] Test expand/collapse with nested topics at various depths
-- [ ] Test expand/collapse persistence across page reloads
-- [ ] Test expand/collapse doesn't break drag-and-drop
-- [ ] Run all tests - must pass before next task
+- [x] Add `collapsed` state property to each topic in state management
+- [x] Add expand/collapse button (chevron icon) to topics with children
+- [x] Modify `flattenTopicTree()` to respect collapsed state and skip collapsed children
+- [x] Add click handler to toggle collapse state
+- [x] Persist collapse state in localStorage
+- [x] Add CSS styles for collapsed state (hide children, rotate chevron)
+- [x] Test expand/collapse with nested topics at various depths
+- [x] Test expand/collapse persistence across page reloads
+- [x] Test expand/collapse doesn't break drag-and-drop
+- [x] Run all tests - must pass before next task
 
 ### Task 3: Add topic icons
 - [ ] Add folder icon for topics with children, file icon for leaf topics

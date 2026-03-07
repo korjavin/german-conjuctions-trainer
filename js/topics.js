@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, toggleTopicCollapse, isTopicCollapsed } from './state.js';
 import { dom } from './dom.js';
 import {
     fetchTopicsAPI,
@@ -134,7 +134,8 @@ function flattenTopicTree(roots, nodesById) {
             totalSiblings,
         });
 
-        if (node.children.length > 0) {
+        // Only visit children if this topic is not collapsed
+        if (node.children.length > 0 && !isTopicCollapsed(node.id)) {
             visitSiblings(node.children, depth + 1, node.id);
         }
     };
@@ -214,11 +215,20 @@ export function renderTopicsList() {
         topicDiv.style.marginLeft = `${depth * 20}px`;
 
         const hasChildren = topic.children.length > 0;
+        const isCollapsed = hasChildren && isTopicCollapsed(topic.id);
+        const chevronDirection = isCollapsed ? 'right' : 'down';
+        const chevronClass = isCollapsed ? 'chevron-right' : 'chevron-down';
         const childBadge = hasChildren ? `<span class="text-xs text-gray-500 ml-2">(${topic.children.length})</span>` : '';
 
         topicDiv.innerHTML = `
             <div class="flex flex-col min-w-0">
                 <div class="font-semibold topic-item-name flex items-center">
+                    ${hasChildren ? `<button class="topic-collapse-btn ${chevronClass} mr-2 p-1 hover:bg-gray-200 rounded" data-topic-id="${topic.id}" aria-label="${isCollapsed ? 'Expand' : 'Collapse'} topic">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 6H8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M6 4V8" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="${chevronClass === 'chevron-right' ? '' : 'hidden'}"/>
+                        </svg>
+                    </button>` : '<span class="w-6 mr-2"></span>'}
                     <span class="text-gray-400 mr-2 select-none">::</span>
                     <span class="truncate">${topic.name}</span>
                     ${childBadge}
@@ -239,6 +249,16 @@ export function renderTopicsList() {
         }
 
         dom.topicsList.appendChild(topicDiv);
+
+        // Add collapse button click handler
+        const collapseBtn = topicDiv.querySelector('.topic-collapse-btn');
+        if (collapseBtn) {
+            collapseBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleTopicCollapse(topic.id);
+                renderTopicsList();
+            });
+        }
 
         const addChildBtn = topicDiv.querySelector('.add-child-btn');
         const editBtn = topicDiv.querySelector('.edit-topic-btn');

@@ -638,6 +638,36 @@ progress.progress-bar::-moz-progress-bar {
     border-left: 1px solid #d1d5db;
 }
 
+/* Topic Collapse Button */
+.topic-collapse-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+    color: #6b7280;
+    flex-shrink: 0;
+}
+
+.topic-collapse-btn:hover {
+    background-color: rgba(107, 114, 128, 0.1);
+    color: #374151;
+}
+
+.topic-collapse-btn:active {
+    transform: scale(0.95);
+}
+
+/* Chevron directions - handled via SVG visibility, but we can add animation if needed */
+.topic-collapse-btn svg {
+    transition: transform 0.15s ease;
+}
+
 .topic-gap-drop-zone {
     height: 0.5rem;
     border-radius: 9999px;

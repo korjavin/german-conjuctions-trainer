@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, toggleTopicCollapse, isTopicCollapsed } from './state.js';
 import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
 import {
@@ -253,6 +253,12 @@ function init() {
     state.startTime = Date.now();
 
     renderExercise();
+
+    // Expose functions to global scope for testing
+    window.state = state;
+    window.renderTopicsList = renderTopicsList;
+    window.toggleTopicCollapse = toggleTopicCollapse;
+    window.isTopicCollapsed = isTopicCollapsed;
 }
 
 init();
