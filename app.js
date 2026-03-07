@@ -65,7 +65,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleFavoriteBtn = document.getElementById('toggle-favorite-btn');
     const favoriteBtnText = document.getElementById('favorite-btn-text');
     const skipExerciseBtn = document.getElementById('skip-exercise-btn');
-    const hideExerciseBtn = document.getElementById('hide-exercise-btn');
+    const skipDialog = document.getElementById('skip-dialog');
+    const skipSessionBtn = document.getElementById('skip-session-btn');
+    const skipRemoveBtn = document.getElementById('skip-remove-btn');
+    const skipCancelBtn = document.getElementById('skip-cancel-btn');
     const exerciseControls = document.getElementById('exercise-controls');
 
     // Stats Modal Elements
@@ -1510,8 +1513,18 @@ document.addEventListener('DOMContentLoaded', () => {
     hintBtn.addEventListener('click', handleHintClick);
     replayAudioBtn.addEventListener('click', handleReplayAudio);
     toggleFavoriteBtn.addEventListener('click', handleToggleFavorite);
-    skipExerciseBtn.addEventListener('click', handleSkipExercise);
-    hideExerciseBtn.addEventListener('click', handleHideExercise);
+
+    skipExerciseBtn.addEventListener('click', () => skipDialog.showModal());
+    skipSessionBtn.addEventListener('click', () => {
+        handleSkipExercise();
+        skipDialog.close();
+    });
+    skipRemoveBtn.addEventListener('click', () => {
+        handleHideExercise();
+        skipDialog.close();
+    });
+    skipCancelBtn.addEventListener('click', () => skipDialog.close());
+
     nextExerciseBtn.addEventListener('click', handleNextExercise);
     document.addEventListener('keydown', handleKeyPress);
 
@@ -1728,13 +1741,13 @@ document.addEventListener('DOMContentLoaded', () => {
             logoutBtn.classList.remove('hidden');
             statsBtn.classList.remove('hidden');
             historyBtn.classList.remove('hidden');
-            hideExerciseBtn.classList.remove('hidden');
+            skipRemoveBtn.classList.remove('hidden');
         } else {
             loginBtn.classList.remove('hidden');
             logoutBtn.classList.add('hidden');
             statsBtn.classList.add('hidden');
             historyBtn.classList.add('hidden');
-            hideExerciseBtn.classList.add('hidden');
+            skipRemoveBtn.classList.add('hidden');
         }
 
         if (state.isAdmin) {

@@ -108,12 +108,6 @@
                                 </svg>
                                 <span>Skip</span>
                             </button>
-                            <button id="hide-exercise-btn" class="btn-secondary exercise-action-btn action-danger flex items-center space-x-2" title="Remove this exercise (you won't see it again)">
-                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
-                                </svg>
-                                <span>Remove</span>
-                            </button>
                             <button id="hint-btn" class="btn-primary exercise-action-btn flex items-center space-x-2">
                                 <svg class="action-icon" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path>
@@ -274,6 +268,19 @@
                     <span class="stat-label">Trained (Strengthening)</span>
                     <span id="stats-trained" class="stat-value">0</span>
                 </div>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Skip Exercise Modal -->
+    <dialog id="skip-dialog" class="modal-backdrop">
+        <div class="card modal-content modal-md text-center">
+            <h2 class="modal-title mb-4">Skip or Remove?</h2>
+            <p class="mb-6 text-gray-600">Do you want to skip this exercise for the current session, or remove it completely from your practice list?</p>
+            <div class="flex flex-col gap-3">
+                <button id="skip-session-btn" class="btn-secondary w-full">Skip for this session</button>
+                <button id="skip-remove-btn" class="btn-secondary action-danger text-red-600 w-full hidden">Remove completely</button>
+                <button id="skip-cancel-btn" class="btn-primary w-full mt-2">Cancel</button>
             </div>
         </div>
     </dialog>

@@ -60,7 +60,10 @@ export const dom = {
     toggleFavoriteBtn: document.getElementById('toggle-favorite-btn'),
     favoriteBtnText: document.getElementById('favorite-btn-text'),
     skipExerciseBtn: document.getElementById('skip-exercise-btn'),
-    hideExerciseBtn: document.getElementById('hide-exercise-btn'),
+    skipDialog: document.getElementById('skip-dialog'),
+    skipSessionBtn: document.getElementById('skip-session-btn'),
+    skipRemoveBtn: document.getElementById('skip-remove-btn'),
+    skipCancelBtn: document.getElementById('skip-cancel-btn'),
     exerciseControls: document.getElementById('exercise-controls'),
 
     statsModal: document.getElementById('stats-modal'),
