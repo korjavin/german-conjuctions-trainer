@@ -599,10 +599,43 @@ progress.progress-bar::-moz-progress-bar {
 
 .topic-tree-item {
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    position: relative;
 }
 
 .topic-tree-item.topic-dragging {
     opacity: 0.6;
+}
+
+/* Tree Lines */
+.tree-lines-container {
+    position: absolute;
+    left: -20px;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.tree-line-vertical {
+    position: absolute;
+    width: 1px;
+    background-color: #d1d5db;
+}
+
+.tree-connector-last {
+    position: absolute;
+    top: 0;
+    height: 50%;
+    border-left: 1px solid #d1d5db;
+    border-top: 1px solid #d1d5db;
+    border-top-left-radius: 4px;
+}
+
+.tree-connector-mid {
+    position: absolute;
+    height: 100%;
+    border-left: 1px solid #d1d5db;
 }
 
 .topic-gap-drop-zone {

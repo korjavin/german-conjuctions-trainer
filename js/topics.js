@@ -149,6 +149,49 @@ function flattenTopicTree(roots, nodesById) {
     return flattened;
 }
 
+function createTreeLines(depth, indexInParent, totalSiblings) {
+    const container = document.createElement('div');
+    container.className = 'tree-lines-container';
+
+    // For each depth level, add appropriate tree lines
+    for (let i = 0; i < depth; i++) {
+        const isLastChild = indexInParent === totalSiblings - 1;
+        const isFirstChild = indexInParent === 0;
+
+        if (i === depth - 1) {
+            // Last level - add horizontal connector from parent to this item
+            const connector = document.createElement('div');
+            connector.className = 'tree-line-vertical';
+            connector.style.left = `${(i * 20) + 10}px`;
+            connector.style.top = '0';
+            connector.style.height = '100%';
+            connector.style.width = '1px';
+            container.appendChild(connector);
+
+            // Add horizontal line from vertical line to item
+            const horizontalLine = document.createElement('div');
+            horizontalLine.className = 'tree-line-vertical';
+            horizontalLine.style.left = `${(i * 20) + 10}px`;
+            horizontalLine.style.top = '50%';
+            horizontalLine.style.width = '15px';
+            horizontalLine.style.height = '1px';
+            horizontalLine.style.borderTop = '1px solid #d1d5db';
+            horizontalLine.style.borderLeft = 'none';
+            container.appendChild(horizontalLine);
+        } else {
+            // Higher levels - add vertical line only
+            const verticalLine = document.createElement('div');
+            verticalLine.className = 'tree-line-vertical';
+            verticalLine.style.left = `${(i * 20) + 10}px`;
+            verticalLine.style.top = '0';
+            verticalLine.style.height = '100%';
+            container.appendChild(verticalLine);
+        }
+    }
+
+    return container;
+}
+
 export function renderTopicsList() {
     dom.topicsList.innerHTML = '';
 
@@ -188,6 +231,12 @@ export function renderTopicsList() {
                 <button class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn" data-topic-id="${topic.id}">Delete</button>
             </div>
         `;
+
+        // Add tree lines for visual hierarchy (after innerHTML so it's not overwritten)
+        if (depth > 0) {
+            const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings);
+            topicDiv.insertBefore(treeLinesContainer, topicDiv.firstChild);
+        }
 
         dom.topicsList.appendChild(topicDiv);
 
