@@ -73,6 +73,7 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
@@ -102,6 +103,18 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 			req.Name = strings.TrimSpace(req.Name)
 			if req.Name == "" || req.Prompt == "" {
 				http.Error(w, "Name and prompt are required", http.StatusBadRequest)
+				return
+			}
+
+			// Validate name length (matches frontend MAX_TOPIC_NAME_LENGTH of 200)
+			if len(req.Name) > 200 {
+				http.Error(w, "Topic name must be less than 200 characters", http.StatusBadRequest)
+				return
+			}
+
+			// Validate prompt length (matches frontend MAX_PROMPT_LENGTH of 10000)
+			if len(req.Prompt) > 10000 {
+				http.Error(w, "Prompt must be less than 10000 characters", http.StatusBadRequest)
 				return
 			}
 
@@ -145,6 +158,7 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
 	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
@@ -305,6 +319,18 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			// Validate name length (matches frontend MAX_TOPIC_NAME_LENGTH of 200)
+			if len(name) > 200 {
+				http.Error(w, "Topic name must be less than 200 characters", http.StatusBadRequest)
+				return
+			}
+
+			// Validate prompt length (matches frontend MAX_PROMPT_LENGTH of 10000)
+			if len(prompt) > 10000 {
+				http.Error(w, "Prompt must be less than 10000 characters", http.StatusBadRequest)
+				return
+			}
+
 			if err := a.validateTopicTree(&topicID, parentID); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -350,6 +376,7 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)

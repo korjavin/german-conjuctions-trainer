@@ -548,6 +548,12 @@ function renderVirtualScrollItems() {
     const container = dom.topicsList;
     container.innerHTML = '';
 
+    // Validate that flattenedTopicNodes exists and is a valid array
+    if (!state.flattenedTopicNodes || !Array.isArray(state.flattenedTopicNodes) || state.flattenedTopicNodes.length === 0) {
+        console.error('Invalid flattenedTopicNodes state:', state.flattenedTopicNodes);
+        return;
+    }
+
     // Only render items in the visible range
     const start = state.virtualScrollStartIndex;
     const end = Math.min(state.virtualScrollEndIndex, state.flattenedTopicNodes.length);
@@ -571,7 +577,7 @@ function renderVirtualScrollItems() {
         fragment.appendChild(beforeZone);
 
         const item = createTopicItem(nodeData.topic, nodeData.depth, nodeData.parentId,
-                                     nodeData.indexInParent, nodeData.totalSiblings, state.nodesById, true);
+                                     nodeData.indexInParent, nodeData.totalSiblings, state.nodesById);
         // Position item below the drop zone within the same slot
         item.style.position = 'absolute';
         item.style.top = `${i * VIRTUAL_SCROLL_ITEM_HEIGHT + DROP_ZONE_HEIGHT}px`;

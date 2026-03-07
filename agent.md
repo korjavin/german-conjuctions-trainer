@@ -32,6 +32,7 @@ A web-based application for learning German grammar. It features interactive wor
 - **API Endpoint `/api/exercises`**: The primary endpoint for the frontend. It orchestrates fetching from cache, applying SRS logic, and triggering generation.
 - **Static File Serving**: Custom handlers serve `index.html` with dynamic cache-busting and `app.js` with long-term caching.
 - **Rate Limiting**: IP-based rate limiting (1 request every 3 seconds) to prevent abuse.
+- **CORS Configuration**: Configurable CORS support via the `CORS_ALLOWED_ORIGINS` environment variable. All API handlers use this configuration to set proper CORS headers, defaulting to wildcard for development.
 - **SQLite Database**: Manages all CRUD operations for topics, versions, exercises, and user data.
 
 ### Environment Variables:
@@ -43,6 +44,7 @@ A web-based application for learning German grammar. It features interactive wor
 - `OPENAI_URL`: API endpoint (defaults to `https://api.openai.com/v1`).
 - `MODEL_NAME`: AI model (defaults to `gpt-3.5-turbo-1106`).
 - `PORT`: Server port (defaults to `8080`).
+- `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed CORS origins (defaults to `*`).
 - `ELEVENLABS_MODEL_ID`: ElevenLabs model to use for TTS (defaults to `eleven_multilingual_v2`).
 - `ELEVENLABS_VOICE_SPEED`: ElevenLabs voice speed for TTS (defaults to `1.0`).
 
@@ -54,11 +56,14 @@ POST /api/exercises
 // -> Returns a JSON object with an array of exercises, either from cache or newly generated.
 
 // Topics Management
-GET    /api/topics      // Get all topics
-POST   /api/topics      // Create a new topic
-GET    /api/topics/{id} // Get a specific topic
-PUT    /api/topics/{id} // Update a topic (creates a new version)
-DELETE /api/topics/{id} // Delete a topic and its versions
+GET    /api/topics                 // Get all topics
+POST   /api/topics                 // Create a new topic
+GET    /api/topics/{id}            // Get a specific topic
+PUT    /api/topics/{id}            // Update a topic (creates a new version)
+PUT    /api/topics/{id}/move       // Move a topic to a new parent or position
+{ "parent_id": "string", "position": number }
+// -> Returns the updated topic with new parent and sort order
+DELETE /api/topics/{id}            // Delete a topic and its versions
 
 // Version History
 GET  /api/versions/{topicId}                  // Get version history for a topic

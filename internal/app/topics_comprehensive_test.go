@@ -24,8 +24,6 @@ func setupComprehensiveTestApp(t *testing.T) *App {
 	return app
 }
 
-// cleanupComprehensiveTestApp is a no-op since t.TempDir() is cleaned up automatically
-func cleanupComprehensiveTestApp(app *App) {}
 
 // Helper function to create an admin user context
 func setupAdminContext(app *App, t *testing.T) context.Context {
@@ -43,7 +41,6 @@ func setupAdminContext(app *App, t *testing.T) context.Context {
 
 func TestValidateTopicTree_AllowsNullParent(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	err := app.validateTopicTree(nil, nil)
 	if err != nil {
@@ -53,7 +50,6 @@ func TestValidateTopicTree_AllowsNullParent(t *testing.T) {
 
 func TestValidateTopicTree_RejectsSelfParenting(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	topic, _ := app.DB.CreateTopic("A", "prompt", nil, 0)
 	topicID := topic.ID
@@ -66,7 +62,6 @@ func TestValidateTopicTree_RejectsSelfParenting(t *testing.T) {
 
 func TestValidateTopicTree_RejectsNonExistentParent(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	fakeParentID := "non-existent-id"
 	err := app.validateTopicTree(nil, &fakeParentID)
@@ -77,7 +72,6 @@ func TestValidateTopicTree_RejectsNonExistentParent(t *testing.T) {
 
 func TestValidateTopicTree_DetectsTwoLevelCycle(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	a, _ := app.DB.CreateTopic("A", "prompt", nil, 0)
 	b, _ := app.DB.CreateTopic("B", "prompt", &a.ID, 0)
@@ -91,7 +85,6 @@ func TestValidateTopicTree_DetectsTwoLevelCycle(t *testing.T) {
 
 func TestValidateTopicTree_DetectsThreeLevelCycle(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	a, _ := app.DB.CreateTopic("A", "prompt", nil, 0)
 	b, _ := app.DB.CreateTopic("B", "prompt", &a.ID, 0)
@@ -106,7 +99,6 @@ func TestValidateTopicTree_DetectsThreeLevelCycle(t *testing.T) {
 
 func TestValidateTopicTree_AllowsValidParent(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	parent, _ := app.DB.CreateTopic("Parent", "prompt", nil, 0)
 	child, _ := app.DB.CreateTopic("Child", "prompt", nil, 0)
@@ -119,7 +111,6 @@ func TestValidateTopicTree_AllowsValidParent(t *testing.T) {
 
 func TestValidateTopicTree_DetectsInvalidParentReference(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	// Create a topic with a parent that doesn't exist (simulating bad data)
 	a, _ := app.DB.CreateTopic("A", "prompt", nil, 0)
@@ -137,7 +128,6 @@ func TestValidateTopicTree_DetectsInvalidParentReference(t *testing.T) {
 
 func TestHandleTopics_GetReturnsAllTopics(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	_, _ = app.DB.CreateTopic("Topic1", "prompt1", nil, 0)
 	_, _ = app.DB.CreateTopic("Topic2", "prompt2", nil, 1)
@@ -164,7 +154,6 @@ func TestHandleTopics_GetReturnsAllTopics(t *testing.T) {
 
 func TestHandleTopics_GetReturnsEmptyListWhenNoTopics(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	req, _ := http.NewRequest("GET", "/api/topics", nil)
 	rr := httptest.NewRecorder()
@@ -188,7 +177,6 @@ func TestHandleTopics_GetReturnsEmptyListWhenNoTopics(t *testing.T) {
 
 func TestHandleTopics_OptionsReturnsOK(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	req, _ := http.NewRequest("OPTIONS", "/api/topics", nil)
 	rr := httptest.NewRecorder()
@@ -202,7 +190,6 @@ func TestHandleTopics_OptionsReturnsOK(t *testing.T) {
 
 func TestHandleTopics_GetReturnsCorrectContentType(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	req, _ := http.NewRequest("GET", "/api/topics", nil)
 	rr := httptest.NewRecorder()
@@ -221,7 +208,6 @@ func TestHandleTopics_GetReturnsCorrectContentType(t *testing.T) {
 
 func TestHandleTopics_PostCreatesTopicAsAdmin(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	payload := `{"name": "New Topic", "prompt": "test prompt", "parent_id": null, "sort_order": 0}`
@@ -252,7 +238,6 @@ func TestHandleTopics_PostCreatesTopicAsAdmin(t *testing.T) {
 
 func TestHandleTopics_PostValidatesRequiredFields(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	tests := []struct {
@@ -284,7 +269,6 @@ func TestHandleTopics_PostValidatesRequiredFields(t *testing.T) {
 
 func TestHandleTopics_PostValidatesParentID(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	payload := `{"name": "New Topic", "prompt": "test prompt", "parent_id": "non-existent-id"}`
@@ -302,7 +286,6 @@ func TestHandleTopics_PostValidatesParentID(t *testing.T) {
 
 func TestHandleTopics_PostRequiresAdmin(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	payload := `{"name": "New Topic", "prompt": "test prompt"}`
 	req, _ := http.NewRequest("POST", "/api/topics", bytes.NewBufferString(payload))
@@ -323,7 +306,6 @@ func TestHandleTopics_PostRequiresAdmin(t *testing.T) {
 
 func TestHandleTopicByID_GetReturnsTopic(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	topic, _ := app.DB.CreateTopic("TestTopic", "prompt", nil, 0)
 
@@ -349,7 +331,6 @@ func TestHandleTopicByID_GetReturnsTopic(t *testing.T) {
 
 func TestHandleTopicByID_GetReturnsNotFound(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	req, _ := http.NewRequest("GET", "/api/topics/non-existent", nil)
 	rr := httptest.NewRecorder()
@@ -363,7 +344,6 @@ func TestHandleTopicByID_GetReturnsNotFound(t *testing.T) {
 
 func TestHandleTopicByID_GetReturnsErrorForEmptyID(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	req, _ := http.NewRequest("GET", "/api/topics/", nil)
 	rr := httptest.NewRecorder()
@@ -381,7 +361,6 @@ func TestHandleTopicByID_GetReturnsErrorForEmptyID(t *testing.T) {
 
 func TestHandleTopicByID_PutUpdatesTopic(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic, _ := app.DB.CreateTopic("OldName", "old prompt", nil, 0)
@@ -414,7 +393,6 @@ func TestHandleTopicByID_PutUpdatesTopic(t *testing.T) {
 
 func TestHandleTopicByID_PutPreservesOmittedFields(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 5)
@@ -447,7 +425,6 @@ func TestHandleTopicByID_PutPreservesOmittedFields(t *testing.T) {
 
 func TestHandleTopicByID_PutValidatesPromptRequired(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
@@ -467,7 +444,6 @@ func TestHandleTopicByID_PutValidatesPromptRequired(t *testing.T) {
 
 func TestHandleTopicByID_PutValidatesParentIDType(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
@@ -487,7 +463,6 @@ func TestHandleTopicByID_PutValidatesParentIDType(t *testing.T) {
 
 func TestHandleTopicByID_PutValidatesSortOrder(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
@@ -520,7 +495,6 @@ func TestHandleTopicByID_PutValidatesSortOrder(t *testing.T) {
 
 func TestHandleTopicByID_PutRejectsInvalidParentID(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
@@ -544,7 +518,6 @@ func TestHandleTopicByID_PutRejectsInvalidParentID(t *testing.T) {
 
 func TestHandleTopicByID_DeleteRemovesTopic(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic, _ := app.DB.CreateTopic("ToDelete", "prompt", nil, 0)
@@ -568,7 +541,6 @@ func TestHandleTopicByID_DeleteRemovesTopic(t *testing.T) {
 
 func TestHandleTopicByID_DeletePreventsTopicWithChildren(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	parent, _ := app.DB.CreateTopic("Parent", "prompt", nil, 0)
@@ -599,7 +571,6 @@ func TestHandleTopicByID_DeletePreventsTopicWithChildren(t *testing.T) {
 
 func TestHandleTopicByID_DeleteReturnsNotFound(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	req, _ := http.NewRequest("DELETE", "/api/topics/non-existent", nil)
@@ -621,7 +592,6 @@ func TestHandleTopicByID_DeleteReturnsNotFound(t *testing.T) {
 
 func TestHandleTopicByID_MoveTopicToRoot(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	parent, _ := app.DB.CreateTopic("Parent", "prompt", nil, 0)
@@ -648,7 +618,6 @@ func TestHandleTopicByID_MoveTopicToRoot(t *testing.T) {
 
 func TestHandleTopicByID_MoveTopicToPosition(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	_, _ = app.DB.CreateTopic("A", "prompt", nil, 0)
@@ -684,7 +653,6 @@ func TestHandleTopicByID_MoveTopicToPosition(t *testing.T) {
 
 func TestHandleTopicByID_MoveTopicWithCycleDetection(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	a, _ := app.DB.CreateTopic("A", "prompt", nil, 0)
@@ -711,7 +679,6 @@ func TestHandleTopicByID_MoveTopicWithCycleDetection(t *testing.T) {
 
 func TestHandleTopicByID_MoveTopicNotFound(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	payload := `{"parent_id": ""}`
@@ -733,7 +700,6 @@ func TestHandleTopicByID_MoveTopicNotFound(t *testing.T) {
 
 func TestHandleTopicByID_InvalidPath(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	tests := []struct {
 		path     string
@@ -764,7 +730,6 @@ func TestHandleTopicByID_InvalidPath(t *testing.T) {
 
 func TestHandleVersions_GetVersions(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
 
@@ -791,7 +756,6 @@ func TestHandleVersions_GetVersions(t *testing.T) {
 
 func TestHandleVersions_GetVersionsNotFound(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	req, _ := http.NewRequest("GET", "/api/versions/non-existent", nil)
 	rr := httptest.NewRecorder()
@@ -816,7 +780,6 @@ func TestHandleVersions_GetVersionsNotFound(t *testing.T) {
 
 func TestHandleVersions_RestoreVersion(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic, _ := app.DB.CreateTopic("Topic", "original prompt", nil, 0)
@@ -851,7 +814,6 @@ func TestHandleVersions_RestoreVersion(t *testing.T) {
 
 func TestHandleVersions_RestoreVersionNotFound(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
@@ -869,7 +831,6 @@ func TestHandleVersions_RestoreVersionNotFound(t *testing.T) {
 
 func TestHandleVersions_InvalidRestorePath(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
@@ -887,7 +848,6 @@ func TestHandleVersions_InvalidRestorePath(t *testing.T) {
 
 func TestHandleVersions_RestoreVersionWrongTopic(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	topic1, _ := app.DB.CreateTopic("Topic1", "prompt1", nil, 0)
@@ -918,7 +878,6 @@ func TestHandleVersions_RestoreVersionWrongTopic(t *testing.T) {
 
 func TestCORSHeadersAreSet(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	req, _ := http.NewRequest("OPTIONS", "/api/topics", nil)
 	rr := httptest.NewRecorder()
@@ -938,7 +897,6 @@ func TestCORSHeadersAreSet(t *testing.T) {
 
 func TestMethodNotAllowedReturns405(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 
 	tests := []struct {
 		method string
@@ -976,7 +934,6 @@ func TestMethodNotAllowedReturns405(t *testing.T) {
 
 func TestIntegration_CreateUpdateDeleteTopic(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	// Create topic
@@ -1049,7 +1006,6 @@ func TestIntegration_CreateUpdateDeleteTopic(t *testing.T) {
 
 func TestIntegration_CreateNestedTopicsAndMove(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
-	defer cleanupComprehensiveTestApp(app)
 	adminCtx := setupAdminContext(app, t)
 
 	// Create parent
