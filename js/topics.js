@@ -399,6 +399,8 @@ export function buildTopicTree(topics, sortOrder = state.topicSortOrder || 'tree
                 parent.children.push(node);
                 continue;
             }
+            // Log warning for orphaned node with invalid parent reference
+            console.warn(`Topic "${node.name}" (${node.id}) has invalid parent reference "${node.parent_id}". Treating as root.`);
         }
         roots.push(node);
     }
@@ -516,8 +518,13 @@ function calculateVisibleRange(containerHeight, scrollTop) {
 }
 
 function setupVirtualScroll() {
+    // Remove existing scroll event listener if any to prevent memory leak
+    if (dom.topicsList.getAttribute('data-virtual-scroll-setup') === 'true') {
+        dom.topicsList.removeEventListener('scroll', virtualScrollHandler);
+    }
+
     // Add scroll event listener for virtual scrolling
-    dom.topicsList.addEventListener('scroll', () => {
+    function virtualScrollHandler() {
         if (!state.virtualScrollEnabled) return;
 
         const scrollTop = dom.topicsList.scrollTop;
@@ -531,7 +538,10 @@ function setupVirtualScroll() {
             state.virtualScrollEndIndex = endIndex;
             renderVirtualScrollItems();
         }
-    });
+    }
+
+    dom.topicsList.addEventListener('scroll', virtualScrollHandler);
+    dom.topicsList.setAttribute('data-virtual-scroll-setup', 'true');
 }
 
 function renderVirtualScrollItems() {
@@ -617,7 +627,7 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
 
     // Add tree lines for visual hierarchy
     if (depth > 0) {
-        const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings);
+        const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings, nodesById);
         topicDiv.insertBefore(treeLinesContainer, topicDiv.firstChild);
     }
 
@@ -762,22 +772,22 @@ function escapeHtml(text) {
  * you would need to track whether siblings above the current topic continue
  * their vertical lines down to avoid gaps in the tree visualization.
  */
-function createTreeLines(depth, indexInParent, totalSiblings) {
+function createTreeLines(depth, indexInParent, totalSiblings, nodesById) {
     const container = document.createElement('div');
     container.className = 'tree-lines-container';
 
+    const isLastChild = indexInParent === totalSiblings - 1;
+
     // For each depth level, add appropriate tree lines
     for (let i = 0; i < depth; i++) {
-        const isLastChild = indexInParent === totalSiblings - 1;
-        const isFirstChild = indexInParent === 0;
-
         if (i === depth - 1) {
-            // Last level - add horizontal connector from parent to this item
+            // Last level - add vertical connector from parent
             const connector = document.createElement('div');
             connector.className = 'tree-line-vertical';
             connector.style.left = `${(i * 20) + 10}px`;
             connector.style.top = '0';
-            connector.style.height = '100%';
+            // Only draw vertical line below if not the last child
+            connector.style.height = isLastChild ? '50%' : '100%';
             connector.style.width = '1px';
             container.appendChild(connector);
 
@@ -792,12 +802,16 @@ function createTreeLines(depth, indexInParent, totalSiblings) {
             horizontalLine.style.borderLeft = 'none';
             container.appendChild(horizontalLine);
         } else {
-            // Higher levels - add vertical line only
+            // Higher levels - add vertical line
+            // Note: For proper tree visualization at higher levels, we would need ancestor sibling info
+            // For now, we draw vertical lines at all higher levels but with reduced visual weight
             const verticalLine = document.createElement('div');
             verticalLine.className = 'tree-line-vertical';
             verticalLine.style.left = `${(i * 20) + 10}px`;
             verticalLine.style.top = '0';
             verticalLine.style.height = '100%';
+            verticalLine.style.width = '1px';
+            verticalLine.style.opacity = '0.3'; // Reduced opacity to reduce visual clutter
             container.appendChild(verticalLine);
         }
     }
@@ -1084,7 +1098,7 @@ function renderAllTopics(flattenedNodes, nodesById) {
 
         // Add tree lines for visual hierarchy (after innerHTML so it's not overwritten)
         if (depth > 0) {
-            const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings);
+            const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings, nodesById);
             topicDiv.insertBefore(treeLinesContainer, topicDiv.firstChild);
         }
 

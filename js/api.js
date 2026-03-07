@@ -99,6 +99,9 @@ export async function updateTopicAPI(topicId, name, prompt, parentId = null, sor
 export async function moveTopicAPI(topicId, parentId, position = null) {
     const payload = { parent_id: parentId || '' };
     if (typeof position === 'number' && Number.isFinite(position)) {
+        if (position < 0) {
+            throw new Error('Invalid position: must be non-negative');
+        }
         payload.position = position;
     }
 

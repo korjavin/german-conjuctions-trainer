@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,7 +27,9 @@ func setupComprehensiveTestApp(t *testing.T) *App {
 
 // cleanupComprehensiveTestApp removes the test database
 func cleanupComprehensiveTestApp(app *App) {
-	os.Remove("test_app_comprehensive_db.sqlite")
+	if err := os.Remove("test_app_comprehensive_db.sqlite"); err != nil {
+		log.Printf("Warning: Failed to remove test database: %v", err)
+	}
 }
 
 // Helper function to create an admin user context

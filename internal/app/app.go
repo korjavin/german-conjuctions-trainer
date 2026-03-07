@@ -13,15 +13,15 @@ import (
 
 // App holds all application dependencies.
 type App struct {
-	DB               storage.Storage
-	SC               *securecookie.SecureCookie
-	OAuthConfig      *oauth2.Config
-	OAuthState       string
-	AdminGoogleID    string
-	ElevenLabs       ElevenLabsConfig
+	DB                 storage.Storage
+	SC                 *securecookie.SecureCookie
+	OAuthConfig        *oauth2.Config
+	OAuthState         string
+	AdminGoogleID      string
+	ElevenLabs         ElevenLabsConfig
 	CORSAllowedOrigins string
-	clients          map[string]*rateclient
-	mu               sync.Mutex
+	clients            map[string]*rateclient
+	mu                 sync.Mutex
 }
 
 // ElevenLabsConfig holds ElevenLabs TTS configuration.
@@ -35,14 +35,14 @@ type ElevenLabsConfig struct {
 // New creates a new App and starts background maintenance tasks.
 func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.Config, oauthState string, adminGoogleID string, el ElevenLabsConfig, corsAllowedOrigins string) *App {
 	a := &App{
-		DB:               db,
-		SC:               sc,
-		OAuthConfig:      oauthConfig,
-		OAuthState:       oauthState,
-		AdminGoogleID:    adminGoogleID,
-		ElevenLabs:       el,
+		DB:                 db,
+		SC:                 sc,
+		OAuthConfig:        oauthConfig,
+		OAuthState:         oauthState,
+		AdminGoogleID:      adminGoogleID,
+		ElevenLabs:         el,
 		CORSAllowedOrigins: corsAllowedOrigins,
-		clients:          make(map[string]*rateclient),
+		clients:            make(map[string]*rateclient),
 	}
 
 	// Cleanup stale rate-limit client entries every 10 minutes.
