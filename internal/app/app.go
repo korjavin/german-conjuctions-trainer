@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,32 @@ type ElevenLabsConfig struct {
 	VoiceName string
 	ModelID   string
 	Speed     float64
+}
+
+// getCORSOrigin returns the appropriate CORS origin for the request.
+// If CORSAllowedOrigins is empty or "*", it returns "*" (allow all).
+// Otherwise, it checks if the request's Origin is in the comma-separated list
+// and returns that origin. If no match, it returns an empty string (no CORS).
+func (a *App) getCORSOrigin(r *http.Request) string {
+	if a.CORSAllowedOrigins == "" || a.CORSAllowedOrigins == "*" {
+		return "*"
+	}
+
+	// Parse comma-separated origins and check if request Origin matches any
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return "*" // If no Origin header, allow all (same-site requests)
+	}
+
+	allowedOrigins := strings.Split(a.CORSAllowedOrigins, ",")
+	for _, allowed := range allowedOrigins {
+		if strings.TrimSpace(allowed) == origin {
+			return origin
+		}
+	}
+
+	// Origin not in allowlist - return empty string to deny
+	return ""
 }
 
 // New creates a new App and starts background maintenance tasks.

@@ -134,6 +134,12 @@ func (s *SQLiteStorage) runMigrations() error {
 		}
 	}
 
+	// Add unique constraint on (parent_id, name) to prevent duplicate names at same level
+	// SQLite doesn't support adding constraints to existing tables, so we need to recreate the table
+	if err := s.addTopicsUniqueConstraint(); err != nil {
+		return fmt.Errorf("failed to add topics unique constraint: %w", err)
+	}
+
 	log.Println("Database migrations completed successfully")
 	return nil
 }
@@ -150,6 +156,104 @@ func isColumnExistsError(err error) bool {
 		err.Error() == "duplicate column name: parent_id" ||
 		err.Error() == "duplicate column name: sort_order" ||
 		err.Error() == "index idx_topics_parent already exists")
+}
+
+// addTopicsUniqueConstraint adds a unique constraint on (parent_id, name) to prevent duplicate names at same level
+// Since SQLite doesn't support adding constraints to existing tables, we recreate the table with the constraint
+func (s *SQLiteStorage) addTopicsUniqueConstraint() error {
+	// Check if we already ran this migration by checking for the generated column in the table schema
+	var sqlFromSchema string
+	err := s.db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='topics'").Scan(&sqlFromSchema)
+	if err == nil && strings.Contains(sqlFromSchema, "parent_key") {
+		// Migration already ran, skip
+		return nil
+	}
+
+	// Start transaction for atomic table recreation
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Create new table with unique constraint using a generated column to handle NULL parent_id
+	// The generated column 'parent_key' replaces NULL with a sentinel value to enforce uniqueness at root level
+	_, err = tx.Exec(`
+		CREATE TABLE topics_new (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			parent_id TEXT NULL,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL,
+			parent_key TEXT GENERATED ALWAYS AS (
+				CASE
+					WHEN parent_id IS NULL THEN '__ROOT__'
+					ELSE parent_id
+				END
+			) STORED,
+			UNIQUE(parent_key, name COLLATE NOCASE)
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create topics_new table: %w", err)
+	}
+
+	// Check for duplicate topic names before proceeding
+	// We need to detect duplicates to fail fast instead of silently dropping data
+	var duplicateCount int
+	err = tx.QueryRow(`
+		SELECT COUNT(*)
+		FROM (
+			SELECT COUNT(*) as cnt
+			FROM topics
+			GROUP BY
+				CASE WHEN parent_id IS NULL THEN '__ROOT__' ELSE parent_id END,
+				LOWER(name)
+			HAVING cnt > 1
+		)
+	`).Scan(&duplicateCount)
+	if err != nil {
+		return fmt.Errorf("failed to check for duplicate topics: %w", err)
+	}
+	if duplicateCount > 0 {
+		return fmt.Errorf("cannot add unique constraint: found %d duplicate topic name(s) at the same parent level. Please manually resolve duplicates by renaming or deleting duplicate topics before running the migration", duplicateCount)
+	}
+
+	// Copy data from old table to new table
+	// At this point, we know there are no duplicates, so all data will be copied
+	_, err = tx.Exec(`
+		INSERT INTO topics_new(id, name, prompt, parent_id, sort_order, created_at, updated_at)
+		SELECT id, name, prompt, parent_id, sort_order, created_at, updated_at FROM topics
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to copy data to topics_new: %w", err)
+	}
+
+	// Drop old table
+	_, err = tx.Exec(`DROP TABLE topics`)
+	if err != nil {
+		return fmt.Errorf("failed to drop topics table: %w", err)
+	}
+
+	// Rename new table to old name
+	_, err = tx.Exec(`ALTER TABLE topics_new RENAME TO topics`)
+	if err != nil {
+		return fmt.Errorf("failed to rename topics_new to topics: %w", err)
+	}
+
+	// Recreate indexes
+	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_topics_parent ON topics(parent_id, sort_order, created_at)`)
+	if err != nil {
+		return fmt.Errorf("failed to recreate index: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration transaction: %w", err)
+	}
+
+	return nil
 }
 
 // querier is an interface that can be a *sql.DB or *sql.Tx

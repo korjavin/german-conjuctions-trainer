@@ -100,14 +100,18 @@ type MoveTopicRequest struct {
 }
 
 func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
-	// Set CORS headers - use configured allowed origins, default to wildcard for development
-	corsOrigin := a.CORSAllowedOrigins
-	if corsOrigin == "" {
-		corsOrigin = "*"
+	// Set CORS headers - check if request origin is in allowed list
+	corsOrigin := a.getCORSOrigin(r)
+	if corsOrigin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Vary", "Origin")
+	} else if a.CORSAllowedOrigins != "" && a.CORSAllowedOrigins != "*" && r.Header.Get("Origin") != "" {
+		// Set Vary: Origin when CORS behavior depends on Origin (allowlist mode with denied origin)
+		// This prevents caches from serving the same response variant to different origins
+		w.Header().Set("Vary", "Origin")
 	}
-	w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';")
 
 	if r.Method == http.MethodOptions {
@@ -175,6 +179,13 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 
 			topic, err := a.DB.CreateTopic(req.Name, req.Prompt, req.ParentID, req.SortOrder)
 			if err != nil {
+				// Check for unique constraint violation (race condition between validation and insert)
+				if strings.Contains(err.Error(), "UNIQUE constraint failed") ||
+					strings.Contains(err.Error(), "constraint violated") {
+					log.Printf("Unique constraint violation while creating topic: %v", err)
+					http.Error(w, "a topic with this name already exists at this level", http.StatusConflict)
+					return
+				}
 				log.Printf("Failed to create topic: %v", err)
 				http.Error(w, "Failed to create topic. Please try again.", http.StatusInternalServerError)
 				return
@@ -191,14 +202,18 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
-	// Set CORS headers - use configured allowed origins, default to wildcard for development
-	corsOrigin := a.CORSAllowedOrigins
-	if corsOrigin == "" {
-		corsOrigin = "*"
+	// Set CORS headers - check if request origin is in allowed list
+	corsOrigin := a.getCORSOrigin(r)
+	if corsOrigin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Vary", "Origin")
+	} else if a.CORSAllowedOrigins != "" && a.CORSAllowedOrigins != "*" && r.Header.Get("Origin") != "" {
+		// Set Vary: Origin when CORS behavior depends on Origin (allowlist mode with denied origin)
+		// This prevents caches from serving the same response variant to different origins
+		w.Header().Set("Vary", "Origin")
 	}
-	w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
-	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';")
 
 	if r.Method == http.MethodOptions {
@@ -385,6 +400,13 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 
 			topic, err := a.DB.UpdateTopic(topicID, name, prompt, parentID, sortOrder)
 			if err != nil {
+				// Check for unique constraint violation (race condition between validation and update)
+				if strings.Contains(err.Error(), "UNIQUE constraint failed") ||
+					strings.Contains(err.Error(), "constraint violated") {
+					log.Printf("Unique constraint violation while updating topic: %v", err)
+					http.Error(w, "a topic with this name already exists at this level", http.StatusConflict)
+					return
+				}
 				log.Printf("Failed to update topic: %v", err)
 				http.Error(w, "Failed to update topic. Please try again.", http.StatusInternalServerError)
 				return
@@ -416,13 +438,18 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
-	corsOrigin := a.CORSAllowedOrigins
-	if corsOrigin == "" {
-		corsOrigin = "*"
+	// Set CORS headers - check if request origin is in allowed list
+	corsOrigin := a.getCORSOrigin(r)
+	if corsOrigin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Vary", "Origin")
+	} else if a.CORSAllowedOrigins != "" && a.CORSAllowedOrigins != "*" && r.Header.Get("Origin") != "" {
+		// Set Vary: Origin when CORS behavior depends on Origin (allowlist mode with denied origin)
+		// This prevents caches from serving the same response variant to different origins
+		w.Header().Set("Vary", "Origin")
 	}
-	w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';")
 
 	if r.Method == http.MethodOptions {

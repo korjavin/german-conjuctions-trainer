@@ -24,7 +24,6 @@ func setupComprehensiveTestApp(t *testing.T) *App {
 	return app
 }
 
-
 // Helper function to create an admin user context
 func setupAdminContext(app *App, t *testing.T) context.Context {
 	app.AdminGoogleID = "admin123"
@@ -892,6 +891,119 @@ func TestCORSHeadersAreSet(t *testing.T) {
 	methods := rr.Header().Get("Access-Control-Allow-Methods")
 	if !strings.Contains(methods, "GET") || !strings.Contains(methods, "POST") {
 		t.Errorf("Expected GET and POST in methods, got %s", methods)
+	}
+}
+
+func TestVaryOriginHeaderSetWithAllowedOrigin(t *testing.T) {
+	app := setupComprehensiveTestApp(t)
+	// Set specific allowed origins
+	app.CORSAllowedOrigins = "https://example.com,https://another.com"
+
+	req, _ := http.NewRequest("GET", "/api/topics", nil)
+	req.Header.Set("Origin", "https://example.com")
+	rr := httptest.NewRecorder()
+
+	app.handleTopics(rr, req)
+
+	vary := rr.Header().Get("Vary")
+	if vary != "Origin" {
+		t.Errorf("Expected Vary: Origin header when origin is allowed, got %s", vary)
+	}
+}
+
+func TestVaryOriginHeaderSetWithDeniedOrigin(t *testing.T) {
+	app := setupComprehensiveTestApp(t)
+	// Set specific allowed origins
+	app.CORSAllowedOrigins = "https://example.com,https://another.com"
+
+	req, _ := http.NewRequest("GET", "/api/topics", nil)
+	req.Header.Set("Origin", "https://evil.com")
+	rr := httptest.NewRecorder()
+
+	app.handleTopics(rr, req)
+
+	// When origin is denied, there should be no Access-Control-Allow-Origin
+	origin := rr.Header().Get("Access-Control-Allow-Origin")
+	if origin != "" {
+		t.Errorf("Expected no Access-Control-Allow-Origin header when origin is denied, got %s", origin)
+	}
+
+	// But Vary: Origin should still be set to prevent cache confusion
+	vary := rr.Header().Get("Vary")
+	if vary != "Origin" {
+		t.Errorf("Expected Vary: Origin header when origin is denied, got %s", vary)
+	}
+}
+
+func TestVaryOriginHeaderSetWithWildcardCORS(t *testing.T) {
+	app := setupComprehensiveTestApp(t)
+	// Wildcard CORS (default behavior)
+	app.CORSAllowedOrigins = "*"
+
+	req, _ := http.NewRequest("GET", "/api/topics", nil)
+	req.Header.Set("Origin", "https://any-origin.com")
+	rr := httptest.NewRecorder()
+
+	app.handleTopics(rr, req)
+
+	// With wildcard, Vary: Origin should still be set (existing behavior)
+	vary := rr.Header().Get("Vary")
+	if vary != "Origin" {
+		t.Errorf("Expected Vary: Origin header with wildcard CORS, got %s", vary)
+	}
+}
+
+func TestVaryOriginHeaderNotSetWithoutOriginHeader(t *testing.T) {
+	app := setupComprehensiveTestApp(t)
+	// Set specific allowed origins
+	app.CORSAllowedOrigins = "https://example.com"
+
+	req, _ := http.NewRequest("GET", "/api/topics", nil)
+	// No Origin header (same-site request)
+	rr := httptest.NewRecorder()
+
+	app.handleTopics(rr, req)
+
+	// Without Origin header, Vary should not be set since getCORSOrigin returns "*"
+	vary := rr.Header().Get("Vary")
+	if vary != "Origin" {
+		t.Errorf("Expected Vary: Origin header even without Origin header, got %s", vary)
+	}
+}
+
+func TestVaryOriginHeaderInHandleTopicByID(t *testing.T) {
+	app := setupComprehensiveTestApp(t)
+	// Set specific allowed origins
+	app.CORSAllowedOrigins = "https://example.com"
+
+	req, _ := http.NewRequest("GET", "/api/topics/123", nil)
+	req.Header.Set("Origin", "https://evil.com")
+	rr := httptest.NewRecorder()
+
+	app.handleTopicByID(rr, req)
+
+	// When origin is denied, Vary: Origin should still be set
+	vary := rr.Header().Get("Vary")
+	if vary != "Origin" {
+		t.Errorf("Expected Vary: Origin header in handleTopicByID when origin is denied, got %s", vary)
+	}
+}
+
+func TestVaryOriginHeaderInHandleVersions(t *testing.T) {
+	app := setupComprehensiveTestApp(t)
+	// Set specific allowed origins
+	app.CORSAllowedOrigins = "https://example.com"
+
+	req, _ := http.NewRequest("GET", "/api/versions/123", nil)
+	req.Header.Set("Origin", "https://evil.com")
+	rr := httptest.NewRecorder()
+
+	app.handleVersions(rr, req)
+
+	// When origin is denied, Vary: Origin should still be set
+	vary := rr.Header().Get("Vary")
+	if vary != "Origin" {
+		t.Errorf("Expected Vary: Origin header in handleVersions when origin is denied, got %s", vary)
 	}
 }
 

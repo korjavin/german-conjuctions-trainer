@@ -600,8 +600,17 @@ function renderVirtualScrollItems() {
     container.appendChild(fragment);
 
     // Set container height to accommodate all items (for scroll bar)
+    // Use a spacer element to create scrollable area while keeping container at viewport height
     const totalHeight = state.flattenedTopicNodes.length * VIRTUAL_SCROLL_ITEM_HEIGHT;
-    container.style.height = `${totalHeight}px`;
+    const spacer = document.createElement('div');
+    spacer.className = 'virtual-scroll-spacer';
+    spacer.style.height = `${totalHeight}px`;
+    spacer.style.position = 'absolute';
+    spacer.style.top = '0';
+    spacer.style.left = '0';
+    spacer.style.width = '100%';
+    spacer.style.pointerEvents = 'none';
+    container.appendChild(spacer);
     container.style.position = 'relative';
 }
 
@@ -653,7 +662,7 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
                 <span class="truncate">${displayName}</span>
                 ${childBadge}
             </div>
-            <div class="topic-item-date">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
+            <div class="topic-item-date" id="topic-date-${topic.id}">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
         </div>
         <div class="flex gap-2 mt-2 sm:mt-0" role="toolbar" aria-label="Topic actions">
             <button class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn" data-topic-id="${topic.id}" aria-label="Add child topic to ${escapeHtml(topic.name)}">Add child</button>
@@ -1215,7 +1224,7 @@ function renderAllTopics(flattenedNodes, nodesById) {
                     <span class="truncate">${displayName}</span>
                     ${childBadge}
                 </div>
-                <div class="topic-item-date" id="topic-date-${topic.id}" aria-hidden="true">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
+                <div class="topic-item-date" id="topic-date-${topic.id}">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
             </div>
             <div class="flex gap-2 mt-2 sm:mt-0" role="toolbar" aria-label="Topic actions">
                 <button class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn" data-topic-id="${topic.id}" aria-label="Add child topic to ${escapeHtml(topic.name)}">Add child</button>
