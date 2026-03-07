@@ -30,6 +30,20 @@ import {
     positionDropdown,
     saveTopic,
     savePrompt,
+    validateTopicName,
+    validateTopicPrompt,
+    showFieldError,
+    clearFieldError,
+    clearFormErrors,
+    renderRecentlyUsedTopics,
+    updateHierarchyPreview,
+    setFormLoading,
+    setupFormValidation,
+    setupFormKeyboardShortcuts,
+    addRecentlyUsedTopic,
+    getFolderIcon,
+    getFileIcon,
+    getTopicPath,
 } from './topics.js';
 import {
     checkAuthStatus,
@@ -289,6 +303,20 @@ function init() {
     window.renderTopicsList = renderTopicsList;
     window.toggleTopicCollapse = toggleTopicCollapse;
     window.isTopicCollapsed = isTopicCollapsed;
+    window.validateTopicName = validateTopicName;
+    window.validateTopicPrompt = validateTopicPrompt;
+    window.showFieldError = showFieldError;
+    window.clearFieldError = clearFieldError;
+    window.clearFormErrors = clearFormErrors;
+    window.renderRecentlyUsedTopics = renderRecentlyUsedTopics;
+    window.updateHierarchyPreview = updateHierarchyPreview;
+    window.setFormLoading = setFormLoading;
+    window.setupFormValidation = setupFormValidation;
+    window.setupFormKeyboardShortcuts = setupFormKeyboardShortcuts;
+    window.addRecentlyUsedTopic = addRecentlyUsedTopic;
+    window.getFolderIcon = getFolderIcon;
+    window.getFileIcon = getFileIcon;
+    window.getTopicPath = getTopicPath;
 }
 
 init();

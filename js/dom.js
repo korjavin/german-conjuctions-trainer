@@ -36,6 +36,23 @@ export const dom = {
     saveTopicBtn: document.getElementById('save-topic-btn'),
     cancelAddBtn: document.getElementById('cancel-add-btn'),
 
+    // Form validation elements
+    newTopicNameError: document.getElementById('new-topic-name-error'),
+    newTopicPromptError: document.getElementById('new-topic-prompt-error'),
+    editTopicPromptError: document.getElementById('edit-topic-prompt-error'),
+
+    // Hierarchy preview elements
+    addTopicHierarchyPreview: document.getElementById('add-topic-hierarchy-preview'),
+    addTopicPreviewPath: document.getElementById('add-topic-preview-path'),
+    editTopicHierarchyPreview: document.getElementById('edit-topic-hierarchy-preview'),
+    editTopicCurrentPath: document.getElementById('edit-topic-current-path'),
+
+    // Recently used topics elements
+    recentlyUsedTopics: document.getElementById('recently-used-topics'),
+    recentTopicsContainer: document.getElementById('recent-topics-container'),
+    editRecentlyUsedTopics: document.getElementById('edit-recently-used-topics'),
+    editRecentTopicsContainer: document.getElementById('edit-recent-topics-container'),
+
     promptEditor: document.getElementById('prompt-editor'),
     currentTopicName: document.getElementById('current-topic-name'),
     promptTextarea: document.getElementById('prompt-textarea'),

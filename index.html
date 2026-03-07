@@ -205,19 +205,42 @@
                     <label class="text-label">Edit Topic: <span id="current-topic-name" class="font-semibold"></span></label>
                     <button id="view-versions-btn" class="text-link">View Version History</button>
                 </div>
+
+                <!-- Recently used topics quick-select -->
+                <div id="edit-recently-used-topics" class="mb-4 hidden">
+                    <label class="text-label mb-1 block">Recently Used Parents</label>
+                    <div id="edit-recent-topics-container" class="flex flex-wrap gap-2 mb-2">
+                        <!-- Recently used topic badges will be inserted here -->
+                    </div>
+                </div>
+
                 <div class="mb-4">
                     <label for="edit-topic-parent" class="text-label block mb-1">Parent Topic</label>
                     <select id="edit-topic-parent" class="form-select w-full">
                         <!-- Options populated via JS -->
                     </select>
                 </div>
-                <div class="mb-4">
-                    <label for="prompt-textarea" class="text-label block mb-1">Prompt</label>
-                    <textarea id="prompt-textarea" rows="10" class="form-textarea w-full mb-2"></textarea>
+
+                <!-- Topic Hierarchy Preview for Edit -->
+                <div id="edit-topic-hierarchy-preview" class="mb-4 p-3 bg-gray-50 rounded border border-gray-200">
+                    <label class="text-label mb-1 block text-sm text-gray-600">Current hierarchy:</label>
+                    <div id="edit-topic-current-path" class="text-sm font-medium text-gray-800"></div>
                 </div>
+
+                <div class="mb-4">
+                    <label for="prompt-textarea" class="text-label block mb-1">
+                        Prompt <span class="text-red-500">*</span>
+                    </label>
+                    <textarea id="prompt-textarea" rows="10" class="form-textarea w-full mb-2"></textarea>
+                    <div id="edit-topic-prompt-error" class="text-error mt-1 text-sm hidden"></div>
+                </div>
+
                 <div class="flex justify-end space-x-2">
-                    <button id="cancel-edit-btn" class="btn-secondary">Cancel</button>
-                    <button id="save-prompt-btn" class="btn-primary">Save Changes</button>
+                    <button id="cancel-edit-btn" class="btn-secondary">Cancel (Esc)</button>
+                    <button id="save-prompt-btn" class="btn-primary flex items-center gap-2">
+                        <span>Save Changes</span>
+                        <span class="loading-spinner hidden" style="width: 16px; height: 16px; border-width: 2px;"></span>
+                    </button>
                 </div>
             </div>
 
@@ -235,23 +258,50 @@
             <!-- Add Topic Form (hidden by default) -->
             <div id="add-topic-form" class="mb-6 hidden">
                 <h3 class="section-title mb-4">Add New Topic</h3>
+
+                <!-- Recently used topics quick-select -->
+                <div id="recently-used-topics" class="mb-4 hidden">
+                    <label class="text-label mb-1 block">Recently Used Parents</label>
+                    <div id="recent-topics-container" class="flex flex-wrap gap-2 mb-2">
+                        <!-- Recently used topic badges will be inserted here -->
+                    </div>
+                </div>
+
                 <div class="mb-4">
-                    <label for="new-topic-parent" class="text-label mb-1">Parent Topic</label>
-                    <select id="new-topic-parent" class="form-input w-full bg-white border border-gray-300 rounded-md shadow-sm">
+                    <label for="new-topic-parent" class="text-label mb-1 block">Parent Topic</label>
+                    <select id="new-topic-parent" class="form-select w-full">
                         <option value="">(Root Topic)</option>
                     </select>
                 </div>
+
+                <!-- Topic Hierarchy Preview -->
+                <div id="add-topic-hierarchy-preview" class="mb-4 p-3 bg-gray-50 rounded border border-gray-200 hidden">
+                    <label class="text-label mb-1 block text-sm text-gray-600">Topic will be created as:</label>
+                    <div id="add-topic-preview-path" class="text-sm font-medium text-gray-800"></div>
+                </div>
+
                 <div class="mb-4">
-                    <label for="new-topic-name" class="text-label mb-1">Topic Name</label>
+                    <label for="new-topic-name" class="text-label mb-1 block">
+                        Topic Name <span class="text-red-500">*</span>
+                    </label>
                     <input type="text" id="new-topic-name" class="form-input w-full" placeholder="e.g., Conjunctions, Verb + Preposition">
+                    <div id="new-topic-name-error" class="text-error mt-1 text-sm hidden"></div>
                 </div>
+
                 <div class="mb-4">
-                    <label for="new-topic-prompt" class="text-label mb-1">Prompt</label>
+                    <label for="new-topic-prompt" class="text-label mb-1 block">
+                        Prompt <span class="text-red-500">*</span>
+                    </label>
                     <textarea id="new-topic-prompt" rows="8" class="form-textarea w-full" placeholder="Enter the prompt for generating exercises..."></textarea>
+                    <div id="new-topic-prompt-error" class="text-error mt-1 text-sm hidden"></div>
                 </div>
+
                 <div class="flex justify-end space-x-2">
-                    <button id="cancel-add-btn" class="btn-secondary">Cancel</button>
-                    <button id="save-topic-btn" class="btn-primary">Create Topic</button>
+                    <button id="cancel-add-btn" class="btn-secondary">Cancel (Esc)</button>
+                    <button id="save-topic-btn" class="btn-primary flex items-center gap-2">
+                        <span>Create Topic</span>
+                        <span class="loading-spinner hidden" style="width: 16px; height: 16px; border-width: 2px;"></span>
+                    </button>
                 </div>
             </div>
 

@@ -1,6 +1,7 @@
 const AUDIO_ENABLED_STORAGE_KEY = 'audioEnabled';
 const WORD_AUDIO_CACHE_STORAGE_KEY = 'wordAudioCacheV1';
 const TOPIC_COLLAPSE_STATE_STORAGE_KEY = 'topicCollapseState';
+const RECENTLY_USED_TOPICS_STORAGE_KEY = 'recentlyUsedTopics';
 
 function _loadAudioEnabled() {
     const savedValue = localStorage.getItem(AUDIO_ENABLED_STORAGE_KEY);
@@ -29,6 +30,39 @@ function _saveTopicCollapseState(collapsedIds) {
     } catch (error) {
         console.error('Failed to save topic collapse state:', error);
     }
+}
+
+function _loadRecentlyUsedTopics() {
+    try {
+        const savedValue = localStorage.getItem(RECENTLY_USED_TOPICS_STORAGE_KEY);
+        if (!savedValue) return [];
+        const parsed = JSON.parse(savedValue);
+        if (Array.isArray(parsed)) {
+            return parsed.slice(0, 10); // Limit to 10 most recent
+        }
+        return [];
+    } catch (error) {
+        console.error('Failed to load recently used topics:', error);
+        return [];
+    }
+}
+
+function _saveRecentlyUsedTopics(topics) {
+    try {
+        localStorage.setItem(RECENTLY_USED_TOPICS_STORAGE_KEY, JSON.stringify(topics.slice(0, 10)));
+    } catch (error) {
+        console.error('Failed to save recently used topics:', error);
+    }
+}
+
+export function addRecentlyUsedTopic(topicId, topicName) {
+    // Remove if already exists
+    const filtered = state.recentlyUsedTopics.filter(t => t.id !== topicId);
+    // Add to front
+    filtered.unshift({ id: topicId, name: topicName });
+    // Limit to 10
+    state.recentlyUsedTopics = filtered.slice(0, 10);
+    _saveRecentlyUsedTopics(state.recentlyUsedTopics);
 }
 
 function _loadWordAudioCache() {
@@ -81,6 +115,7 @@ export const state = {
     collapsedTopicIds: _loadTopicCollapseState(),
     topicsSearchQuery: '',
     topicsMatchingIds: new Set(),
+    recentlyUsedTopics: _loadRecentlyUsedTopics(),
     exercises: [],
     exerciseIds: [],
     currentExerciseIndex: 0,
@@ -96,6 +131,8 @@ export const state = {
     sessionTime: 0,
     isSessionComplete: false,
     editingTopicId: null,
+    isCreatingTopic: false,
+    isUpdatingTopic: false,
     timer: 60,
     timerInterval: null,
     isLoggedIn: false,

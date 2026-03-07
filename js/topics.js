@@ -1,4 +1,4 @@
-import { state, toggleTopicCollapse, isTopicCollapsed } from './state.js';
+import { state, toggleTopicCollapse, isTopicCollapsed, addRecentlyUsedTopic } from './state.js';
 import { dom } from './dom.js';
 import {
     fetchTopicsAPI,
@@ -12,6 +12,214 @@ import {
     fetchLastRefinedPromptAPI,
     saveUserSettingsAPI,
 } from './api.js';
+
+// Form validation constants
+const MIN_TOPIC_NAME_LENGTH = 1;
+const MAX_TOPIC_NAME_LENGTH = 200;
+const MIN_PROMPT_LENGTH = 10;
+const MAX_PROMPT_LENGTH = 10000;
+
+// Validation functions with improved error messages
+export function validateTopicName(name) {
+    if (!name || name.trim().length === 0) {
+        return 'Topic name is required.';
+    }
+    if (name.trim().length < MIN_TOPIC_NAME_LENGTH) {
+        return `Topic name must be at least ${MIN_TOPIC_NAME_LENGTH} character.`;
+    }
+    if (name.length > MAX_TOPIC_NAME_LENGTH) {
+        return `Topic name must be less than ${MAX_TOPIC_NAME_LENGTH} characters. Currently ${name.length} characters.`;
+    }
+    // Check for duplicate names at the same level
+    const normalizedName = name.trim();
+    const duplicate = state.topics.find(t =>
+        t.name.toLowerCase() === normalizedName.toLowerCase() && t.id !== state.editingTopicId
+    );
+    if (duplicate) {
+        return 'A topic with this name already exists. Please choose a different name.';
+    }
+    return null;
+}
+
+export function validateTopicPrompt(prompt) {
+    if (!prompt || prompt.trim().length === 0) {
+        return 'Prompt is required.';
+    }
+    if (prompt.trim().length < MIN_PROMPT_LENGTH) {
+        return `Prompt must be at least ${MIN_PROMPT_LENGTH} characters. Currently ${prompt.trim().length} characters.`;
+    }
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+        return `Prompt must be less than ${MAX_PROMPT_LENGTH} characters. Currently ${prompt.length} characters.`;
+    }
+    return null;
+}
+
+// Form field error handling
+export function showFieldError(fieldElement, errorElement, message) {
+    fieldElement.classList.add('form-input-error');
+    fieldElement.classList.remove('form-input-success');
+    if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.classList.remove('hidden');
+    }
+}
+
+export function clearFieldError(fieldElement, errorElement) {
+    fieldElement.classList.remove('form-input-error');
+    fieldElement.classList.add('form-input-success');
+    if (errorElement) {
+        errorElement.textContent = '';
+        errorElement.classList.add('hidden');
+    }
+}
+
+export function clearFormErrors(formType) {
+    if (formType === 'add') {
+        clearFieldError(dom.newTopicName, dom.newTopicNameError);
+        clearFieldError(dom.newTopicPrompt, dom.newTopicPromptError);
+        dom.newTopicName.classList.remove('form-input-success');
+        dom.newTopicPrompt.classList.remove('form-input-success');
+    } else if (formType === 'edit') {
+        clearFieldError(dom.promptTextarea, dom.editTopicPromptError);
+        dom.promptTextarea.classList.remove('form-input-success');
+    }
+}
+
+// Recently used topics rendering
+export function renderRecentlyUsedTopics(containerId, parentSelectId) {
+    const container = document.getElementById(containerId);
+    const parentSelect = document.getElementById(parentSelectId);
+
+    if (!container || !parentSelect) return;
+
+    container.innerHTML = '';
+
+    if (state.recentlyUsedTopics.length === 0) {
+        container.parentElement.classList.add('hidden');
+        return;
+    }
+
+    container.parentElement.classList.remove('hidden');
+
+    state.recentlyUsedTopics.forEach(recentTopic => {
+        const badge = document.createElement('span');
+        badge.className = 'recent-topic-badge';
+        badge.textContent = recentTopic.name;
+        badge.title = `Select ${recentTopic.name} as parent`;
+        badge.addEventListener('click', () => {
+            parentSelect.value = recentTopic.id;
+            // Trigger change event
+            parentSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+            // Update active state
+            container.querySelectorAll('.recent-topic-badge').forEach(b => b.classList.remove('active'));
+            badge.classList.add('active');
+        });
+
+        container.appendChild(badge);
+    });
+}
+
+// Update topic hierarchy preview
+export function updateHierarchyPreview(parentSelect, previewElement, topicName = '') {
+    if (!previewElement) return;
+
+    const parentId = parentSelect.value;
+    let previewPath = '';
+
+    if (topicName) {
+        if (parentId) {
+            const parentPath = getTopicPath(parentId, state.topics);
+            previewPath = `${parentPath} / ${topicName}`;
+        } else {
+            previewPath = topicName;
+        }
+        previewElement.textContent = previewPath || 'Root';
+    } else {
+        // For edit form, show current path
+        previewElement.textContent = parentId
+            ? getTopicPath(parentId, state.topics)
+            : 'Root Topic';
+    }
+}
+
+// Loading state handling
+export function setFormLoading(formType, isLoading, button) {
+    if (formType === 'add') {
+        state.isCreatingTopic = isLoading;
+    } else if (formType === 'edit') {
+        state.isUpdatingTopic = isLoading;
+    }
+
+    if (button) {
+        const spinner = button.querySelector('.loading-spinner');
+        const textSpan = button.querySelector('span:not(.loading-spinner)');
+
+        if (isLoading) {
+            button.disabled = true;
+            if (spinner) spinner.classList.remove('hidden');
+            if (textSpan) textSpan.textContent = formType === 'add' ? 'Creating...' : 'Saving...';
+        } else {
+            button.disabled = false;
+            if (spinner) spinner.classList.add('hidden');
+            if (textSpan) textSpan.textContent = formType === 'add' ? 'Create Topic' : 'Save Changes';
+        }
+    }
+}
+
+// Real-time validation
+export function setupFormValidation(formType) {
+    if (formType === 'add') {
+        dom.newTopicName.addEventListener('input', () => {
+            const error = validateTopicName(dom.newTopicName.value);
+            if (error) {
+                showFieldError(dom.newTopicName, dom.newTopicNameError, error);
+            } else if (dom.newTopicName.value.trim().length > 0) {
+                clearFieldError(dom.newTopicName, dom.newTopicNameError);
+            }
+            updateHierarchyPreview(document.getElementById('new-topic-parent'), dom.addTopicPreviewPath, dom.newTopicName.value);
+        });
+
+        dom.newTopicPrompt.addEventListener('input', () => {
+            const error = validateTopicPrompt(dom.newTopicPrompt.value);
+            if (error) {
+                showFieldError(dom.newTopicPrompt, dom.newTopicPromptError, error);
+            } else if (dom.newTopicPrompt.value.trim().length >= MIN_PROMPT_LENGTH) {
+                clearFieldError(dom.newTopicPrompt, dom.newTopicPromptError);
+            }
+        });
+    } else if (formType === 'edit') {
+        dom.promptTextarea.addEventListener('input', () => {
+            const error = validateTopicPrompt(dom.promptTextarea.value);
+            if (error) {
+                showFieldError(dom.promptTextarea, dom.editTopicPromptError, error);
+            } else if (dom.promptTextarea.value.trim().length >= MIN_PROMPT_LENGTH) {
+                clearFieldError(dom.promptTextarea, dom.editTopicPromptError);
+            }
+        });
+    }
+}
+
+// Keyboard shortcuts for forms
+export function setupFormKeyboardShortcuts(formType, saveAction, cancelAction) {
+    const form = formType === 'add' ? dom.addTopicForm : dom.promptEditor;
+
+    form.addEventListener('keydown', (e) => {
+        // Enter to save (Ctrl+Enter or Cmd+Enter to prevent accidental submission)
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            if (!state.isCreatingTopic && !state.isUpdatingTopic) {
+                saveAction();
+            }
+        }
+
+        // Escape to cancel
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelAction();
+        }
+    });
+}
 
 let draggedTopicId = null;
 let isMoveInProgress = false;
@@ -607,17 +815,55 @@ function getNextSortOrder(parentId) {
 
 async function createTopic(name, prompt, parentId = null, sortOrder = 0) {
     try {
-        await createTopicAPI(name, prompt, parentId, sortOrder);
+        const result = await createTopicAPI(name, prompt, parentId, sortOrder);
+
+        // Add to recently used topics
+        if (result && result.id) {
+            addRecentlyUsedTopic(result.id, name);
+        }
+
         await loadTopics();
         hideAddTopicForm();
     } catch (error) {
         console.error('Error creating topic:', error);
-        alert('Failed to create topic. Please try again.');
+
+        // Show more specific error message
+        let errorMessage = 'Failed to create topic.';
+        if (error.message) {
+            if (error.message.includes('duplicate') || error.message.includes('already exists')) {
+                errorMessage = 'A topic with this name already exists.';
+            } else if (error.message.includes('validation')) {
+                errorMessage = error.message;
+            } else {
+                errorMessage = `Failed to create topic: ${error.message}`;
+            }
+        }
+        alert(errorMessage);
+    } finally {
+        setFormLoading('add', false, dom.saveTopicBtn);
     }
 }
 
 async function deleteTopic(topicId) {
-    if (!confirm('Are you sure you want to delete this topic? This action cannot be undone.')) {
+    const topic = state.topics.find(t => t.id === topicId);
+    if (!topic) {
+        alert('Topic not found. Please refresh and try again.');
+        return;
+    }
+
+    // Count children
+    const { nodesById } = buildTopicTree(state.topics);
+    const node = nodesById.get(topicId);
+    const childCount = node ? node.children.length : 0;
+
+    // Build confirmation message
+    let message = `Are you sure you want to delete the topic "${topic.name}"?`;
+    if (childCount > 0) {
+        message += `\n\nThis will also delete ${childCount} child topic${childCount > 1 ? 's' : ''}.`;
+    }
+    message += '\n\nThis action cannot be undone.';
+
+    if (!confirm(message)) {
         return;
     }
 
@@ -629,21 +875,56 @@ async function deleteTopic(topicId) {
             localStorage.removeItem('selectedTopicId');
         }
 
+        // Remove from recently used topics
+        state.recentlyUsedTopics = state.recentlyUsedTopics.filter(t => t.id !== topicId);
+        localStorage.setItem('recentlyUsedTopics', JSON.stringify(state.recentlyUsedTopics));
+
         await loadTopics();
     } catch (error) {
         console.error('Error deleting topic:', error);
-        alert(error.message || 'Failed to delete topic. Please try again.');
+
+        // Show more specific error message
+        let errorMessage = 'Failed to delete topic.';
+        if (error.message) {
+            if (error.message.includes('foreign key') || error.message.includes('constraint')) {
+                errorMessage = 'Cannot delete this topic because it has associated data. Please delete child topics first.';
+            } else {
+                errorMessage = `Failed to delete topic: ${error.message}`;
+            }
+        }
+        alert(errorMessage);
     }
 }
 
 async function updateTopicDetails(topicId, name, prompt, parentId, sortOrder) {
     try {
         await updateTopicAPI(topicId, name, prompt, parentId, sortOrder);
+
+        // Add to recently used topics
+        const topic = state.topics.find(t => t.id === topicId);
+        if (topic) {
+            addRecentlyUsedTopic(topicId, name);
+        }
+
         await loadTopics();
         hidePromptEditor();
     } catch (error) {
         console.error('Error updating topic:', error);
-        alert('Failed to update topic. Please try again.');
+
+        // Show more specific error message
+        let errorMessage = 'Failed to update topic.';
+        if (error.message) {
+            if (error.message.includes('duplicate') || error.message.includes('already exists')) {
+                errorMessage = 'A topic with this name already exists.';
+            } else if (error.message.includes('validation')) {
+                errorMessage = error.message;
+            } else {
+                errorMessage = `Failed to update topic: ${error.message}`;
+            }
+        }
+        alert(errorMessage);
+    } finally {
+        setFormLoading('edit', false, dom.savePromptBtn);
     }
 }
 
@@ -662,6 +943,10 @@ export function showAddTopicForm(parentId = null) {
     dom.newTopicName.value = '';
     dom.newTopicPrompt.value = '';
 
+    // Clear previous errors and success states
+    clearFormErrors('add');
+    dom.addTopicHierarchyPreview.classList.add('hidden');
+
     const parentSelect = document.getElementById('new-topic-parent');
     if (parentSelect) {
         parentSelect.innerHTML = '<option value="">(Root Topic)</option>';
@@ -672,13 +957,32 @@ export function showAddTopicForm(parentId = null) {
             parentSelect.appendChild(opt);
         });
         parentSelect.value = parentId || '';
+
+        // Add change listener for hierarchy preview
+        parentSelect.addEventListener('change', () => {
+            updateHierarchyPreview(parentSelect, dom.addTopicPreviewPath, dom.newTopicName.value.trim());
+            if (dom.newTopicName.value.trim()) {
+                dom.addTopicHierarchyPreview.classList.remove('hidden');
+            }
+        });
     }
+
+    // Render recently used topics
+    renderRecentlyUsedTopics('recent-topics-container', 'new-topic-parent');
+
+    // Setup real-time validation
+    setupFormValidation('add');
+
+    // Setup keyboard shortcuts
+    setupFormKeyboardShortcuts('add', saveTopic, hideAddTopicForm);
 
     dom.newTopicName.focus();
 }
 
 export function hideAddTopicForm() {
     dom.addTopicForm.classList.add('hidden');
+    clearFormErrors('add');
+    dom.addTopicHierarchyPreview.classList.add('hidden');
 }
 
 export function showPromptEditor(topicId) {
@@ -688,6 +992,17 @@ export function showPromptEditor(topicId) {
     state.editingTopicId = topicId;
     dom.currentTopicName.textContent = topic.name;
     dom.promptTextarea.value = topic.prompt;
+
+    // Clear previous errors and success states
+    clearFormErrors('edit');
+
+    // Show current hierarchy
+    if (topic.parent_id) {
+        const currentPath = getTopicPath(topic.parent_id, state.topics);
+        dom.editTopicCurrentPath.textContent = `${currentPath} / ${topic.name}`;
+    } else {
+        dom.editTopicCurrentPath.textContent = topic.name;
+    }
 
     const editParentSelect = document.getElementById('edit-topic-parent');
     if (editParentSelect) {
@@ -700,7 +1015,27 @@ export function showPromptEditor(topicId) {
             editParentSelect.appendChild(opt);
         });
         editParentSelect.value = topic.parent_id || '';
+
+        // Add change listener for hierarchy preview
+        editParentSelect.addEventListener('change', () => {
+            const newParentId = editParentSelect.value;
+            if (newParentId) {
+                const parentPath = getTopicPath(newParentId, state.topics);
+                dom.editTopicCurrentPath.textContent = `${parentPath} / ${topic.name}`;
+            } else {
+                dom.editTopicCurrentPath.textContent = topic.name;
+            }
+        });
     }
+
+    // Render recently used topics
+    renderRecentlyUsedTopics('edit-recent-topics-container', 'edit-topic-parent');
+
+    // Setup real-time validation
+    setupFormValidation('edit');
+
+    // Setup keyboard shortcuts
+    setupFormKeyboardShortcuts('edit', savePrompt, hidePromptEditor);
 
     dom.promptEditor.classList.remove('hidden');
     dom.versionHistory.classList.add('hidden');
@@ -709,6 +1044,7 @@ export function showPromptEditor(topicId) {
 export function hidePromptEditor() {
     dom.promptEditor.classList.add('hidden');
     state.editingTopicId = null;
+    clearFormErrors('edit');
 }
 
 export async function showVersionHistory(topicId) {
@@ -756,7 +1092,12 @@ export async function showVersionHistory(topicId) {
 }
 
 async function restoreVersion(topicId, versionId) {
-    if (!confirm('Are you sure you want to restore this version? This will create a new version with this content.')) {
+    const topic = state.topics.find(t => t.id === topicId);
+    const topicName = topic ? topic.name : 'Unknown Topic';
+
+    const message = `Are you sure you want to restore this version for "${topicName}"?\n\nThis will create a new version with the restored content. The current version will be preserved in history.`;
+
+    if (!confirm(message)) {
         return;
     }
 
@@ -764,10 +1105,16 @@ async function restoreVersion(topicId, versionId) {
         await restoreVersionAPI(topicId, versionId);
         await loadTopics();
         dom.versionHistory.classList.add('hidden');
-        alert('Version restored successfully!');
+        alert('Version restored successfully! A new version has been created.');
     } catch (error) {
         console.error('Error restoring version:', error);
-        alert('Failed to restore version.');
+
+        // Show more specific error message
+        let errorMessage = 'Failed to restore version.';
+        if (error.message) {
+            errorMessage = `Failed to restore version: ${error.message}`;
+        }
+        alert(errorMessage);
     }
 }
 
@@ -845,15 +1192,30 @@ export function saveTopic() {
     const name = dom.newTopicName.value.trim();
     const prompt = dom.newTopicPrompt.value.trim();
 
-    const parentSelect = document.getElementById('new-topic-parent');
-    const parentId = parentSelect && parentSelect.value ? parentSelect.value : null;
-
-    if (!name || !prompt) {
-        alert('Please provide both a name and a prompt.');
+    // Validate name
+    const nameError = validateTopicName(name);
+    if (nameError) {
+        showFieldError(dom.newTopicName, dom.newTopicNameError, nameError);
+        dom.newTopicName.focus();
         return;
     }
 
+    // Validate prompt
+    const promptError = validateTopicPrompt(prompt);
+    if (promptError) {
+        showFieldError(dom.newTopicPrompt, dom.newTopicPromptError, promptError);
+        dom.promptTextarea.focus();
+        return;
+    }
+
+    const parentSelect = document.getElementById('new-topic-parent');
+    const parentId = parentSelect && parentSelect.value ? parentSelect.value : null;
+
     const sortOrder = getNextSortOrder(parentId);
+
+    // Set loading state
+    setFormLoading('add', true, dom.saveTopicBtn);
+
     createTopic(name, prompt, parentId, sortOrder);
 }
 
@@ -861,13 +1223,16 @@ export function savePrompt() {
     const prompt = dom.promptTextarea.value.trim();
     const name = dom.currentTopicName.textContent.trim();
 
-    const editParentSelect = document.getElementById('edit-topic-parent');
-    const parentId = editParentSelect && editParentSelect.value ? editParentSelect.value : null;
-
-    if (!prompt) {
-        alert('Prompt cannot be empty.');
+    // Validate prompt
+    const promptError = validateTopicPrompt(prompt);
+    if (promptError) {
+        showFieldError(dom.promptTextarea, dom.editTopicPromptError, promptError);
+        dom.promptTextarea.focus();
         return;
     }
+
+    const editParentSelect = document.getElementById('edit-topic-parent');
+    const parentId = editParentSelect && editParentSelect.value ? editParentSelect.value : null;
 
     const existingTopic = state.topics.find(t => t.id === state.editingTopicId);
     if (!existingTopic) {
@@ -880,6 +1245,9 @@ export function savePrompt() {
     if (existingParentId !== parentId) {
         sortOrder = getNextSortOrder(parentId);
     }
+
+    // Set loading state
+    setFormLoading('edit', true, dom.savePromptBtn);
 
     updateTopicDetails(state.editingTopicId, name, prompt, parentId, sortOrder);
 }
