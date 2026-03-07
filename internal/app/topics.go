@@ -65,6 +65,8 @@ type MoveTopicRequest struct {
 }
 
 func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
+	// SECURITY: Wildcard CORS allows any origin. In production, use specific allowed origins.
+	// TODO: Configure allowed origins via environment variable or config.
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")

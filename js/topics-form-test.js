@@ -42,19 +42,7 @@
         }
     }
 
-    // Test 1: Verify validateTopicName function exists
-    tests.push(() => {
-        const validateName = typeof window.validateTopicName === 'function' ? window.validateTopicName : null;
-        assert(validateName !== null, 'validateTopicName function is available');
-    });
-
-    // Test 2: Verify validateTopicPrompt function exists
-    tests.push(() => {
-        const validatePrompt = typeof window.validateTopicPrompt === 'function' ? window.validateTopicPrompt : null;
-        assert(validatePrompt !== null, 'validateTopicPrompt function is available');
-    });
-
-    // Test 3: Verify validateTopicName returns error for empty name
+    // Test 1: Verify validateTopicName returns error for empty name
     tests.push(() => {
         const validateName = typeof window.validateTopicName === 'function' ? window.validateTopicName : null;
         if (!validateName) {
@@ -67,7 +55,7 @@
         assert(error.includes('required'), 'Error message mentions "required"');
     });
 
-    // Test 4: Verify validateTopicName accepts valid name
+    // Test 2: Verify validateTopicName accepts valid name
     tests.push(() => {
         const validateName = typeof window.validateTopicName === 'function' ? window.validateTopicName : null;
         if (!validateName) {
@@ -79,7 +67,7 @@
         assert(error === null, 'validateTopicName accepts valid name');
     });
 
-    // Test 5: Verify validateTopicPrompt returns error for empty prompt
+    // Test 3: Verify validateTopicPrompt returns error for empty prompt
     tests.push(() => {
         const validatePrompt = typeof window.validateTopicPrompt === 'function' ? window.validateTopicPrompt : null;
         if (!validatePrompt) {

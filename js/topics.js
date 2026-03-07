@@ -38,7 +38,7 @@ export function debounce(func, wait) {
 }
 
 // Validation functions with improved error messages
-export function validateTopicName(name) {
+export function validateTopicName(name, parentId = null) {
     if (!name || name.trim().length === 0) {
         return 'Topic name is required.';
     }
@@ -48,13 +48,17 @@ export function validateTopicName(name) {
     if (name.length > MAX_TOPIC_NAME_LENGTH) {
         return `Topic name must be less than ${MAX_TOPIC_NAME_LENGTH} characters. Currently ${name.length} characters.`;
     }
-    // Check for duplicate names at the same level
+    // Check for duplicate names at the same level (same parent)
     const normalizedName = name.trim();
-    const duplicate = state.topics.find(t =>
-        t.name.toLowerCase() === normalizedName.toLowerCase() && t.id !== state.editingTopicId
-    );
+    const normalizedParentId = parentId || null; // Treat empty string as null (root level)
+    const duplicate = state.topics.find(t => {
+        const topicParentId = t.parent_id || null;
+        return t.name.toLowerCase() === normalizedName.toLowerCase() &&
+               topicParentId === normalizedParentId &&
+               t.id !== state.editingTopicId;
+    });
     if (duplicate) {
-        return 'A topic with this name already exists. Please choose a different name.';
+        return 'A topic with this name already exists at this level. Please choose a different name.';
     }
     return null;
 }
@@ -189,7 +193,9 @@ export function setFormLoading(formType, isLoading, button) {
 export function setupFormValidation(formType) {
     if (formType === 'add') {
         dom.newTopicName.addEventListener('input', () => {
-            const error = validateTopicName(dom.newTopicName.value);
+            const parentSelect = document.getElementById('new-topic-parent');
+            const parentId = parentSelect && parentSelect.value ? parentSelect.value : null;
+            const error = validateTopicName(dom.newTopicName.value, parentId);
             if (error) {
                 showFieldError(dom.newTopicName, dom.newTopicNameError, error);
             } else if (dom.newTopicName.value.trim().length > 0) {
@@ -504,6 +510,7 @@ function setupVirtualScroll() {
 function renderVirtualScrollItems() {
     // Clear current items but keep the container
     const container = dom.topicsList;
+    container.innerHTML = '';
 
     // Only render items in the visible range
     const start = state.virtualScrollStartIndex;
@@ -518,6 +525,11 @@ function renderVirtualScrollItems() {
 
         const item = createTopicItem(nodeData.topic, nodeData.depth, nodeData.parentId,
                                      nodeData.indexInParent, nodeData.totalSiblings);
+        // Position item at its correct scroll offset
+        item.style.position = 'absolute';
+        item.style.top = `${i * VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
+        item.style.left = '0';
+        item.style.width = '100%';
         fragment.appendChild(item);
     }
 
@@ -613,11 +625,7 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings) {
     // Accessibility: Add keyboard navigation handler
     topicDiv.addEventListener('keydown', handleTopicKeyboard);
 
-    // Drag and drop handlers
-    let draggedTopicId = null;
-    let isMoveInProgress = false;
-    let dragGhostElement = null;
-
+    // Drag and drop handlers - use module-level variables
     topicDiv.addEventListener('dragstart', (event) => {
         draggedTopicId = topic.id;
         topicDiv.classList.add('topic-dragging');
@@ -999,6 +1007,11 @@ function renderAllTopics(flattenedNodes, nodesById) {
         topicDiv.draggable = true;
         topicDiv.dataset.topicId = topic.id;
         topicDiv.style.marginLeft = `${depth * 20}px`;
+
+        // Calculate child status before using it for ARIA attributes
+        const hasChildren = topic.children.length > 0;
+        const isCollapsed = hasChildren && isTopicCollapsed(topic.id);
+
         // Accessibility: Add ARIA attributes
         topicDiv.setAttribute('role', 'treeitem');
         topicDiv.setAttribute('tabindex', '0');
@@ -1007,9 +1020,6 @@ function renderAllTopics(flattenedNodes, nodesById) {
         topicDiv.setAttribute('aria-selected', 'false');
         topicDiv.setAttribute('aria-label', `${topic.name}${hasChildren ? `, ${isCollapsed ? 'collapsed' : 'expanded'} with ${topic.children.length} children` : ''}`);
         topicDiv.setAttribute('aria-describedby', `topic-date-${topic.id}`);
-
-        const hasChildren = topic.children.length > 0;
-        const isCollapsed = hasChildren && isTopicCollapsed(topic.id);
         const chevronDirection = isCollapsed ? 'right' : 'down';
         const chevronClass = isCollapsed ? 'chevron-right' : 'chevron-down';
         const childBadge = hasChildren ? `<span class="text-xs text-gray-500 ml-2">(${topic.children.length})</span>` : '';
@@ -1715,8 +1725,11 @@ export function saveTopic() {
     const name = dom.newTopicName.value.trim();
     const prompt = dom.newTopicPrompt.value.trim();
 
+    const parentSelect = document.getElementById('new-topic-parent');
+    const parentId = parentSelect && parentSelect.value ? parentSelect.value : null;
+
     // Validate name
-    const nameError = validateTopicName(name);
+    const nameError = validateTopicName(name, parentId);
     if (nameError) {
         showFieldError(dom.newTopicName, dom.newTopicNameError, nameError);
         dom.newTopicName.focus();
@@ -1730,9 +1743,6 @@ export function saveTopic() {
         dom.promptTextarea.focus();
         return;
     }
-
-    const parentSelect = document.getElementById('new-topic-parent');
-    const parentId = parentSelect && parentSelect.value ? parentSelect.value : null;
 
     const sortOrder = getNextSortOrder(parentId);
 

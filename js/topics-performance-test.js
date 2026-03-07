@@ -68,10 +68,10 @@ function generateMockTopics(count, nestingLevel = 2) {
 }
 
 // Run all tests
-function runPerformanceTests() {
+async function runPerformanceTests() {
     console.log('=== Topic Tree Performance Tests ===\n');
 
-    testDebounceFunction();
+    await testDebounceFunction();
     testTreeBuildingOptimization();
     testFlatteningOptimization();
     testVirtualScrollThreshold();
@@ -99,35 +99,38 @@ function testDebounceFunction() {
 
     if (!debounce) {
         console.log('  Skipping: debounce function not available');
-        return;
+        return Promise.resolve();
     }
 
-    let callCount = 0;
-    const debouncedFunc = debounce(() => {
-        callCount++;
-    }, 300);
+    return new Promise((resolve) => {
+        let callCount = 0;
+        const debouncedFunc = debounce(() => {
+            callCount++;
+        }, 300);
 
-    // Call multiple times rapidly
-    debouncedFunc();
-    debouncedFunc();
-    debouncedFunc();
-    debouncedFunc();
+        // Call multiple times rapidly
+        debouncedFunc();
+        debouncedFunc();
+        debouncedFunc();
+        debouncedFunc();
 
-    // Should not have been called yet (debounced)
-    if (assertEqual(callCount, 0, 'Debounce prevents immediate multiple calls')) {
-        testsPassed++;
-    } else {
-        testsFailed++;
-    }
-
-    // Wait for debounce delay and check again
-    setTimeout(() => {
-        if (assertEqual(callCount, 1, 'Debounce executes once after delay')) {
+        // Should not have been called yet (debounced)
+        if (assertEqual(callCount, 0, 'Debounce prevents immediate multiple calls')) {
             testsPassed++;
         } else {
             testsFailed++;
         }
-    }, 400);
+
+        // Wait for debounce delay and check again
+        setTimeout(() => {
+            if (assertEqual(callCount, 1, 'Debounce executes once after delay')) {
+                testsPassed++;
+            } else {
+                testsFailed++;
+            }
+            resolve();
+        }, 400);
+    });
 }
 
 // Test 2: Tree building is efficient for large datasets
