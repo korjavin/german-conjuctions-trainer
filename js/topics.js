@@ -96,7 +96,7 @@ export function sortTopics(topics, sortOrder = state.topicSortOrder || 'tree') {
     return sorted;
 }
 
-function buildTopicTree(topics, sortOrder = state.topicSortOrder || 'tree') {
+export function buildTopicTree(topics, sortOrder = state.topicSortOrder || 'tree') {
     const nodesById = new Map();
 
     topics.forEach(topic => {
@@ -120,11 +120,19 @@ function buildTopicTree(topics, sortOrder = state.topicSortOrder || 'tree') {
     return { roots, nodesById };
 }
 
-function sortTreeNodes(nodes, sortOrder) {
-    nodes.sort((a, b) => compareTopics(a, b, sortOrder));
+function sortTreeNodes(nodes, sortOrder, isTopLevel = true) {
+    // Only sort top-level topics - nested children maintain tree order
+    if (isTopLevel && sortOrder !== 'tree') {
+        nodes.sort((a, b) => compareTopics(a, b, sortOrder));
+    } else if (sortOrder === 'tree') {
+        // For tree order, sort by sort_order at all levels
+        nodes.sort((a, b) => compareTopics(a, b, sortOrder));
+    }
+
+    // Recursively process children (but don't sort them unless it's tree order)
     nodes.forEach(node => {
         if (node.children.length > 0) {
-            sortTreeNodes(node.children, sortOrder);
+            sortTreeNodes(node.children, sortOrder, false);
         }
     });
 }

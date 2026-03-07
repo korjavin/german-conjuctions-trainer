@@ -130,15 +130,15 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run all tests - must pass before next task
 
 ### Task 5: Add top-level sibling sorting
-- [ ] Add sort control for top-level topics only (not full tree)
-- [ ] Modify `buildTopicTree()` or `sortTreeNodes()` to support top-level-only sorting
-- [ ] Add sort options: Name (A-Z), Name (Z-A), Date Newest, Date Oldest, Custom Order
-- [ ] Implement top-level sorting logic that doesn't affect nested children
-- [ ] Add UI controls for top-level sort selection
-- [ ] Persist top-level sort preference in localStorage
-- [ ] Test top-level sorting works without affecting nested children
-- [ ] Test sorting persists across page reloads
-- [ ] Run all tests - must pass before next task
+- [x] Add sort control for top-level topics only (not full tree)
+- [x] Modify `buildTopicTree()` or `sortTreeNodes()` to support top-level-only sorting
+- [x] Add sort options: Name (A-Z), Name (Z-A), Date Newest, Date Oldest, Custom Order
+- [x] Implement top-level sorting logic that doesn't affect nested children
+- [x] Add UI controls for top-level sort selection
+- [x] Persist top-level sort preference in localStorage
+- [x] Test top-level sorting works without affecting nested children
+- [x] Test sorting persists across page reloads
+- [x] Run all tests - must pass before next task
 
 ### Task 6: Improve drag-and-drop visual feedback
 - [ ] Add drop zone indicators that show exactly where topic will be dropped
