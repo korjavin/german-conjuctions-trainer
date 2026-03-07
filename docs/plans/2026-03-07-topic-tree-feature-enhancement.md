@@ -85,13 +85,13 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 ## Implementation Steps
 
 ### Task 1: Add tree lines visual connectors
-- [ ] Add CSS styles for tree line connectors (vertical and horizontal lines)
-- [ ] Modify `renderTopicsList()` to add tree line elements before each topic item
-- [ ] Implement CSS to render tree lines based on topic depth using left borders or pseudo-elements
-- [ ] Add tree line connectors that connect parent to children across different depths
-- [ ] Test tree lines render correctly for various tree depths and structures
-- [ ] Test tree lines work with existing drag-and-drop functionality
-- [ ] Run all tests - must pass before next task
+- [x] Add CSS styles for tree line connectors (vertical and horizontal lines)
+- [x] Modify `renderTopicsList()` to add tree line elements before each topic item
+- [x] Implement CSS to render tree lines based on topic depth using left borders or pseudo-elements
+- [x] Add tree line connectors that connect parent to children across different depths
+- [x] Test tree lines render correctly for various tree depths and structures
+- [x] Test tree lines work with existing drag-and-drop functionality
+- [x] Run all tests - must pass before next task
 
 ### Task 2: Add expand/collapse functionality
 - [ ] Add `collapsed` state property to each topic in state management
