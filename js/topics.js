@@ -247,7 +247,9 @@ export function setupFormKeyboardShortcuts(formType, saveAction, cancelAction) {
 
 let draggedTopicId = null;
 let isMoveInProgress = false;
+let parentElement = null;
 let dragGhostElement = null;
+let virtualScrollHandler = null; // Store handler reference for proper cleanup
 
 /**
  * Disables dragging on all topic items to prevent concurrent drag operations
@@ -519,12 +521,12 @@ function calculateVisibleRange(containerHeight, scrollTop) {
 
 function setupVirtualScroll() {
     // Remove existing scroll event listener if any to prevent memory leak
-    if (dom.topicsList.getAttribute('data-virtual-scroll-setup') === 'true') {
+    if (virtualScrollHandler) {
         dom.topicsList.removeEventListener('scroll', virtualScrollHandler);
     }
 
     // Add scroll event listener for virtual scrolling
-    function virtualScrollHandler() {
+    virtualScrollHandler = function() {
         if (!state.virtualScrollEnabled) return;
 
         const scrollTop = dom.topicsList.scrollTop;
@@ -538,10 +540,9 @@ function setupVirtualScroll() {
             state.virtualScrollEndIndex = endIndex;
             renderVirtualScrollItems();
         }
-    }
+    };
 
     dom.topicsList.addEventListener('scroll', virtualScrollHandler);
-    dom.topicsList.setAttribute('data-virtual-scroll-setup', 'true');
 }
 
 function renderVirtualScrollItems() {
@@ -560,8 +561,17 @@ function renderVirtualScrollItems() {
         const nodeData = state.flattenedTopicNodes[i];
         if (!nodeData) continue;
 
+        // Add drop zone before each item (for sibling reordering)
+        const beforeZone = createSiblingDropZone(nodeData.depth, nodeData.parentId, nodeData.indexInParent, state.nodesById);
+        beforeZone.style.position = 'absolute';
+        beforeZone.style.top = `${i * VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
+        beforeZone.style.left = '0';
+        beforeZone.style.width = '100%';
+        beforeZone.style.height = `${VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
+        fragment.appendChild(beforeZone);
+
         const item = createTopicItem(nodeData.topic, nodeData.depth, nodeData.parentId,
-                                     nodeData.indexInParent, nodeData.totalSiblings, state.nodesById);
+                                     nodeData.indexInParent, nodeData.totalSiblings, state.nodesById, true);
         // Position item at its correct scroll offset
         item.style.position = 'absolute';
         item.style.top = `${i * VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
@@ -579,7 +589,7 @@ function renderVirtualScrollItems() {
     container.style.position = 'relative';
 }
 
-function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, nodesById) {
+function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, nodesById, useVirtualScroll = false) {
     // Create a single topic item element
     // This is extracted from renderTopicsList to avoid code duplication
     // nodesById is passed as a parameter to avoid rebuilding the tree on every call
@@ -625,8 +635,8 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
         </div>
     `;
 
-    // Add tree lines for visual hierarchy
-    if (depth > 0) {
+    // Add tree lines for visual hierarchy (disabled in virtual scroll mode due to positioning conflicts)
+    if (depth > 0 && !useVirtualScroll) {
         const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings, nodesById);
         topicDiv.insertBefore(treeLinesContainer, topicDiv.firstChild);
     }
@@ -989,6 +999,7 @@ export function renderTopicsList() {
     if (state.topicsSearchQuery) {
         const { matchingIds, expandedIds } = findMatchingTopics(state.topicsSearchQuery, nodesById);
         state.topicsMatchingIds = matchingIds;
+        state.searchExpandedTopicIds = expandedIds;
         searchExpandedIds = expandedIds;
         flattenedNodes = flattenTopicTree(roots, nodesById, searchExpandedIds);
         // Filter to only show matching topics and their parents
@@ -997,6 +1008,21 @@ export function renderTopicsList() {
         });
     } else {
         state.topicsMatchingIds.clear();
+        // Collapse topics that were auto-expanded by search
+        if (state.searchExpandedTopicIds.size > 0) {
+            state.searchExpandedTopicIds.forEach(topicId => {
+                state.collapsedTopicIds.add(topicId);
+            });
+            state.searchExpandedTopicIds.clear();
+            // Save the restored collapse state
+            // Import _saveTopicCollapseState from state.js
+            try {
+                const TOPIC_COLLAPSE_STATE_STORAGE_KEY = 'topicCollapseState';
+                localStorage.setItem(TOPIC_COLLAPSE_STATE_STORAGE_KEY, JSON.stringify([...state.collapsedTopicIds]));
+            } catch (error) {
+                console.error('Failed to save topic collapse state:', error);
+            }
+        }
         flattenedNodes = flattenTopicTree(roots, nodesById);
     }
 
@@ -1509,6 +1535,26 @@ async function updateTopicDetails(topicId, name, prompt, parentId, sortOrder) {
 
 async function moveTopic(topicId, parentId, position = null) {
     try {
+        // Validate position bounds
+        if (typeof position === 'number' && Number.isFinite(position) && position >= 0) {
+            // Calculate maximum valid position for the target parent
+            let maxPosition = 0;
+            if (parentId) {
+                const parentNode = state.nodesById.get(parentId);
+                if (parentNode) {
+                    maxPosition = parentNode.children.length;
+                }
+            } else {
+                // Root level - count topics with no parent
+                maxPosition = state.topics.filter(t => !t.parent_id).length;
+            }
+
+            // Position should be at most maxPosition (append at end)
+            if (position > maxPosition) {
+                throw new Error(`Position ${position} is out of bounds. Maximum valid position is ${maxPosition}.`);
+            }
+        }
+
         await moveTopicAPI(topicId, parentId, position);
         await loadTopics();
     } catch (error) {

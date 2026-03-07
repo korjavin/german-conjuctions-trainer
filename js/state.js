@@ -3,6 +3,15 @@ const WORD_AUDIO_CACHE_STORAGE_KEY = 'wordAudioCacheV1';
 const TOPIC_COLLAPSE_STATE_STORAGE_KEY = 'topicCollapseState';
 const RECENTLY_USED_TOPICS_STORAGE_KEY = 'recentlyUsedTopics';
 
+let localStorageErrorShown = false; // Prevent multiple notifications for localStorage errors
+
+function _showLocalStorageError(context) {
+    if (!localStorageErrorShown) {
+        localStorageErrorShown = true;
+        alert(`Warning: Unable to save your preferences to local storage. Your changes may not persist after closing the browser.\n\nContext: ${context}`);
+    }
+}
+
 function _loadAudioEnabled() {
     try {
         const savedValue = localStorage.getItem(AUDIO_ENABLED_STORAGE_KEY);
@@ -36,6 +45,7 @@ function _saveTopicCollapseState(collapsedIds) {
         localStorage.setItem(TOPIC_COLLAPSE_STATE_STORAGE_KEY, JSON.stringify([...collapsedIds]));
     } catch (error) {
         console.error('Failed to save topic collapse state:', error);
+        _showLocalStorageError('topic collapse state');
     }
 }
 
@@ -66,6 +76,7 @@ function _saveRecentlyUsedTopics(topics) {
         localStorage.setItem(RECENTLY_USED_TOPICS_STORAGE_KEY, JSON.stringify(topics.slice(0, 10)));
     } catch (error) {
         console.error('Failed to save recently used topics:', error);
+        _showLocalStorageError('recently used topics');
     }
 }
 
@@ -136,6 +147,7 @@ export const state = {
     collapsedTopicIds: _loadTopicCollapseState(),
     topicsSearchQuery: '',
     topicsMatchingIds: new Set(),
+    searchExpandedTopicIds: new Set(), // Track topics auto-expanded by search
     recentlyUsedTopics: _loadRecentlyUsedTopics(),
     exercises: [],
     exerciseIds: [],

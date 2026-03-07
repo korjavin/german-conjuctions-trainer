@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strings"
@@ -41,10 +42,16 @@ func (a *App) validateTopicTree(topicID *string, parentID *string) error {
 		return fmt.Errorf("parent topic not found")
 	}
 
-	// Check for cycles
+	// Check for cycles and maximum depth
+	const maxTreeDepth = 100
 	if topicID != nil {
 		currentParent := parent.ParentID
+		depth := 0
 		for currentParent != nil {
+			depth++
+			if depth > maxTreeDepth {
+				return fmt.Errorf("topic tree depth exceeds maximum of %d levels", maxTreeDepth)
+			}
 			if *currentParent == *topicID {
 				return fmt.Errorf("cannot create a cycle in the topic tree")
 			}
@@ -83,7 +90,8 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		topicsList, err := a.DB.GetAllTopics()
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to get topics: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to get topics: %v", err)
+			http.Error(w, "Failed to retrieve topics. Please try again.", http.StatusInternalServerError)
 			return
 		}
 
@@ -119,7 +127,8 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 
 			topic, err := a.DB.CreateTopic(req.Name, req.Prompt, req.ParentID, req.SortOrder)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to create topic: %v", err), http.StatusInternalServerError)
+				log.Printf("Failed to create topic: %v", err)
+				http.Error(w, "Failed to create topic. Please try again.", http.StatusInternalServerError)
 				return
 			}
 
@@ -186,7 +195,8 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				case strings.Contains(errMsg, "invalid"):
 					http.Error(w, errMsg, http.StatusBadRequest)
 				default:
-					http.Error(w, fmt.Sprintf("Failed to move topic: %v", err), http.StatusInternalServerError)
+					log.Printf("Failed to move topic: %v", err)
+					http.Error(w, "Failed to move topic. Please try again.", http.StatusInternalServerError)
 				}
 				return
 			}
@@ -302,7 +312,8 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 
 			topic, err := a.DB.UpdateTopic(topicID, name, prompt, parentID, sortOrder)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to update topic: %v", err), http.StatusInternalServerError)
+				log.Printf("Failed to update topic: %v", err)
+				http.Error(w, "Failed to update topic. Please try again.", http.StatusInternalServerError)
 				return
 			}
 
@@ -317,7 +328,8 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, storage.ErrTopicHasChildren) {
 					http.Error(w, err.Error(), http.StatusConflict) // 409 Conflict for business rule violation
 				} else {
-					http.Error(w, fmt.Sprintf("Failed to delete topic: %v", err), http.StatusInternalServerError)
+					log.Printf("Failed to delete topic: %v", err)
+					http.Error(w, "Failed to delete topic. Please try again.", http.StatusInternalServerError)
 				}
 				return
 			}
@@ -352,7 +364,8 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		versions, err := a.DB.GetVersions(topicID)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to get versions: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to get versions: %v", err)
+			http.Error(w, "Failed to retrieve versions. Please try again.", http.StatusInternalServerError)
 			return
 		}
 
@@ -387,7 +400,8 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
 
 			topic, err := a.DB.UpdateTopic(topicID, currentTopic.Name, versionToRestore.Prompt, currentTopic.ParentID, currentTopic.SortOrder)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to restore version: %v", err), http.StatusInternalServerError)
+				log.Printf("Failed to restore version: %v", err)
+				http.Error(w, "Failed to restore version. Please try again.", http.StatusInternalServerError)
 				return
 			}
 
