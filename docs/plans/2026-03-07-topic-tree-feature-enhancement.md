@@ -194,19 +194,19 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run all tests - must pass before next task
 
 ### Task 11: Verify acceptance criteria
-- [ ] Verify tree lines display correctly for all depth levels
-- [ ] Verify expand/collapse works for topics with children
-- [ ] Verify topic icons display correctly (folder for parents, file for leaves)
-- [ ] Verify tree search finds topics by name and highlights matches
-- [ ] Verify top-level sorting works without affecting nested children
-- [ ] Verify drag-and-drop has improved visual feedback
-- [ ] Verify settings page has better UX for creating/editing topics
-- [ ] Verify keyboard navigation works throughout tree
-- [ ] Verify accessibility features work with screen readers
-- [ ] Verify performance is acceptable with large topic lists
-- [ ] Verify all existing features still work (backward compatibility)
-- [ ] Run full test suite - must pass
-- [ ] Run linter - all issues must be fixed
+- [x] Verify tree lines display correctly for all depth levels
+- [x] Verify expand/collapse works for topics with children
+- [x] Verify topic icons display correctly (folder for parents, file for leaves)
+- [x] Verify tree search finds topics by name and highlights matches
+- [x] Verify top-level sorting works without affecting nested children
+- [x] Verify drag-and-drop has improved visual feedback
+- [x] Verify settings page has better UX for creating/editing topics
+- [x] Verify keyboard navigation works throughout tree
+- [x] Verify accessibility features work with screen readers
+- [x] Verify performance is acceptable with large topic lists
+- [x] Verify all existing features still work (backward compatibility)
+- [x] Run full test suite - must pass
+- [x] Run linter - all issues must be fixed
 
 ### Task 12: Update documentation
 - [ ] Update README.md with new topic tree features
