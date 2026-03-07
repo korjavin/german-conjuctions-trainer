@@ -44,7 +44,9 @@ func main() {
 		log.Println("Warning: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REDIRECT_URL not set. Google login will be disabled.")
 	} else {
 		b := make([]byte, 16)
-		rand.Read(b)
+		if _, err := rand.Read(b); err != nil {
+			log.Fatalf("Failed to generate OAuth state: %v", err)
+		}
 		oauthState = base64.URLEncoding.EncodeToString(b)
 		oauthConfig = &oauth2.Config{
 			RedirectURL:  redirectURL,

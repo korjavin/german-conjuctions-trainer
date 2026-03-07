@@ -410,15 +410,15 @@ export function buildTopicTree(topics, sortOrder = state.topicSortOrder || 'tree
 }
 
 function sortTreeNodes(nodes, sortOrder, isTopLevel = true) {
-    // Only sort top-level topics - nested children maintain tree order
+    // Only sort top-level topics by the chosen sort order; children always sort by sort_order
     if (isTopLevel && sortOrder !== 'tree') {
         nodes.sort((a, b) => compareTopics(a, b, sortOrder));
-    } else if (sortOrder === 'tree') {
-        // For tree order, sort by sort_order at all levels
-        nodes.sort((a, b) => compareTopics(a, b, sortOrder));
+    } else {
+        // For tree order at top level, or any level below top, sort by sort_order
+        nodes.sort((a, b) => compareTopics(a, b, 'tree'));
     }
 
-    // Recursively process children (but don't sort them unless it's tree order)
+    // Recursively process children, always using tree order for nested levels
     nodes.forEach(node => {
         if (node.children.length > 0) {
             sortTreeNodes(node.children, sortOrder, false);
@@ -997,7 +997,7 @@ function handleTopicKeyboard(event) {
             break;
 
         case 'Enter':
-        case ' ':
+        case ' ': {
             // Toggle expand/collapse on Enter or Space for topics with children
             event.preventDefault();
             const collapseBtn = topicItem.querySelector('.topic-collapse-btn');
@@ -1005,6 +1005,7 @@ function handleTopicKeyboard(event) {
                 collapseBtn.click();
             }
             break;
+        }
 
         case 'Escape':
             // Exit tree navigation
@@ -1120,6 +1121,7 @@ export function renderTopicsList() {
         // Disable virtual scrolling mode and render all items
         state.virtualScrollEnabled = false;
         dom.topicsList.classList.remove('virtual-scroll-enabled');
+        dom.topicsList.removeAttribute('data-virtual-scroll-setup');
         renderAllTopics(flattenedNodes, nodesById);
     }
 }
