@@ -141,16 +141,16 @@ A comprehensive overhaul of the topic tree functionality and visualization in th
 - [x] Run all tests - must pass before next task
 
 ### Task 6: Improve drag-and-drop visual feedback
-- [ ] Add drop zone indicators that show exactly where topic will be dropped
-- [ ] Add ghost element preview during drag
-- [ ] Add highlight to potential parent topic when dragging over it
-- [ ] Add animation for drop action
-- [ ] Improve drag cursor and visual cues
-- [ ] Add CSS transitions for smoother drag interactions
-- [ ] Test improved visual feedback for sibling reordering
-- [ ] Test improved visual feedback for making topic a child
-- [ ] Test animations and transitions are smooth
-- [ ] Run all tests - must pass before next task
+- [x] Add drop zone indicators that show exactly where topic will be dropped
+- [x] Add ghost element preview during drag
+- [x] Add highlight to potential parent topic when dragging over it
+- [x] Add animation for drop action
+- [x] Improve drag cursor and visual cues
+- [x] Add CSS transitions for smoother drag interactions
+- [x] Test improved visual feedback for sibling reordering
+- [x] Test improved visual feedback for making topic a child
+- [x] Test animations and transitions are smooth
+- [x] Run all tests - must pass before next task
 
 ### Task 7: Improve settings page usability for create/edit
 - [ ] Improve add topic form UX (better validation feedback, clearer labels)

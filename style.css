@@ -603,7 +603,98 @@ progress.progress-bar::-moz-progress-bar {
 }
 
 .topic-tree-item.topic-dragging {
-    opacity: 0.6;
+    opacity: 0.4;
+    transform: scale(0.98);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    cursor: grabbing;
+}
+
+.topic-tree-item {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.15s ease,
+                background-color 0.15s ease,
+                opacity 0.15s ease;
+    cursor: grab;
+}
+
+.topic-tree-item:active {
+    cursor: grabbing;
+}
+
+/* Ghost drag preview element */
+.topic-drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 10000;
+    opacity: 0.7;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid #2563eb;
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+    transform: rotate(2deg);
+    transition: transform 0.1s ease;
+}
+
+/* Drop zone indicator styling */
+.topic-gap-drop-zone {
+    height: 0.75rem;
+    border-radius: 9999px;
+    margin-top: 0.25rem;
+    margin-bottom: 0.25rem;
+    border: 2px solid transparent;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.topic-gap-drop-zone.topic-drop-active {
+    height: 1.5rem;
+    border: 2px dashed #2563eb;
+    background: linear-gradient(90deg, #eff6ff 0%, #dbeafe 50%, #eff6ff 100%);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    animation: drop-zone-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes drop-zone-pulse {
+    0%, 100% {
+        background: linear-gradient(90deg, #eff6ff 0%, #dbeafe 50%, #eff6ff 100%);
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    }
+    50% {
+        background: linear-gradient(90deg, #dbeafe 0%, #bfdbfe 50%, #dbeafe 100%);
+        box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.2);
+    }
+}
+
+/* Parent drop highlight */
+.topic-tree-item.parent-drop-highlight {
+    border-color: #2563eb !important;
+    background: linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15), 0 4px 12px rgba(37, 99, 235, 0.2) !important;
+    transform: scale(1.02);
+}
+
+/* Sibling drop highlight */
+.topic-tree-item.sibling-drop-highlight {
+    border-color: #2563eb !important;
+    background: #eff6ff !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Drop animation */
+@keyframes drop-complete {
+    0% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.3);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: none;
+    }
+}
+
+.topic-drop-complete {
+    animation: drop-complete 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Tree Lines */
@@ -701,9 +792,9 @@ progress.progress-bar::-moz-progress-bar {
 }
 
 .topic-drop-active {
-    border: 1px dashed #2563eb !important;
-    background-color: #eff6ff !important;
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    border: 2px dashed #2563eb !important;
+    background: linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15), 0 4px 12px rgba(37, 99, 235, 0.2) !important;
 }
 
 .topic-item-name {

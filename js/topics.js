@@ -15,6 +15,7 @@ import {
 
 let draggedTopicId = null;
 let isMoveInProgress = false;
+let dragGhostElement = null;
 
 export function getFolderIcon() {
     return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="topic-icon-folder">
@@ -261,6 +262,38 @@ function createTreeLines(depth, indexInParent, totalSiblings) {
     return container;
 }
 
+function createDragGhost(sourceElement) {
+    const ghost = sourceElement.cloneNode(true);
+    ghost.className = 'topic-drag-ghost topic-list-item';
+    ghost.style.width = `${sourceElement.offsetWidth}px`;
+    ghost.style.height = `${sourceElement.offsetHeight}px`;
+
+    // Remove any interactive elements from the ghost
+    ghost.querySelectorAll('button').forEach(btn => {
+        btn.style.pointerEvents = 'none';
+    });
+
+    document.body.appendChild(ghost);
+    return ghost;
+}
+
+function updateDragGhostPosition(event) {
+    if (!dragGhostElement) return;
+
+    const ghostX = event.clientX - (dragGhostElement.offsetWidth / 2);
+    const ghostY = event.clientY - (dragGhostElement.offsetHeight / 2);
+
+    dragGhostElement.style.left = `${ghostX}px`;
+    dragGhostElement.style.top = `${ghostY}px`;
+}
+
+function removeDragGhost() {
+    if (dragGhostElement) {
+        dragGhostElement.remove();
+        dragGhostElement = null;
+    }
+}
+
 export function renderTopicsList() {
     dom.topicsList.innerHTML = '';
 
@@ -378,9 +411,18 @@ export function renderTopicsList() {
         topicDiv.addEventListener('dragstart', (event) => {
             draggedTopicId = topic.id;
             topicDiv.classList.add('topic-dragging');
+
+            // Create ghost element
+            dragGhostElement = createDragGhost(topicDiv);
+            updateDragGhostPosition(event);
+
             if (event.dataTransfer) {
                 event.dataTransfer.effectAllowed = 'move';
                 event.dataTransfer.setData('text/plain', topic.id);
+                // Use a transparent image to hide default drag image
+                const emptyImg = new Image();
+                emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                event.dataTransfer.setDragImage(emptyImg, 0, 0);
             }
         });
 
@@ -388,6 +430,7 @@ export function renderTopicsList() {
             draggedTopicId = null;
             topicDiv.classList.remove('topic-dragging');
             clearDropHighlights();
+            removeDragGhost();
         });
 
         attachDropHandlers(topicDiv, {
@@ -419,25 +462,67 @@ function createSiblingDropZone(depth, targetParentId, targetPosition, nodesById)
 
 function attachDropHandlers(element, options) {
     const { targetParentId, targetPosition, nodesById, isChildDrop } = options;
+    let parentElement = null;
 
     element.addEventListener('dragover', (event) => {
         if (!draggedTopicId || isMoveInProgress) return;
         event.preventDefault();
+        updateDragGhostPosition(event);
     });
 
     element.addEventListener('dragenter', (event) => {
         if (!draggedTopicId || isMoveInProgress) return;
         event.preventDefault();
+        event.stopPropagation();
+
+        // Clear previous highlights
+        clearDropHighlights();
+
+        // Highlight drop zone
         element.classList.add('topic-drop-active');
+
+        // Highlight parent topic for child drops
+        if (isChildDrop && targetParentId) {
+            parentElement = element.closest('[data-topic-id]');
+            if (parentElement && parentElement.dataset.topicId === targetParentId) {
+                parentElement.classList.add('parent-drop-highlight');
+            }
+        } else if (!isChildDrop && element.classList.contains('topic-tree-item')) {
+            // Highlight sibling being reordered
+            element.classList.add('sibling-drop-highlight');
+        }
     });
 
-    element.addEventListener('dragleave', () => {
-        element.classList.remove('topic-drop-active');
+    element.addEventListener('dragleave', (event) => {
+        if (!draggedTopicId || isMoveInProgress) return;
+
+        // Only remove if we're leaving the element itself, not a child
+        const rect = element.getBoundingClientRect();
+        const x = event.clientX;
+        const y = event.clientY;
+
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+            element.classList.remove('topic-drop-active');
+            if (parentElement) {
+                parentElement.classList.remove('parent-drop-highlight');
+                parentElement = null;
+            }
+            element.classList.remove('sibling-drop-highlight');
+        }
     });
 
     element.addEventListener('drop', async (event) => {
         event.preventDefault();
-        element.classList.remove('topic-drop-active');
+        event.stopPropagation();
+
+        const dropTarget = element.closest('[data-topic-id]') || element;
+
+        // Clear all highlights
+        clearDropHighlights();
+        if (parentElement) {
+            parentElement.classList.remove('parent-drop-highlight');
+            parentElement = null;
+        }
 
         if (!draggedTopicId || isMoveInProgress) return;
         if (draggedTopicId === targetParentId && isChildDrop) return;
@@ -449,6 +534,14 @@ function attachDropHandlers(element, options) {
         isMoveInProgress = true;
         try {
             await moveTopic(draggedTopicId, targetParentId || null, targetPosition);
+
+            // Add drop animation to the target element
+            if (dropTarget && dropTarget.classList.contains('topic-tree-item')) {
+                dropTarget.classList.add('topic-drop-complete');
+                setTimeout(() => {
+                    dropTarget.classList.remove('topic-drop-complete');
+                }, 400);
+            }
         } finally {
             isMoveInProgress = false;
         }
@@ -481,6 +574,12 @@ function wouldCreateCycle(nodesById, draggedId, targetParentId) {
 function clearDropHighlights() {
     dom.topicsList.querySelectorAll('.topic-drop-active').forEach(el => {
         el.classList.remove('topic-drop-active');
+    });
+    dom.topicsList.querySelectorAll('.parent-drop-highlight').forEach(el => {
+        el.classList.remove('parent-drop-highlight');
+    });
+    dom.topicsList.querySelectorAll('.sibling-drop-highlight').forEach(el => {
+        el.classList.remove('sibling-drop-highlight');
     });
 }
 
@@ -784,3 +883,16 @@ export function savePrompt() {
 
     updateTopicDetails(state.editingTopicId, name, prompt, parentId, sortOrder);
 }
+
+// Global dragover listener to update ghost position
+document.addEventListener('dragover', (event) => {
+    if (dragGhostElement) {
+        updateDragGhostPosition(event);
+    }
+});
+
+// Global dragend cleanup (in case drag ends unexpectedly)
+document.addEventListener('dragend', () => {
+    removeDragGhost();
+    clearDropHighlights();
+});
