@@ -19,13 +19,6 @@ type TopicRequest struct {
 	SortOrder int     `json:"sort_order"`
 }
 
-type UpdateTopicRequest struct {
-	Name      string  `json:"name"`
-	Prompt    string  `json:"prompt"`
-	ParentID  *string `json:"parent_id"`
-	SortOrder int     `json:"sort_order"`
-}
-
 // validateTopicTree ensures we don't create cycles and the parent exists
 func (a *App) validateTopicTree(topicID *string, parentID *string) error {
 	if parentID == nil {
@@ -106,7 +99,7 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if req.Name == "" || req.Prompt == "" {
+			if strings.TrimSpace(req.Name) == "" || req.Prompt == "" {
 				http.Error(w, "Name and prompt are required", http.StatusBadRequest)
 				return
 			}
@@ -300,6 +293,11 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			if strings.TrimSpace(name) == "" {
+				http.Error(w, "Name is required", http.StatusBadRequest)
+				return
+			}
+
 			if prompt == "" {
 				http.Error(w, "Prompt is required", http.StatusBadRequest)
 				return
@@ -343,7 +341,11 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	corsOrigin := a.CORSAllowedOrigins
+	if corsOrigin == "" {
+		corsOrigin = "*"
+	}
+	w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 

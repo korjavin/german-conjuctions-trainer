@@ -1,4 +1,4 @@
-import { state, toggleTopicCollapse, isTopicCollapsed } from './state.js';
+import { state, toggleTopicCollapse, isTopicCollapsed, addRecentlyUsedTopic } from './state.js';
 import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
 import {
@@ -40,7 +40,6 @@ import {
     setFormLoading,
     setupFormValidation,
     setupFormKeyboardShortcuts,
-    addRecentlyUsedTopic,
     getFolderIcon,
     getFileIcon,
     getTopicPath,
@@ -55,7 +54,6 @@ import {
     renderHistoryPage,
     updateHistoryFilterUI,
 } from './history.js';
-import { getTopicPath } from './topics.js';
 
 const sampleExercises = {
     "exercises": [

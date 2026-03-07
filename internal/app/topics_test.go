@@ -6,12 +6,12 @@ import (
 	"german-conjunctions-trainer/pkg/storage"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"path/filepath"
 	"testing"
 )
 
 func setupTestApp(t *testing.T) *App {
-	dbPath := "test_app_db.sqlite"
+	dbPath := filepath.Join(t.TempDir(), "test.db")
 	store, err := storage.NewSQLiteStorage(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
@@ -21,7 +21,7 @@ func setupTestApp(t *testing.T) *App {
 }
 
 func cleanupTestApp(app *App) {
-	os.Remove("test_app_db.sqlite")
+	// t.TempDir() is cleaned up automatically
 }
 
 func TestValidateTopicTreeCycle(t *testing.T) {

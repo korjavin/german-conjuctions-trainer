@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,7 +15,7 @@ import (
 
 // setupComprehensiveTestApp creates a test app with a temporary database
 func setupComprehensiveTestApp(t *testing.T) *App {
-	dbPath := "test_app_comprehensive_db.sqlite"
+	dbPath := filepath.Join(t.TempDir(), "test.db")
 	store, err := storage.NewSQLiteStorage(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
@@ -25,12 +24,8 @@ func setupComprehensiveTestApp(t *testing.T) *App {
 	return app
 }
 
-// cleanupComprehensiveTestApp removes the test database
-func cleanupComprehensiveTestApp(app *App) {
-	if err := os.Remove("test_app_comprehensive_db.sqlite"); err != nil {
-		log.Printf("Warning: Failed to remove test database: %v", err)
-	}
-}
+// cleanupComprehensiveTestApp is a no-op since t.TempDir() is cleaned up automatically
+func cleanupComprehensiveTestApp(app *App) {}
 
 // Helper function to create an admin user context
 func setupAdminContext(app *App, t *testing.T) context.Context {
@@ -596,7 +591,10 @@ func TestHandleTopicByID_DeletePreventsTopicWithChildren(t *testing.T) {
 	}
 
 	// Child should still exist
-	_, _ = app.DB.GetTopic(child.ID)
+	_, err = app.DB.GetTopic(child.ID)
+	if err != nil {
+		t.Error("Expected child to still exist after blocked parent deletion")
+	}
 }
 
 func TestHandleTopicByID_DeleteReturnsNotFound(t *testing.T) {
@@ -995,7 +993,9 @@ func TestIntegration_CreateUpdateDeleteTopic(t *testing.T) {
 	}
 
 	var createdTopic storage.Topic
-	json.Unmarshal(createRR.Body.Bytes(), &createdTopic)
+	if err := json.Unmarshal(createRR.Body.Bytes(), &createdTopic); err != nil {
+		t.Fatalf("Failed to parse create response: %v", err)
+	}
 
 	// Update topic
 	updatePayload := `{"name": "Updated Topic", "prompt": "updated prompt"}`
@@ -1021,7 +1021,9 @@ func TestIntegration_CreateUpdateDeleteTopic(t *testing.T) {
 	}
 
 	var updatedTopic storage.Topic
-	json.Unmarshal(getRR.Body.Bytes(), &updatedTopic)
+	if err := json.Unmarshal(getRR.Body.Bytes(), &updatedTopic); err != nil {
+		t.Fatalf("Failed to parse get response: %v", err)
+	}
 
 	if updatedTopic.Name != "Updated Topic" {
 		t.Errorf("Expected name 'Updated Topic', got '%s'", updatedTopic.Name)
@@ -1060,7 +1062,9 @@ func TestIntegration_CreateNestedTopicsAndMove(t *testing.T) {
 	app.handleTopics(parentRR, parentReq)
 
 	var parent storage.Topic
-	json.Unmarshal(parentRR.Body.Bytes(), &parent)
+	if err := json.Unmarshal(parentRR.Body.Bytes(), &parent); err != nil {
+		t.Fatalf("Failed to parse parent response: %v", err)
+	}
 
 	// Create child
 	childPayload := `{"name": "Child", "prompt": "child prompt", "parent_id": "` + parent.ID + `"}`
@@ -1072,7 +1076,9 @@ func TestIntegration_CreateNestedTopicsAndMove(t *testing.T) {
 	app.handleTopics(childRR, childReq)
 
 	var child storage.Topic
-	json.Unmarshal(childRR.Body.Bytes(), &child)
+	if err := json.Unmarshal(childRR.Body.Bytes(), &child); err != nil {
+		t.Fatalf("Failed to parse child response: %v", err)
+	}
 
 	// Move child to root
 	movePayload := `{"parent_id": ""}`

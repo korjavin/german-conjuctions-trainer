@@ -141,7 +141,7 @@ The application includes a comprehensive topic tree management system with advan
 
 #### Expand/Collapse Functionality
 - Topics can be collapsed to reduce clutter in the tree view
-- Collapse state is persisted in localStorage (`topic-collapse-state`)
+- Collapse state is persisted in localStorage (`topicCollapseState`)
 - Chevron buttons indicate expand/collapse state with rotation animation
 - When collapsed, child topics are hidden from the view
 
@@ -155,7 +155,7 @@ The application includes a comprehensive topic tree management system with advan
 #### Sorting Options
 - Top-level topics can be sorted without affecting nested children
 - Sort options: Tree (custom order), Name (A-Z), Name (Z-A), Date (newest), Date (oldest)
-- Sort preference is persisted in localStorage (`topic-toplevel-sort-order`)
+- Sort preference is persisted in localStorage (`topicSortOrder`)
 
 #### Drag and Drop
 - Enhanced visual feedback with ghost element preview during drag
@@ -307,18 +307,18 @@ The topic tree implements the WAI-ARIA tree pattern for accessibility:
 
 The topic tree uses the following localStorage keys for persistence:
 
-- `topic-collapse-state`: JSON object mapping topic IDs to boolean collapse state
-  - Format: `{"topic-id-1": false, "topic-id-2": true}`
+- `topicCollapseState`: JSON array of collapsed topic IDs
+  - Format: `["topic-id-1", "topic-id-2"]`
   - Persisted across page reloads to maintain expanded/collapsed state
 
-- `topic-toplevel-sort-order`: String value for sort order preference
+- `topicSortOrder`: String value for sort order preference
   - Possible values: `'tree'`, `'name-asc'`, `'name-desc'`, `'date-newest'`, `'date-oldest'`
   - Default: `'tree'` (custom sort order from sort_order field)
   - Only affects top-level topics, not nested children
 
-- `recently-used-topics`: Array of recently used topic objects for quick-select in forms
+- `recentlyUsedTopics`: Array of recently used topic objects for quick-select in forms
   - Format: `[{id: "topic-id", name: "Topic Name"}, ...]`
-  - Limited to most recent 5 topics
+  - Limited to most recent 10 topics
   - Updated whenever a user creates a new topic or selects a parent in forms
 
 - `selectedTopicId`: The currently selected topic for exercise generation
@@ -401,7 +401,7 @@ This entire process is now triggered **only when the exercise cache is insuffici
 - **Airtable Integration**: Added persistent storage for topics and prompt versions. (Legacy, deprecated)
 
 ## Development Workflow
-1. **Local Development**: `go run main.go` → http://localhost:8080
+1. **Local Development**: `go run cmd/server/main.go` → http://localhost:8080
 2. **Docker Build**: `docker-compose up`
 3. **Cache Issues**: Server restart generates new timestamps
 4. **API Testing**: Requires valid OpenAI API key in environment

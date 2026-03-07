@@ -182,6 +182,7 @@ export const state = {
     virtualScrollEndIndex: 0,
     flattenedTopicNodes: [], // Cached flattened nodes for virtual scrolling
     nodesById: new Map(), // Cached nodes by ID for tree operations
+    preSearchCollapsedTopicIds: undefined, // Saved collapse state before search began
 };
 
 export function toggleTopicCollapse(topicId) {

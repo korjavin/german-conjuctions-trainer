@@ -14,7 +14,6 @@ import {
 } from './api.js';
 
 // Form validation constants
-const MIN_TOPIC_NAME_LENGTH = 1;
 const MAX_TOPIC_NAME_LENGTH = 200;
 const MIN_PROMPT_LENGTH = 10;
 const MAX_PROMPT_LENGTH = 10000;
@@ -41,9 +40,6 @@ export function debounce(func, wait) {
 export function validateTopicName(name, parentId = null) {
     if (!name || name.trim().length === 0) {
         return 'Topic name is required.';
-    }
-    if (name.trim().length < MIN_TOPIC_NAME_LENGTH) {
-        return `Topic name must be at least ${MIN_TOPIC_NAME_LENGTH} character.`;
     }
     if (name.length > MAX_TOPIC_NAME_LENGTH) {
         return `Topic name must be less than ${MAX_TOPIC_NAME_LENGTH} characters. Currently ${name.length} characters.`;
@@ -352,12 +348,6 @@ function compareTopics(a, b, sortOrder) {
     }
 }
 
-export function sortTopics(topics, sortOrder = state.topicSortOrder || 'tree') {
-    const sorted = [...topics];
-    sorted.sort((a, b) => compareTopics(a, b, sortOrder));
-    return sorted;
-}
-
 /**
  * Builds a hierarchical tree structure from a flat list of topics.
  * This is a core function that transforms the flat database structure into
@@ -589,7 +579,7 @@ function renderVirtualScrollItems() {
     container.style.position = 'relative';
 }
 
-function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, nodesById, useVirtualScroll = false) {
+function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, nodesById) {
     // Create a single topic item element
     // This is extracted from renderTopicsList to avoid code duplication
     // nodesById is passed as a parameter to avoid rebuilding the tree on every call
@@ -635,9 +625,9 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
         </div>
     `;
 
-    // Add tree lines for visual hierarchy (disabled in virtual scroll mode due to positioning conflicts)
-    if (depth > 0 && !useVirtualScroll) {
-        const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings, nodesById);
+    // Add tree lines for visual hierarchy
+    if (depth > 0) {
+        const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings);
         topicDiv.insertBefore(treeLinesContainer, topicDiv.firstChild);
     }
 
@@ -782,7 +772,7 @@ function escapeHtml(text) {
  * you would need to track whether siblings above the current topic continue
  * their vertical lines down to avoid gaps in the tree visualization.
  */
-function createTreeLines(depth, indexInParent, totalSiblings, nodesById) {
+function createTreeLines(depth, indexInParent, totalSiblings) {
     const container = document.createElement('div');
     container.className = 'tree-lines-container';
 
@@ -860,9 +850,6 @@ function removeDragGhost() {
         dragGhostElement = null;
     }
 }
-
-// Accessibility: Track currently focused topic for keyboard navigation
-let currentFocusedTopicId = null;
 
 // Accessibility: Announcer for screen reader messages
 function announceToScreenReader(message) {
@@ -997,6 +984,11 @@ export function renderTopicsList() {
     let searchExpandedIds = new Set();
 
     if (state.topicsSearchQuery) {
+        // Capture current collapsed state before search starts (only on first search render)
+        if (!state.preSearchCollapsedTopicIds) {
+            state.preSearchCollapsedTopicIds = new Set(state.collapsedTopicIds);
+        }
+
         const { matchingIds, expandedIds } = findMatchingTopics(state.topicsSearchQuery, nodesById);
         state.topicsMatchingIds = matchingIds;
         state.searchExpandedTopicIds = expandedIds;
@@ -1008,14 +1000,11 @@ export function renderTopicsList() {
         });
     } else {
         state.topicsMatchingIds.clear();
-        // Collapse topics that were auto-expanded by search
-        if (state.searchExpandedTopicIds.size > 0) {
-            state.searchExpandedTopicIds.forEach(topicId => {
-                state.collapsedTopicIds.add(topicId);
-            });
+        // Restore the original collapsed state from before search started
+        if (state.preSearchCollapsedTopicIds) {
+            state.collapsedTopicIds = new Set(state.preSearchCollapsedTopicIds);
             state.searchExpandedTopicIds.clear();
-            // Save the restored collapse state
-            // Import _saveTopicCollapseState from state.js
+            state.preSearchCollapsedTopicIds = undefined;
             try {
                 const TOPIC_COLLAPSE_STATE_STORAGE_KEY = 'topicCollapseState';
                 localStorage.setItem(TOPIC_COLLAPSE_STATE_STORAGE_KEY, JSON.stringify([...state.collapsedTopicIds]));
@@ -1040,6 +1029,7 @@ export function renderTopicsList() {
     if (shouldUseVirtualScroll) {
         // Enable virtual scrolling mode
         state.virtualScrollEnabled = true;
+        dom.topicsList.classList.add('virtual-scroll-enabled');
 
         // Setup scroll handler if not already set up
         if (!dom.topicsList.hasAttribute('data-virtual-scroll-setup')) {
@@ -1062,6 +1052,7 @@ export function renderTopicsList() {
     } else {
         // Disable virtual scrolling mode and render all items
         state.virtualScrollEnabled = false;
+        dom.topicsList.classList.remove('virtual-scroll-enabled');
         renderAllTopics(flattenedNodes, nodesById);
     }
 }
@@ -1124,7 +1115,7 @@ function renderAllTopics(flattenedNodes, nodesById) {
 
         // Add tree lines for visual hierarchy (after innerHTML so it's not overwritten)
         if (depth > 0) {
-            const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings, nodesById);
+            const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings);
             topicDiv.insertBefore(treeLinesContainer, topicDiv.firstChild);
         }
 
@@ -1135,7 +1126,6 @@ function renderAllTopics(flattenedNodes, nodesById) {
         if (collapseBtn) {
             collapseBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const wasCollapsed = isTopicCollapsed(topic.id);
                 toggleTopicCollapse(topic.id);
                 // Accessibility: Announce the action to screen readers
                 const isNowCollapsed = isTopicCollapsed(topic.id);
@@ -1172,7 +1162,6 @@ function renderAllTopics(flattenedNodes, nodesById) {
                 item.setAttribute('aria-selected', 'false');
             });
             topicDiv.setAttribute('aria-selected', 'true');
-            currentFocusedTopicId = topic.id;
         });
 
         topicDiv.addEventListener('blur', () => {
@@ -1457,14 +1446,12 @@ async function deleteTopic(topicId) {
     }
 
     // Count children
-    const { nodesById } = buildTopicTree(state.topics);
-    const node = nodesById.get(topicId);
-    const childCount = node ? node.children.length : 0;
+    const childCount = state.topics.filter(t => t.parent_id === topicId).length;
 
     // Build confirmation message
     let message = `Are you sure you want to delete the topic "${topic.name}"?`;
     if (childCount > 0) {
-        message += `\n\nThis will also delete ${childCount} child topic${childCount > 1 ? 's' : ''}.`;
+        message += `\n\nThis topic has ${childCount} child topic${childCount > 1 ? 's' : ''}. You must delete child topics first before deleting this one.`;
     }
     message += '\n\nThis action cannot be undone.';
 
@@ -1491,8 +1478,8 @@ async function deleteTopic(topicId) {
         // Show more specific error message
         let errorMessage = 'Failed to delete topic.';
         if (error.message) {
-            if (error.message.includes('foreign key') || error.message.includes('constraint')) {
-                errorMessage = 'Cannot delete this topic because it has associated data. Please delete child topics first.';
+            if (error.message.includes('has children') || error.message.includes('cannot be deleted')) {
+                errorMessage = 'Cannot delete this topic because it has child topics. Please delete child topics first.';
             } else {
                 errorMessage = `Failed to delete topic: ${error.message}`;
             }
