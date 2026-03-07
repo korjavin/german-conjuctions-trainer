@@ -79,6 +79,7 @@ docker run -p 8080:8080 \
 | `MODEL_NAME` | No | `gpt-3.5-turbo-1106` | Model name to use |
 | `SQLITE_PATH` | No | `german.db` | Path to the SQLite database file |
 | `PORT` | No | `8080` | Port for the web server |
+| `AUDIO_CACHE_MAX_SIZE_MB` | No | `2048` | Maximum size of the local TTS audio cache in MB (e.g., `2048` for 2GB). Older files are removed when the limit is reached. |
 | `GOOGLE_CLIENT_ID` | No | - | Your Google OAuth 2.0 Client ID |
 | `GOOGLE_CLIENT_SECRET` | No | - | Your Google OAuth 2.0 Client Secret |
 | `GOOGLE_REDIRECT_URL` | No | - | Your Google OAuth 2.0 Redirect URL |

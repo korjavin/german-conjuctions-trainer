@@ -25,10 +25,11 @@ type App struct {
 
 // ElevenLabsConfig holds ElevenLabs TTS configuration.
 type ElevenLabsConfig struct {
-	APIKey    string
-	VoiceName string
-	ModelID   string
-	Speed     float64
+	APIKey              string
+	VoiceName           string
+	ModelID             string
+	Speed               float64
+	AudioCacheMaxSizeMB int64
 }
 
 // New creates a new App and starts background maintenance tasks.
@@ -56,6 +57,16 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 			a.mu.Unlock()
 		}
 	}()
+
+	// Start background job to manage audio_cache size
+	if a.ElevenLabs.AudioCacheMaxSizeMB > 0 {
+		go func() {
+			for {
+				time.Sleep(10 * time.Minute)
+				a.cleanupAudioCache()
+			}
+		}()
+	}
 
 	return a
 }

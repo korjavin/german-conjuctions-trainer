@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 type TTSRequest struct {
@@ -20,11 +21,6 @@ type TTSRequest struct {
 func (a *App) handleTTS(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if a.ElevenLabs.APIKey == "" {
-		http.Error(w, "TTS service is not configured", http.StatusInternalServerError)
 		return
 	}
 
@@ -39,7 +35,31 @@ func (a *App) handleTTS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename, err := a.generateAndSaveAudio(req.Text)
+	hasher := sha256.New()
+	hasher.Write([]byte(req.Text))
+	hash := hex.EncodeToString(hasher.Sum(nil))
+	filename := fmt.Sprintf("audio_cache/%s.mp3", hash)
+
+	// Check cache first, regardless of API key
+	if _, err := os.Stat(filename); err == nil {
+		log.Printf("Using cached audio file: %s", filename)
+		// Update modification time for LRU eviction logic
+		now := time.Now()
+		if err := os.Chtimes(filename, now, now); err != nil {
+			log.Printf("Warning: failed to update times for %s: %v", filename, err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
+		return
+	}
+
+	if a.ElevenLabs.APIKey == "" {
+		http.Error(w, "TTS service is not configured and audio is not cached", http.StatusServiceUnavailable)
+		return
+	}
+
+	filename, err := a.generateAndSaveAudio(req.Text, filename)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -52,19 +72,9 @@ func (a *App) handleTTS(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
 }
 
-func (a *App) generateAndSaveAudio(text string) (string, error) {
+func (a *App) generateAndSaveAudio(text string, filename string) (string, error) {
 	if a.ElevenLabs.APIKey == "" {
 		return "", fmt.Errorf("TTS service is not configured")
-	}
-
-	hasher := sha256.New()
-	hasher.Write([]byte(text))
-	hash := hex.EncodeToString(hasher.Sum(nil))
-	filename := fmt.Sprintf("audio_cache/%s.mp3", hash)
-
-	if _, err := os.Stat(filename); err == nil {
-		log.Printf("Using cached audio file: %s", filename)
-		return filename, nil
 	}
 
 	log.Printf("Generating new audio file for text: %s", text)
