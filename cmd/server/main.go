@@ -107,9 +107,17 @@ func main() {
 		log.Printf("ElevenLabs integration enabled with voice: %s, model: %s, speed: %.1f", el.VoiceName, el.ModelID, el.Speed)
 	}
 
+	// CORS
+	corsAllowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if corsAllowedOrigins == "" {
+		log.Println("Warning: CORS_ALLOWED_ORIGINS not set. Using wildcard (*) for development. Set this environment variable in production.")
+	} else {
+		log.Printf("CORS allowed origins configured: %s", corsAllowedOrigins)
+	}
+
 	db.InitializeDefaultTopics()
 
-	a := app.New(db, sc, oauthConfig, oauthState, adminGoogleID, el)
+	a := app.New(db, sc, oauthConfig, oauthState, adminGoogleID, el, corsAllowedOrigins)
 	a.RegisterRoutes()
 
 	port := os.Getenv("PORT")

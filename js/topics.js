@@ -249,6 +249,26 @@ let draggedTopicId = null;
 let isMoveInProgress = false;
 let dragGhostElement = null;
 
+/**
+ * Disables dragging on all topic items to prevent concurrent drag operations
+ */
+function disableDragging() {
+    const topicItems = document.querySelectorAll('.topic-tree-item');
+    topicItems.forEach(item => {
+        item.draggable = false;
+    });
+}
+
+/**
+ * Enables dragging on all topic items
+ */
+function enableDragging() {
+    const topicItems = document.querySelectorAll('.topic-tree-item');
+    topicItems.forEach(item => {
+        item.draggable = true;
+    });
+}
+
 export function getFolderIcon() {
     return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="topic-icon-folder">
         <path d="M2 5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V11.5C14 12.3284 13.3284 13 12.5 13H3.5C2.67157 13 2 12.3284 2 11.5V5.5Z" fill="#f59e0b" fill-opacity="0.2" stroke="#f59e0b" stroke-width="1.5"/>
@@ -1263,7 +1283,9 @@ function attachDropHandlers(element, options) {
             return;
         }
 
+        // Disable dragging to prevent concurrent operations
         isMoveInProgress = true;
+        disableDragging();
         try {
             await moveTopic(draggedTopicId, targetParentId || null, targetPosition);
 
@@ -1276,6 +1298,7 @@ function attachDropHandlers(element, options) {
             }
         } finally {
             isMoveInProgress = false;
+            enableDragging();
         }
     });
 }

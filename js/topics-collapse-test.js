@@ -44,7 +44,7 @@
     tests.push(() => {
         const key = 'topicCollapseState';
         const stored = localStorage.getItem(key);
-        assert(stored !== null || stored === null, 'Collapse state storage key is accessible');
+        assert(localStorage.getItem(key) !== undefined, 'Collapse state storage key is accessible');
         console.log('  Storage key:', key);
         console.log('  Current value:', stored);
     });

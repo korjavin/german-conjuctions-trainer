@@ -20,7 +20,9 @@ function _loadTopicCollapseState() {
         if (!savedValue) return new Set();
         const parsed = JSON.parse(savedValue);
         if (Array.isArray(parsed)) {
-            return new Set(parsed);
+            // Validate and sanitize - only accept strings
+            const sanitized = parsed.filter(item => typeof item === 'string');
+            return new Set(sanitized);
         }
         return new Set();
     } catch (error) {
@@ -43,7 +45,14 @@ function _loadRecentlyUsedTopics() {
         if (!savedValue) return [];
         const parsed = JSON.parse(savedValue);
         if (Array.isArray(parsed)) {
-            return parsed.slice(0, 10); // Limit to 10 most recent
+            // Validate and sanitize - only accept objects with string id and name
+            const sanitized = parsed.filter(item =>
+                typeof item === 'object' &&
+                item !== null &&
+                typeof item.id === 'string' &&
+                typeof item.name === 'string'
+            );
+            return sanitized.slice(0, 10); // Limit to 10 most recent
         }
         return [];
     } catch (error) {

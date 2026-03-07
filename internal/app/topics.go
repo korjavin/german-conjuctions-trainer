@@ -65,9 +65,12 @@ type MoveTopicRequest struct {
 }
 
 func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
-	// SECURITY: Wildcard CORS allows any origin. In production, use specific allowed origins.
-	// TODO: Configure allowed origins via environment variable or config.
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// Set CORS headers - use configured allowed origins, default to wildcard for development
+	corsOrigin := a.CORSAllowedOrigins
+	if corsOrigin == "" {
+		corsOrigin = "*"
+	}
+	w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
@@ -100,6 +103,15 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			if req.SortOrder < 0 {
+				http.Error(w, "sort_order must be a non-negative integer", http.StatusBadRequest)
+				return
+			}
+			if req.SortOrder > 999999 {
+				http.Error(w, "sort_order must be less than 1000000", http.StatusBadRequest)
+				return
+			}
+
 			if err := a.validateTopicTree(nil, req.ParentID); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -122,7 +134,12 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// Set CORS headers - use configured allowed origins, default to wildcard for development
+	corsOrigin := a.CORSAllowedOrigins
+	if corsOrigin == "" {
+		corsOrigin = "*"
+	}
+	w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
 	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
@@ -260,6 +277,10 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				if floatVal, ok := sortVal.(float64); ok {
 					if floatVal < 0 || floatVal != math.Trunc(floatVal) {
 						http.Error(w, "sort_order must be a non-negative integer", http.StatusBadRequest)
+						return
+					}
+					if floatVal > 999999 {
+						http.Error(w, "sort_order must be less than 1000000", http.StatusBadRequest)
 						return
 					}
 					sortOrder = int(floatVal)

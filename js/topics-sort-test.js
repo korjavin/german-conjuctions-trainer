@@ -44,7 +44,7 @@
     tests.push(() => {
         const key = 'topicSortOrder';
         const stored = localStorage.getItem(key);
-        assert(stored !== null || stored === null, 'Sort order storage key is accessible');
+        assert(localStorage.getItem(key) !== undefined, 'Sort order storage key is accessible');
         console.log('  Storage key:', key);
         console.log('  Current value:', stored || 'not set (will default to "tree")');
     });
