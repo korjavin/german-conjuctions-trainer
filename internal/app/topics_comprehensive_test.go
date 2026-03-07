@@ -394,7 +394,7 @@ func TestHandleTopicByID_PutPreservesOmittedFields(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
 	adminCtx := setupAdminContext(app, t)
 
-	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 5)
+	topic, _ := app.DB.CreateTopic("Topic", "valid prompt", nil, 5)
 
 	// Only update name, preserve other fields
 	payload := `{"name": "NewName"}`
@@ -411,7 +411,7 @@ func TestHandleTopicByID_PutPreservesOmittedFields(t *testing.T) {
 
 	// Fetch updated topic from DB to verify
 	updatedTopic, _ := app.DB.GetTopic(topic.ID)
-	if updatedTopic.Prompt != "prompt" {
+	if updatedTopic.Prompt != "valid prompt" {
 		t.Errorf("Expected prompt to be preserved, got '%s'", updatedTopic.Prompt)
 	}
 	if updatedTopic.SortOrder != 5 {
@@ -426,7 +426,7 @@ func TestHandleTopicByID_PutValidatesPromptRequired(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
 	adminCtx := setupAdminContext(app, t)
 
-	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
+	topic, _ := app.DB.CreateTopic("Topic", "valid prompt", nil, 0)
 
 	payload := `{"prompt": ""}`
 	req, _ := http.NewRequest("PUT", "/api/topics/"+topic.ID, bytes.NewBufferString(payload))
@@ -445,7 +445,7 @@ func TestHandleTopicByID_PutValidatesParentIDType(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
 	adminCtx := setupAdminContext(app, t)
 
-	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
+	topic, _ := app.DB.CreateTopic("Topic", "valid prompt", nil, 0)
 
 	payload := `{"parent_id": 123}`
 	req, _ := http.NewRequest("PUT", "/api/topics/"+topic.ID, bytes.NewBufferString(payload))
@@ -464,7 +464,7 @@ func TestHandleTopicByID_PutValidatesSortOrder(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
 	adminCtx := setupAdminContext(app, t)
 
-	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
+	topic, _ := app.DB.CreateTopic("Topic", "valid prompt", nil, 0)
 
 	tests := []struct {
 		name     string
@@ -496,7 +496,7 @@ func TestHandleTopicByID_PutRejectsInvalidParentID(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
 	adminCtx := setupAdminContext(app, t)
 
-	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
+	topic, _ := app.DB.CreateTopic("Topic", "valid prompt", nil, 0)
 
 	payload := `{"parent_id": "non-existent-id"}`
 	req, _ := http.NewRequest("PUT", "/api/topics/"+topic.ID, bytes.NewBufferString(payload))
@@ -730,7 +730,7 @@ func TestHandleTopicByID_InvalidPath(t *testing.T) {
 func TestHandleVersions_GetVersions(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
 
-	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
+	topic, _ := app.DB.CreateTopic("Topic", "valid prompt", nil, 0)
 
 	req, _ := http.NewRequest("GET", "/api/versions/"+topic.ID, nil)
 	rr := httptest.NewRecorder()
@@ -815,7 +815,7 @@ func TestHandleVersions_RestoreVersionNotFound(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
 	adminCtx := setupAdminContext(app, t)
 
-	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
+	topic, _ := app.DB.CreateTopic("Topic", "valid prompt", nil, 0)
 
 	req, _ := http.NewRequest("POST", "/api/versions/"+topic.ID+"/restore/non-existent", nil)
 	req = req.WithContext(adminCtx)
@@ -832,7 +832,7 @@ func TestHandleVersions_InvalidRestorePath(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
 	adminCtx := setupAdminContext(app, t)
 
-	topic, _ := app.DB.CreateTopic("Topic", "prompt", nil, 0)
+	topic, _ := app.DB.CreateTopic("Topic", "valid prompt", nil, 0)
 
 	req, _ := http.NewRequest("POST", "/api/versions/"+topic.ID+"/invalid/path", nil)
 	req = req.WithContext(adminCtx)

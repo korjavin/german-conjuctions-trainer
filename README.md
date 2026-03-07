@@ -86,6 +86,18 @@ docker run -p 8080:8080 \
 | `COOKIE_HASH_KEY` | No | Randomly generated | A 64-byte key for HMAC authentication of cookies. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
 | `COOKIE_BLOCK_KEY` | No | Randomly generated | A 32-byte key for AES-256 encryption of cookie data. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
 
+## Database Migrations
+
+The application automatically runs database migrations on startup to update the schema. If you're upgrading from an older version:
+
+- Migrations will add `parent_id` and `sort_order` columns to the topics table
+- A unique constraint on (parent_id, name) will be added to prevent duplicate topic names at the same level
+- Additional tracking columns may be added for user exercise statistics
+
+**Important**: If you have duplicate topic names at the same parent level in your existing database, the migration will fail. You must manually resolve duplicates by renaming or deleting duplicate topics before the migration can complete.
+
+Migrations are designed to be idempotent - running them multiple times has no effect.
+
 ## Airtable Setup (Deprecated)
 
 **Note:** Airtable storage is deprecated and will be removed in future versions. Use SQLite (default) instead.
@@ -106,6 +118,8 @@ On first startup, the application will create two default topics:
 ### Topic Hierarchy
 Topics can be organized hierarchically in a tree structure with advanced features:
 
+**Topic Hierarchy Features:**
+
 - **Visual Tree Lines**: Clear visual connectors show parent-child relationships at any depth level
 - **Expand/Collapse**: Collapse branches to reduce clutter, with state persisted across sessions
 - **Topic Icons**: Folder icons for topics with children, file icons for leaf topics
@@ -115,6 +129,19 @@ Topics can be organized hierarchically in a tree structure with advanced feature
 - **Better Form UX**: Real-time validation, hierarchy preview, recently-used topics quick-select, and keyboard shortcuts (Ctrl+Enter to save, Escape to cancel)
 - **Accessibility**: Full keyboard navigation (Arrow keys, Home, End, Enter/Space to expand), ARIA attributes, and screen reader announcements
 - **Performance**: Virtual scrolling for large topic lists (100+ topics) and debounced search input
+
+**Topic Name Uniqueness:** Topic names must be unique at the same parent level (case-insensitive). You cannot create two topics with the same name that share the same parent, but you can reuse names at different levels (e.g., "Grammar" -> "Verbs" and "Adjectives" -> "Verbs" are both allowed).
+
+**Sort Order Field:** Topics have a `sort_order` field that determines their display position within their parent. Lower values appear first. When using the "Custom Order" sort option, topics are displayed based on their `sort_order` value.
+
+**Tree Depth Limit:** Topic trees are limited to a maximum depth of 100 levels to prevent performance issues.
+
+**Topic Creation Rules:**
+
+When creating or editing topics, the following validation rules apply:
+- **Topic Name**: Required, max 200 characters
+- **Prompt**: Required, min 10 characters, max 10,000 characters
+- **Sort Order**: Required, must be a non-negative integer (0-999,999)
 
 You can assign a parent topic to any new or existing topic to keep your exercises neatly categorized (e.g., "Grammar" -> "Verbs" -> "Verb + Preposition"). Deleting a topic that has children is prevented with a HTTP 409 Conflict to ensure data integrity.
 

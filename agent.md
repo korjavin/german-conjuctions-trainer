@@ -73,14 +73,38 @@ POST /api/versions/{topicId}/restore/{versionId} // Restore a specific version
 GET /api/last-refined-prompt // Get the most recently used refined prompt
 ```
 
+### Topic Validation
+
+The backend includes validation functions to ensure data integrity:
+
+- **`validateTopicName(name, parentID, excludeTopicID)`**: Ensures topic names are unique at the same parent level (case-insensitive). Excludes the topic being edited via `excludeTopicID` parameter.
+- **`validateTopicTree(topicID, parentID)`**: Validates parent references, prevents cycles, and enforces maximum depth (100 levels).
+- **`normalizeStringPtr(s)`**: Normalizes `*string` pointers by treating nil and empty strings as equivalent. Used for comparing parent_id values.
+
+### Topic Validation Rules
+
+When creating or editing topics, the backend enforces the following validation:
+
+- **Topic Name**: Required, max 200 characters
+- **Prompt**: Required, min 10 characters, max 10,000 characters (validation only applies when providing a new prompt value, not when preserving existing prompts)
+- **Parent ID**: Optional, must reference an existing topic ID or be null (for root-level)
+- **Sort Order**: Required, must be a non-negative integer between 0 and 999,999
+- **Tree Depth**: Maximum of 100 levels to prevent performance issues
+- **No Cycles**: A topic cannot be its own ancestor or descendant
+- **Unique Names**: Topic names must be unique at the same parent level (case-insensitive)
+
 ## Database Schema (SQLite)
 
 ### `topics`
 - `id` (TEXT, PK): UUID for the topic.
 - `name` (TEXT): The name of the topic.
 - `prompt` (TEXT): The prompt used for generation.
+- `parent_id` (TEXT, NULL): Foreign key to parent topic (NULL for root-level topics).
+- `sort_order` (INTEGER): Display order within parent (lower values first).
 - `created_at` (DATETIME): Timestamp of creation.
 - `updated_at` (DATETIME): Timestamp of last update.
+
+**Constraints**: Unique constraint on (parent_key, name COLLATE NOCASE) to prevent duplicate names at the same parent level. Uses a generated column `parent_key` that converts NULL parent_id to '__ROOT__' for uniqueness enforcement.
 
 ### `prompt_versions`
 - `id` (TEXT, PK): UUID for the version.
@@ -119,6 +143,17 @@ GET /api/last-refined-prompt // Get the most recently used refined prompt
 - **SRS Tracking**: Stores user-specific exercise view history to enable SRS.
 - **Version Management**: Automatic versioning for topic prompts.
 - **Default Topics**: Auto-creation on first startup if the database is empty.
+
+### Database Migrations
+
+The application automatically runs migrations on startup to update the database schema. The `runMigrations()` function in SQLite storage adds new columns and constraints to existing databases. Migrations include:
+
+- Adding `parent_id` and `sort_order` columns to topics table
+- Creating unique constraint on (parent_key, name) via table recreation
+- Adding new tracking columns to user_exercise_views table
+- Creating indexes for performance optimization
+
+Migrations are designed to be idempotent - running them multiple times has no effect. If you have duplicate topic names at the same parent level in your existing database, the migration will fail and you must manually resolve duplicates.
 
 ## Frontend (js/main.js, js/topics.js, js/state.js, js/dom.js)
 

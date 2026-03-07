@@ -151,7 +151,11 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// Validate prompt length (matches frontend MAX_PROMPT_LENGTH of 10000)
+			// Validate prompt length (matches frontend MIN_PROMPT_LENGTH of 10 and MAX_PROMPT_LENGTH of 10000)
+			if len(req.Prompt) < 10 {
+				http.Error(w, "Prompt must be at least 10 characters", http.StatusBadRequest)
+				return
+			}
 			if len(req.Prompt) > 10000 {
 				http.Error(w, "Prompt must be less than 10000 characters", http.StatusBadRequest)
 				return
@@ -321,7 +325,9 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 			}
 
 			prompt := existingTopic.Prompt
+			promptProvided := false
 			if val, exists := rawReq["prompt"]; exists {
+				promptProvided = true
 				if strVal, ok := val.(string); ok {
 					prompt = strVal
 				} else {
@@ -381,7 +387,12 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// Validate prompt length (matches frontend MAX_PROMPT_LENGTH of 10000)
+			// Validate prompt length (matches frontend MIN_PROMPT_LENGTH of 10 and MAX_PROMPT_LENGTH of 10000)
+			// Only validate minimum length when a new value is being provided
+			if promptProvided && len(prompt) < 10 {
+				http.Error(w, "Prompt must be at least 10 characters", http.StatusBadRequest)
+				return
+			}
 			if len(prompt) > 10000 {
 				http.Error(w, "Prompt must be less than 10000 characters", http.StatusBadRequest)
 				return
