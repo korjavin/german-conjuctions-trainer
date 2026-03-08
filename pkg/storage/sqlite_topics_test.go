@@ -211,3 +211,155 @@ func TestUpdateTopic_WithWhitespacePrompt(t *testing.T) {
 		t.Errorf("Prompt was modified: expected '%s', got '%s'", originalPrompt, updatedTopic.Prompt)
 	}
 }
+
+func TestGetDescendantTopicIDs(t *testing.T) {
+	store := newTestSQLiteStorageForMove(t)
+
+	// Create tree:
+	// A
+	//  - B
+	//    - D
+	//    - E
+	//  - C
+	// F
+
+	a := mustCreateRootTopic(t, store, "A")
+	f := mustCreateRootTopic(t, store, "F")
+
+	b, _ := store.CreateTopic("B", "prompt B", &a.ID, 0)
+	c, _ := store.CreateTopic("C", "prompt C", &a.ID, 1)
+
+	d, _ := store.CreateTopic("D", "prompt D", &b.ID, 0)
+	e, _ := store.CreateTopic("E", "prompt E", &b.ID, 1)
+
+	// Test a topic with no children
+	fDescendants, err := store.GetDescendantTopicIDs(f.ID)
+	if err != nil {
+		t.Fatalf("GetDescendantTopicIDs for F failed: %v", err)
+	}
+	if len(fDescendants) != 0 {
+		t.Fatalf("Expected 0 descendants for F, got %d", len(fDescendants))
+	}
+
+	// Test a topic with direct children
+	bDescendants, err := store.GetDescendantTopicIDs(b.ID)
+	if err != nil {
+		t.Fatalf("GetDescendantTopicIDs for B failed: %v", err)
+	}
+	if len(bDescendants) != 2 {
+		t.Fatalf("Expected 2 descendants for B, got %d", len(bDescendants))
+	}
+
+	// Create a map to check existence
+	bMap := make(map[string]bool)
+	for _, id := range bDescendants {
+		bMap[id] = true
+	}
+	if !bMap[d.ID] || !bMap[e.ID] {
+		t.Fatalf("Expected descendants D and E for B")
+	}
+
+	// Test a topic with nested children
+	aDescendants, err := store.GetDescendantTopicIDs(a.ID)
+	if err != nil {
+		t.Fatalf("GetDescendantTopicIDs for A failed: %v", err)
+	}
+	if len(aDescendants) != 4 {
+		t.Fatalf("Expected 4 descendants for A, got %d", len(aDescendants))
+	}
+
+	aMap := make(map[string]bool)
+	for _, id := range aDescendants {
+		aMap[id] = true
+	}
+	if !aMap[b.ID] || !aMap[c.ID] || !aMap[d.ID] || !aMap[e.ID] {
+		t.Fatalf("Expected descendants B, C, D, E for A")
+	}
+
+	// Cycle detection is inherently handled by the tree structure enforcement in CreateTopic/MoveTopic,
+	// but GetDescendantTopicIDs has built-in infinite loop prevention as well.
+}
+
+func TestGetExercisesForTopics(t *testing.T) {
+	store := newTestSQLiteStorageForMove(t)
+
+	// Create topics
+	topic1 := mustCreateRootTopic(t, store, "Topic1")
+	topic2 := mustCreateRootTopic(t, store, "Topic2")
+	topic3 := mustCreateRootTopic(t, store, "Topic3")
+
+	// Create exercises for them
+	ex1_1, err := store.CreateExercise(topic1.ID, "hash1", "json1", "")
+	if err != nil { t.Fatalf("failed to create exercise 1 for topic 1: %v", err) }
+
+	ex1_2, err := store.CreateExercise(topic1.ID, "hash1", "json2", "")
+	if err != nil { t.Fatalf("failed to create exercise 2 for topic 1: %v", err) }
+
+	ex2_1, err := store.CreateExercise(topic2.ID, "hash2", "json3", "")
+	if err != nil { t.Fatalf("failed to create exercise 1 for topic 2: %v", err) }
+
+	// No exercises for topic3
+
+	// Test single topic ID
+	exercises, err := store.GetExercisesForTopics([]string{topic1.ID}, "")
+	if err != nil {
+		t.Fatalf("GetExercisesForTopics failed for single topic: %v", err)
+	}
+	if len(exercises) != 2 {
+		t.Fatalf("Expected 2 exercises, got %d", len(exercises))
+	}
+
+	// Check promptHash filtering on single topic
+	exercises, err = store.GetExercisesForTopics([]string{topic1.ID}, "hash1")
+	if err != nil {
+		t.Fatalf("GetExercisesForTopics failed with hash: %v", err)
+	}
+	if len(exercises) != 2 {
+		t.Fatalf("Expected 2 exercises with matching hash, got %d", len(exercises))
+	}
+
+	// Filter out all with wrong hash
+	exercises, err = store.GetExercisesForTopics([]string{topic1.ID}, "wrong_hash")
+	if err != nil {
+		t.Fatalf("GetExercisesForTopics failed with wrong hash: %v", err)
+	}
+	if len(exercises) != 0 {
+		t.Fatalf("Expected 0 exercises with wrong hash, got %d", len(exercises))
+	}
+
+	// Test multiple topic IDs
+	exercises, err = store.GetExercisesForTopics([]string{topic1.ID, topic2.ID}, "")
+	if err != nil {
+		t.Fatalf("GetExercisesForTopics failed for multiple topics: %v", err)
+	}
+	if len(exercises) != 3 {
+		t.Fatalf("Expected 3 exercises for multiple topics, got %d", len(exercises))
+	}
+
+	// Create a map to verify exercises
+	exMap := make(map[string]bool)
+	for _, ex := range exercises {
+		exMap[ex.ID] = true
+	}
+	if !exMap[ex1_1.ID] || !exMap[ex1_2.ID] || !exMap[ex2_1.ID] {
+		t.Fatalf("Expected exercises ex1_1, ex1_2, ex2_1 not all found in result")
+	}
+
+	// Test with multiple topic IDs and empty list
+	exercises, err = store.GetExercisesForTopics([]string{}, "")
+	if err != nil {
+		t.Fatalf("GetExercisesForTopics failed for empty slice: %v", err)
+	}
+	if len(exercises) != 0 {
+		t.Fatalf("Expected 0 exercises for empty topic IDs slice, got %d", len(exercises))
+	}
+
+	// Include topic with no exercises
+	exercises, err = store.GetExercisesForTopics([]string{topic1.ID, topic3.ID}, "")
+	if err != nil {
+		t.Fatalf("GetExercisesForTopics failed with empty topic: %v", err)
+	}
+	if len(exercises) != 2 {
+		t.Fatalf("Expected 2 exercises from topic1, got %d", len(exercises))
+	}
+}

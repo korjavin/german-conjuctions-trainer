@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	mrand "math/rand"
 	"net/http"
 	"time"
 
@@ -38,16 +39,31 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	promptHash := storage.GetPromptHash(topic.Prompt)
 	userID := getUserIDFromRequest(r)
-	log.Printf("[EXERCISES] Fetching exercises for topic %s, userID='%s'", req.TopicID, userID)
 
-	allExercises, err := a.DB.GetExercisesForTopic(req.TopicID, promptHash)
+	// Collect all descendant topics
+	descendants, err := a.DB.GetDescendantTopicIDs(req.TopicID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "TOPIC_LOOKUP_FAILED", "Failed to get descendant topics", err.Error(), false)
+		return
+	}
+
+	topicIDs := append([]string{req.TopicID}, descendants...)
+	log.Printf("[EXERCISES] Fetching exercises from %d topics: %v, userID='%s'", len(topicIDs), topicIDs, userID)
+
+	// If it's just one topic, filter by promptHash for exact matching of the current prompt version.
+	// If it's a sub-tree selection, we don't filter by promptHash to get all exercises from all topics.
+	filterPromptHash := ""
+	if len(topicIDs) == 1 {
+		filterPromptHash = storage.GetPromptHash(topic.Prompt)
+	}
+
+	allExercises, err := a.DB.GetExercisesForTopics(topicIDs, filterPromptHash)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "EXERCISE_LOOKUP_FAILED", "Failed to get exercises", err.Error(), false)
 		return
 	}
-	log.Printf("[EXERCISES] Found %d exercises in cache for topic %s", len(allExercises), req.TopicID)
+	log.Printf("[EXERCISES] Found %d exercises in cache for topics %v", len(allExercises), topicIDs)
 
 	var finalExercises []*storage.Exercise
 	userViews := make(map[string]*storage.UserExerciseView)
@@ -66,7 +82,16 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 
 		eligibleExercises := getEligibleExercisesForSRS(allExercises, userViews)
 		if len(eligibleExercises) < 10 {
-			newlyGenerated, err := llm.GenerateAndCacheExercises(topic, true)
+			// Randomly select a topic from the sub-tree
+			randomTopicID := topicIDs[mrand.Intn(len(topicIDs))]
+			selectedTopic, err := a.DB.GetTopic(randomTopicID)
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, "TOPIC_LOOKUP_FAILED", "Failed to get selected topic for generation", err.Error(), false)
+				return
+			}
+
+			log.Printf("[EXERCISES] Generating new exercises for randomly selected sub-tree topic %s", randomTopicID)
+			newlyGenerated, err := llm.GenerateAndCacheExercises(selectedTopic, true)
 			if err != nil {
 				status := http.StatusBadGateway
 				code := "EXERCISE_GENERATION_FAILED"
@@ -76,11 +101,11 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 					code = "UPSTREAM_TIMEOUT"
 					message = "Exercise generation timed out while waiting for AI provider. Please try again."
 				}
-				log.Printf("[EXERCISES] ERROR generating exercises for topic %s user %s: %v", req.TopicID, userID, err)
+				log.Printf("[EXERCISES] ERROR generating exercises for topic %s user %s: %v", selectedTopic.ID, userID, err)
 				writeJSONError(w, status, code, message, err.Error(), true)
 				return
 			}
-			log.Printf("[EXERCISES] Generated and cached %d new exercises for topic %s", len(newlyGenerated), req.TopicID)
+			log.Printf("[EXERCISES] Generated and cached %d new exercises for topic %s", len(newlyGenerated), selectedTopic.ID)
 			allExercises = append(allExercises, newlyGenerated...)
 			eligibleExercises = getEligibleExercisesForSRS(allExercises, userViews)
 		}
