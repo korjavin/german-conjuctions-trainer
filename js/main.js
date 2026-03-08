@@ -26,6 +26,7 @@ import {
     showVersionHistory,
     showLastRefinedPrompt,
     renderTopicDropdown,
+    isDropdownRenderFromCollapseClick,
     selectTopic,
     positionDropdown,
     saveTopic,
@@ -44,6 +45,7 @@ import {
     getFileIcon,
     getTopicPath,
     debounce,
+    resetDropdownCollapseState,
 } from './topics.js';
 import {
     checkAuthStatus,
@@ -170,32 +172,42 @@ dom.lastRefinedPromptCloseBtn.addEventListener('click', () => {
 
 // Topic combobox
 dom.topicSearch.addEventListener('focus', () => {
-    renderTopicDropdown(state.topics);
+    renderTopicDropdown('');
     positionDropdown();
     dom.topicDropdown.classList.remove('hidden');
 });
 
-dom.topicSearch.addEventListener('blur', () => {
+dom.topicSearch.addEventListener('blur', (e) => {
     // Delay hiding so that a click on a dropdown item can be registered
     setTimeout(() => {
-        dom.topicDropdown.classList.add('hidden');
-        // If the search input doesn't match a topic name, reset it
-        const currentTopic = state.topics.find(t => t.id === state.currentTopicId);
-        if (currentTopic) {
-            dom.topicSearch.value = getTopicPath(currentTopic.id, state.topics);
-        } else {
-            dom.topicSearch.value = '';
+        // Don't close if a collapse button click just triggered a re-render
+        if (isDropdownRenderFromCollapseClick()) {
+            return;
         }
+
+        // Don't close if focus moved inside the dropdown (e.g., to collapse button)
+        const activeElement = document.activeElement;
+        if (dom.topicDropdown.contains(activeElement)) {
+            return;
+        }
+
+        dom.topicDropdown.classList.add('hidden');
+        resetSearchInputToCanonicalPath();
     }, 200);
 });
 
+// Helper function to reset the search input to the canonical topic path
+function resetSearchInputToCanonicalPath() {
+    const currentTopic = state.topics.find(t => t.id === state.currentTopicId);
+    if (currentTopic) {
+        dom.topicSearch.value = getTopicPath(currentTopic.id, state.topics);
+    } else {
+        dom.topicSearch.value = '';
+    }
+}
+
 dom.topicSearch.addEventListener('input', () => {
-    const searchTerm = dom.topicSearch.value.toLowerCase();
-    const filteredTopics = state.topics.filter(topic => {
-        const fullPath = getTopicPath(topic.id, state.topics).toLowerCase();
-        return fullPath.includes(searchTerm);
-    });
-    renderTopicDropdown(filteredTopics);
+    renderTopicDropdown(dom.topicSearch.value);
     if (!dom.topicDropdown.classList.contains('hidden')) {
         positionDropdown();
     }
@@ -218,7 +230,26 @@ window.addEventListener('scroll', () => {
 document.addEventListener('click', (e) => {
     if (!dom.topicSearch.contains(e.target) && !dom.topicDropdown.contains(e.target)) {
         dom.topicDropdown.classList.add('hidden');
+        resetSearchInputToCanonicalPath();
     }
+});
+
+// Hide dropdown when focus leaves the dropdown (e.g., tabbing out)
+dom.topicDropdown.addEventListener('focusout', (e) => {
+    // Small delay to allow the focus transition to complete
+    setTimeout(() => {
+        // Don't close if a collapse button click just triggered a re-render
+        if (isDropdownRenderFromCollapseClick()) {
+            return;
+        }
+
+        const activeElement = document.activeElement;
+        // Close if focus is no longer inside the dropdown or search input
+        if (!dom.topicDropdown.contains(activeElement) && !dom.topicSearch.contains(activeElement)) {
+            dom.topicDropdown.classList.add('hidden');
+            resetSearchInputToCanonicalPath();
+        }
+    }, 50);
 });
 
 // Keyboard shortcut for topics search (Ctrl+F / Cmd+F)
@@ -334,6 +365,7 @@ function init() {
     window.getFolderIcon = getFolderIcon;
     window.getFileIcon = getFileIcon;
     window.getTopicPath = getTopicPath;
+    window.resetDropdownCollapseState = resetDropdownCollapseState;
 }
 
 init();

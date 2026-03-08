@@ -23,6 +23,25 @@ const VIRTUAL_SCROLL_THRESHOLD = 100; // Enable virtual scrolling above this man
 const VIRTUAL_SCROLL_ITEM_HEIGHT = 80; // Estimated height of each topic item in pixels
 const SEARCH_DEBOUNCE_MS = 300; // Debounce delay for search input in milliseconds
 
+// Module-level state for topic dropdown collapse (not persisted, separate from settings modal tree)
+const dropdownCollapsedTopicIds = new Set();
+
+// Timestamp of last collapse button click to prevent dropdown from closing unexpectedly
+// This prevents the dropdown from closing due to blur race condition during rapid clicks
+let lastCollapseClickTimestamp = 0;
+
+// Reset dropdown collapse state (for testing)
+export function resetDropdownCollapseState() {
+    dropdownCollapsedTopicIds.clear();
+    lastCollapseClickTimestamp = 0;
+}
+
+// Check if renderTopicDropdown is currently being called from a collapse button click
+// Returns true if a collapse render is in progress (within 250ms of last click)
+export function isDropdownRenderFromCollapseClick() {
+    return Date.now() - lastCollapseClickTimestamp < 250;
+}
+
 // Debounce utility function
 export function debounce(func, wait) {
     let timeout;
@@ -776,7 +795,13 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
  */
 function findMatchingTopics(searchQuery, nodesById) {
     const matchingIds = new Set();
-    const lowerQuery = searchQuery.toLowerCase();
+
+    // Validate nodesById parameter
+    if (!nodesById || !(nodesById instanceof Map)) {
+        return { matchingIds, expandedIds: new Set() };
+    }
+
+    const lowerQuery = searchQuery.trim().toLowerCase();
 
     nodesById.forEach((node) => {
         if (node.name.toLowerCase().includes(lowerQuery)) {
@@ -1082,7 +1107,7 @@ export function renderTopicsList() {
     dom.topicsList.setAttribute('aria-multiselectable', 'false');
 
     if (state.topics.length === 0) {
-        dom.topicsList.innerHTML = `<div class="p-4 text-gray-500 text-center" role="status">No topics available. Add one to get started.</div>`;
+        dom.topicsList.innerHTML = `<div style="padding: 1rem; color: #6b7280; text-align: center;" role="status">No topics available. Add one to get started.</div>`;
         return;
     }
 
@@ -1144,7 +1169,7 @@ export function renderTopicsList() {
     }
 
     if (flattenedNodes.length === 0 && state.topicsSearchQuery) {
-        dom.topicsList.innerHTML = `<div class="p-4 text-gray-500 text-center">No topics found matching "${escapeHtml(state.topicsSearchQuery)}".</div>`;
+        dom.topicsList.innerHTML = `<div style="padding: 1rem; color: #6b7280; text-align: center;">No topics found matching "${escapeHtml(state.topicsSearchQuery)}".</div>`;
         return;
     }
 
@@ -1767,21 +1792,134 @@ export async function showLastRefinedPrompt() {
     }
 }
 
-export function renderTopicDropdown(topicsToRender) {
+export function renderTopicDropdown(searchQuery = '') {
     dom.topicDropdown.innerHTML = '';
-    if (topicsToRender.length === 0) {
-        dom.topicDropdown.innerHTML = `<div class="p-2 text-gray-500">No topics found.</div>`;
+
+    // Check if topics are loaded
+    if (!state.topics || state.topics.length === 0) {
+        dom.topicDropdown.innerHTML = '<div style="padding: 0.5rem; color: #6b7280;">No topics available.</div>';
         return;
     }
-    topicsToRender.forEach(topic => {
+
+    // Build the topic tree
+    const { roots, nodesById } = buildTopicTree(state.topics);
+
+    // If searching, find matching topics and their parent IDs to auto-expand
+    let matchingIds = new Set();
+    let expandedIds = new Set();
+    if (searchQuery.trim()) {
+        const result = findMatchingTopics(searchQuery, nodesById);
+        matchingIds = result.matchingIds;
+        expandedIds = result.expandedIds;
+    }
+
+    // Inline flatten that respects dropdownCollapsedTopicIds and search-expandedIds
+    const flattened = [];
+    const visited = new Set();
+    const stack = [];
+
+    // Initialize stack with roots (in reverse order for correct processing)
+    for (let i = roots.length - 1; i >= 0; i--) {
+        stack.push({ node: roots[i], depth: 0 });
+    }
+
+    while (stack.length > 0) {
+        const { node, depth } = stack.pop();
+
+        if (visited.has(node.id)) continue;
+        visited.add(node.id);
+
+        // Include this node if:
+        // - Not searching, OR
+        // - This node matches OR is a parent of a matching node (in expandedIds)
+        const isMatching = matchingIds.has(node.id);
+        const shouldInclude = !searchQuery.trim() || isMatching || expandedIds.has(node.id);
+
+        if (shouldInclude) {
+            flattened.push({ node, depth });
+        }
+
+        // Only visit children if this topic is not collapsed or is search-expanded
+        const isCollapsed = dropdownCollapsedTopicIds.has(node.id);
+        const isExpandedBySearch = expandedIds.has(node.id);
+        const shouldShowChildren = node.children.length > 0 && (!isCollapsed || isExpandedBySearch);
+
+        if (shouldShowChildren) {
+            // Add children to stack (in reverse order for correct processing)
+            for (let i = node.children.length - 1; i >= 0; i--) {
+                stack.push({ node: node.children[i], depth: depth + 1 });
+            }
+        }
+    }
+
+    // Handle case where no topics match
+    if (flattened.length === 0) {
+        dom.topicDropdown.innerHTML = `<div style="padding: 0.5rem; color: #6b7280;">No topics found.</div>`;
+        return;
+    }
+
+    // Render each flattened node as a tree item
+    flattened.forEach(({ node, depth }) => {
         const item = document.createElement('div');
-        item.className = 'topic-item';
-        const fullPath = getTopicPath(topic.id, state.topics);
-        item.textContent = fullPath;
-        item.dataset.topicId = topic.id;
+        item.className = 'topic-dropdown-tree-item';
+
+        // Set inline padding based on depth (16px per level)
+        const paddingLeft = depth * 16;
+        item.style.paddingLeft = `${paddingLeft + 16}px`;
+
+        const hasChildren = node.children.length > 0;
+
+        // Collapse toggle button for parent topics
+        if (hasChildren) {
+            const collapseBtn = document.createElement('button');
+            collapseBtn.className = 'topic-dropdown-collapse-btn';
+            const isCollapsed = dropdownCollapsedTopicIds.has(node.id);
+            const isExpandedBySearch = expandedIds.has(node.id);
+            // Use effective expansion state: expanded if not collapsed OR search-expanded
+            const isEffectivelyExpanded = !isCollapsed || isExpandedBySearch;
+            collapseBtn.textContent = isEffectivelyExpanded ? '▼' : '▶';
+            collapseBtn.setAttribute('aria-label', isEffectivelyExpanded ? 'Collapse topic' : 'Expand topic');
+            collapseBtn.setAttribute('aria-expanded', String(isEffectivelyExpanded));
+            collapseBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent topic selection
+                if (dropdownCollapsedTopicIds.has(node.id)) {
+                    dropdownCollapsedTopicIds.delete(node.id);
+                } else {
+                    dropdownCollapsedTopicIds.add(node.id);
+                }
+                // Set timestamp to prevent blur/focusout from closing the dropdown
+                lastCollapseClickTimestamp = Date.now();
+                // Re-render the dropdown with current search value
+                renderTopicDropdown(dom.topicSearch.value);
+                // Clear the timestamp after a delay longer than blur (200ms) and focusout (50ms) timeouts
+                setTimeout(() => {
+                    lastCollapseClickTimestamp = 0;
+                }, 250);
+            });
+            item.appendChild(collapseBtn);
+        }
+
+        // Icon (folder for parents, file for leaves)
+        const iconSpan = document.createElement('span');
+        iconSpan.innerHTML = hasChildren ? getFolderIcon() : getFileIcon();
+        iconSpan.className = 'mr-2';
+        item.appendChild(iconSpan);
+
+        // Topic name text with highlighting when searching
+        const textSpan = document.createElement('span');
+        if (searchQuery.trim()) {
+            textSpan.innerHTML = highlightText(escapeHtml(node.name), searchQuery);
+        } else {
+            textSpan.textContent = node.name;
+        }
+        item.appendChild(textSpan);
+
+        // Click handler: select the topic
         item.addEventListener('click', () => {
-            selectTopic(topic.id, fullPath);
+            const fullPath = getTopicPath(node.id, state.topics);
+            selectTopic(node.id, fullPath);
         });
+
         dom.topicDropdown.appendChild(item);
     });
 }
