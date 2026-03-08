@@ -422,6 +422,60 @@ func TestHandleTopicByID_PutPreservesOmittedFields(t *testing.T) {
 	}
 }
 
+func TestHandleTopicByID_PutWithWhitespaceOnlyLegacyPrompt(t *testing.T) {
+	app := setupComprehensiveTestApp(t)
+	adminCtx := setupAdminContext(app, t)
+
+	// Create a topic with whitespace-only prompt through storage layer (simulating legacy data)
+	whitespacePrompt := "   " // 3 spaces
+	topic, err := app.DB.CreateTopic("Topic", "placeholder", nil, 0)
+	if err != nil {
+		t.Fatalf("Failed to create topic: %v", err)
+	}
+
+	// Update topic to have whitespace-only prompt through storage layer
+	_, err = app.DB.UpdateTopic(topic.ID, topic.Name, whitespacePrompt, nil, 0)
+	if err != nil {
+		t.Fatalf("Failed to update topic with whitespace prompt: %v", err)
+	}
+
+	// Verify prompt is whitespace-only
+	updatedTopic, _ := app.DB.GetTopic(topic.ID)
+	if updatedTopic.Prompt != whitespacePrompt {
+		t.Fatalf("Expected prompt '%s', got '%s'", whitespacePrompt, updatedTopic.Prompt)
+	}
+
+	// Try to update only the name (omit prompt)
+	// This should work if code properly handles omitted fields and whitespace-only legacy prompts
+	payload := `{"name": "NewName"}`
+	req, _ := http.NewRequest("PUT", "/api/topics/"+topic.ID, bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(adminCtx)
+	rr := httptest.NewRecorder()
+
+	app.handleTopicByID(rr, req)
+
+	// If this fails with 400, it confirms the bug: name-only update rejected when legacy prompt is whitespace-only
+	if rr.Code == http.StatusBadRequest {
+		t.Fatalf("Name-only update rejected when legacy prompt is whitespace-only (prompt: '%s'). Response: %s", updatedTopic.Prompt, rr.Body.String())
+	}
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	// Verify the name was updated
+	finalTopic, _ := app.DB.GetTopic(topic.ID)
+	if finalTopic.Name != "NewName" {
+		t.Errorf("Expected name 'NewName', got '%s'", finalTopic.Name)
+	}
+
+	// Verify the prompt was preserved (including whitespace)
+	if finalTopic.Prompt != whitespacePrompt {
+		t.Errorf("Prompt was modified: expected '%s', got '%s'", whitespacePrompt, finalTopic.Prompt)
+	}
+}
+
 func TestHandleTopicByID_PutValidatesPromptRequired(t *testing.T) {
 	app := setupComprehensiveTestApp(t)
 	adminCtx := setupAdminContext(app, t)

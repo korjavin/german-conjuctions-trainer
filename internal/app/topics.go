@@ -80,11 +80,11 @@ func (a *App) validateTopicTree(topicID *string, parentID *string) error {
 	}
 
 	// Check for cycles and maximum depth
+	depth := 1 // Start at 1 for the parent itself
 	currentParent := parent.ParentID
-	depth := 0
 	for currentParent != nil {
 		depth++
-		if depth > maxTreeDepth {
+		if depth >= maxTreeDepth {
 			return fmt.Errorf("topic tree depth exceeds maximum of %d levels", maxTreeDepth)
 		}
 		// Only check for cycles when topicID is not nil (new topics can't create cycles)

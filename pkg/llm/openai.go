@@ -222,16 +222,6 @@ func setLastGenerationData(prompt string, info GenerationDebugInfo) {
 	lastGeneration.debug = cloneGenerationDebugInfo(info)
 }
 
-func setLastPromptUsed(prompt string) {
-	// For backward compatibility, maintain the old API
-	setLastGenerationData(prompt, lastGeneration.debug)
-}
-
-func setLastGenerationDebugInfo(info GenerationDebugInfo) {
-	// For backward compatibility, maintain the old API
-	setLastGenerationData(lastGeneration.prompt, info)
-}
-
 // IsTimeoutError identifies timeout-like errors from upstream provider calls.
 func IsTimeoutError(err error) bool {
 	if err == nil {
@@ -433,6 +423,7 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 	debugInfo.GenerationLatencyMS += elapsed.Milliseconds()
 	if err != nil {
 		debugInfo.LastError = err.Error()
+		setLastGenerationData(debugInfo.Prompt, debugInfo)
 		return nil, err
 	}
 
@@ -457,12 +448,14 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 		debugInfo.GenerationLatencyMS += elapsed.Milliseconds()
 		if err != nil {
 			debugInfo.LastError = fmt.Sprintf("quality retry request failed: %v", err)
+			setLastGenerationData(debugInfo.Prompt, debugInfo)
 			return nil, err
 		}
 
 		if secondQualityErr := ValidateExerciseSet(exercises, profile); secondQualityErr != nil {
 			debugInfo.QualityGateFailures = append(debugInfo.QualityGateFailures, secondQualityErr.Error())
 			debugInfo.LastError = secondQualityErr.Error()
+			setLastGenerationData(debugInfo.Prompt, debugInfo)
 			return nil, secondQualityErr
 		}
 	}

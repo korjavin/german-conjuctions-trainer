@@ -1111,16 +1111,29 @@ export function renderTopicsList() {
         if (state.preSearchCollapsedTopicIds) {
             // Start with pre-search state
             const mergedCollapsedIds = new Set(state.preSearchCollapsedTopicIds);
-            // Preserve manual changes: if topic was manually collapsed during search, keep it collapsed
-            // (if topic is in current collapsed state but not in searchExpandedIds, it was manually collapsed)
-            for (const topicId of state.collapsedTopicIds) {
-                if (!state.searchExpandedTopicIds.has(topicId)) {
-                    // Topic was manually collapsed during search (not auto-expanded)
-                    mergedCollapsedIds.add(topicId);
+
+            // Remove only topics that were auto-expanded AND were not already collapsed before search
+            // Topics that were collapsed before search and got auto-expanded should be restored to collapsed
+            for (const topicId of state.searchExpandedTopicIds) {
+                if (!state.preSearchCollapsedTopicIds.has(topicId)) {
+                    mergedCollapsedIds.delete(topicId);
                 }
             }
+
+            // Then, preserve manual collapses made during search
+            for (const topicId of state.searchManualCollapsedTopicIds) {
+                mergedCollapsedIds.add(topicId);
+            }
+
+            // Finally, preserve manual expansions made during search
+            for (const topicId of state.searchManualExpandedTopicIds) {
+                mergedCollapsedIds.delete(topicId);
+            }
+
             state.collapsedTopicIds = mergedCollapsedIds;
             state.searchExpandedTopicIds.clear();
+            state.searchManualExpandedTopicIds.clear();
+            state.searchManualCollapsedTopicIds.clear();
             state.preSearchCollapsedTopicIds = undefined;
             saveTopicCollapseState();
         }

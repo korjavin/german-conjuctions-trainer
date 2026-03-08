@@ -157,6 +157,8 @@ export const state = {
     topicsSearchQuery: '',
     topicsMatchingIds: new Set(),
     searchExpandedTopicIds: new Set(), // Track topics auto-expanded by search
+    searchManualExpandedTopicIds: new Set(), // Track topics manually expanded during search
+    searchManualCollapsedTopicIds: new Set(), // Track topics manually collapsed during search
     recentlyUsedTopics: _loadRecentlyUsedTopics(),
     exercises: [],
     exerciseIds: [],
@@ -201,6 +203,17 @@ export function toggleTopicCollapse(topicId) {
         state.collapsedTopicIds.add(topicId);
     }
     _saveTopicCollapseState(state.collapsedTopicIds);
+
+    // Track manual state changes during search
+    if (state.collapsedTopicIds.has(topicId)) {
+        // Topic was manually collapsed during search
+        state.searchManualCollapsedTopicIds.add(topicId);
+        state.searchManualExpandedTopicIds.delete(topicId);
+    } else {
+        // Topic was manually expanded during search
+        state.searchManualExpandedTopicIds.add(topicId);
+        state.searchManualCollapsedTopicIds.delete(topicId);
+    }
 }
 
 export function isTopicCollapsed(topicId) {
