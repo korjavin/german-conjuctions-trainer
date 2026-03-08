@@ -31,6 +31,7 @@ export async function showExerciseHistory() {
         // Reset filters when opening fresh history
         state.historyFilterReady = false;
         state.historyFilterFavorites = false;
+        state.historyFilterTrained = false;
         updateHistoryFilterUI();
 
         dom.historyLoading.classList.add('hidden');
@@ -79,6 +80,9 @@ function getFilteredHistoryData() {
         }
         if (state.historyFilterFavorites) {
             matches = matches && item.is_favorite;
+        }
+        if (state.historyFilterTrained) {
+            matches = matches && !item.ready_to_repeat;
         }
         return matches;
     });
@@ -205,5 +209,12 @@ export function updateHistoryFilterUI() {
     } else {
         dom.historyFilterFavorites.classList.remove('filter-active-yellow');
         favoritesSvg.setAttribute('fill', 'none');
+    }
+
+    // Update Trained filter UI
+    if (state.historyFilterTrained) {
+        dom.historyFilterTrained.classList.add('filter-active-yellow');
+    } else {
+        dom.historyFilterTrained.classList.remove('filter-active-yellow');
     }
 }

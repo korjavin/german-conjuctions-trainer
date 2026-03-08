@@ -187,6 +187,7 @@ export const state = {
     historyItemsPerPage: 10,
     historyFilterReady: false,
     historyFilterFavorites: false,
+    historyFilterTrained: false,
     // Virtual scrolling state
     virtualScrollEnabled: false,
     virtualScrollStartIndex: 0,
