@@ -51,10 +51,10 @@ Replace the flat list in the main screen topic dropdown with an interactive tree
 **Files:**
 - Modify: `js/main.js`
 
-- [ ] Change focus handler: replace `renderTopicDropdown(state.topics)` with `renderTopicDropdown('')`
-- [ ] Change input handler: replace the local filter + `renderTopicDropdown(filteredTopics)` with `renderTopicDropdown(dom.topicSearch.value)`
-- [ ] Keep the `renderTopicDropdown` import (signature changes but name stays)
-- [ ] run project test suite: `go test ./...` must pass before task 3
+- [x] Change focus handler: replace `renderTopicDropdown(state.topics)` with `renderTopicDropdown('')`
+- [x] Change input handler: replace the local filter + `renderTopicDropdown(filteredTopics)` with `renderTopicDropdown(dom.topicSearch.value)`
+- [x] Keep the `renderTopicDropdown` import (signature changes but name stays)
+- [x] run project test suite: `go test ./...` must pass before task 3
 
 ### Task 3: Add CSS styles for dropdown tree items in style.css
 

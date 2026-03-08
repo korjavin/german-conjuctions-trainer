@@ -170,7 +170,7 @@ dom.lastRefinedPromptCloseBtn.addEventListener('click', () => {
 
 // Topic combobox
 dom.topicSearch.addEventListener('focus', () => {
-    renderTopicDropdown(state.topics);
+    renderTopicDropdown('');
     positionDropdown();
     dom.topicDropdown.classList.remove('hidden');
 });
@@ -190,12 +190,7 @@ dom.topicSearch.addEventListener('blur', () => {
 });
 
 dom.topicSearch.addEventListener('input', () => {
-    const searchTerm = dom.topicSearch.value.toLowerCase();
-    const filteredTopics = state.topics.filter(topic => {
-        const fullPath = getTopicPath(topic.id, state.topics).toLowerCase();
-        return fullPath.includes(searchTerm);
-    });
-    renderTopicDropdown(filteredTopics);
+    renderTopicDropdown(dom.topicSearch.value);
     if (!dom.topicDropdown.classList.contains('hidden')) {
         positionDropdown();
     }
