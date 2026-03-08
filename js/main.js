@@ -46,6 +46,8 @@ import {
     getTopicPath,
     debounce,
     resetDropdownCollapseState,
+    BLUR_TIMEOUT_MS,
+    FOCUSOUT_TIMEOUT_MS,
 } from './topics.js';
 import {
     checkAuthStatus,
@@ -193,7 +195,7 @@ dom.topicSearch.addEventListener('blur', (e) => {
 
         dom.topicDropdown.classList.add('hidden');
         resetSearchInputToCanonicalPath();
-    }, 200);
+    }, BLUR_TIMEOUT_MS);
 });
 
 // Helper function to reset the search input to the canonical topic path
@@ -249,7 +251,7 @@ dom.topicDropdown.addEventListener('focusout', (e) => {
             dom.topicDropdown.classList.add('hidden');
             resetSearchInputToCanonicalPath();
         }
-    }, 50);
+    }, FOCUSOUT_TIMEOUT_MS);
 });
 
 // Keyboard shortcut for topics search (Ctrl+F / Cmd+F)
@@ -346,26 +348,29 @@ function init() {
 
     renderExercise();
 
-    // Expose functions to global scope for testing
-    window.state = state;
-    window.renderTopicsList = renderTopicsList;
-    window.toggleTopicCollapse = toggleTopicCollapse;
-    window.isTopicCollapsed = isTopicCollapsed;
-    window.validateTopicName = validateTopicName;
-    window.validateTopicPrompt = validateTopicPrompt;
-    window.showFieldError = showFieldError;
-    window.clearFieldError = clearFieldError;
-    window.clearFormErrors = clearFormErrors;
-    window.renderRecentlyUsedTopics = renderRecentlyUsedTopics;
-    window.updateHierarchyPreview = updateHierarchyPreview;
-    window.setFormLoading = setFormLoading;
-    window.setupFormValidation = setupFormValidation;
-    window.setupFormKeyboardShortcuts = setupFormKeyboardShortcuts;
-    window.addRecentlyUsedTopic = addRecentlyUsedTopic;
-    window.getFolderIcon = getFolderIcon;
-    window.getFileIcon = getFileIcon;
-    window.getTopicPath = getTopicPath;
-    window.resetDropdownCollapseState = resetDropdownCollapseState;
+    // Expose functions to global scope for testing (only in development mode)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ||
+        window.location.search.includes('debug=true')) {
+        window.state = state;
+        window.renderTopicsList = renderTopicsList;
+        window.toggleTopicCollapse = toggleTopicCollapse;
+        window.isTopicCollapsed = isTopicCollapsed;
+        window.validateTopicName = validateTopicName;
+        window.validateTopicPrompt = validateTopicPrompt;
+        window.showFieldError = showFieldError;
+        window.clearFieldError = clearFieldError;
+        window.clearFormErrors = clearFormErrors;
+        window.renderRecentlyUsedTopics = renderRecentlyUsedTopics;
+        window.updateHierarchyPreview = updateHierarchyPreview;
+        window.setFormLoading = setFormLoading;
+        window.setupFormValidation = setupFormValidation;
+        window.setupFormKeyboardShortcuts = setupFormKeyboardShortcuts;
+        window.addRecentlyUsedTopic = addRecentlyUsedTopic;
+        window.getFolderIcon = getFolderIcon;
+        window.getFileIcon = getFileIcon;
+        window.getTopicPath = getTopicPath;
+        window.resetDropdownCollapseState = resetDropdownCollapseState;
+    }
 }
 
 init();

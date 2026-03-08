@@ -23,6 +23,11 @@ const VIRTUAL_SCROLL_THRESHOLD = 100; // Enable virtual scrolling above this man
 const VIRTUAL_SCROLL_ITEM_HEIGHT = 80; // Estimated height of each topic item in pixels
 const SEARCH_DEBOUNCE_MS = 300; // Debounce delay for search input in milliseconds
 
+// UI timing constants (milliseconds)
+export const BLUR_TIMEOUT_MS = 200; // Timeout for search blur handler
+export const FOCUSOUT_TIMEOUT_MS = 50; // Timeout for search focusout handler
+export const COLLAPSE_CLICK_TIMEOUT_MS = 250; // Timeout for collapse click race condition prevention
+
 // Module-level state for topic dropdown collapse (not persisted, separate from settings modal tree)
 const dropdownCollapsedTopicIds = new Set();
 
@@ -37,9 +42,9 @@ export function resetDropdownCollapseState() {
 }
 
 // Check if renderTopicDropdown is currently being called from a collapse button click
-// Returns true if a collapse render is in progress (within 250ms of last click)
+// Returns true if a collapse render is in progress (within COLLAPSE_CLICK_TIMEOUT_MS of last click)
 export function isDropdownRenderFromCollapseClick() {
-    return Date.now() - lastCollapseClickTimestamp < 250;
+    return Date.now() - lastCollapseClickTimestamp < COLLAPSE_CLICK_TIMEOUT_MS;
 }
 
 // Debounce utility function
@@ -1891,10 +1896,10 @@ export function renderTopicDropdown(searchQuery = '') {
                 lastCollapseClickTimestamp = Date.now();
                 // Re-render the dropdown with current search value
                 renderTopicDropdown(dom.topicSearch.value);
-                // Clear the timestamp after a delay longer than blur (200ms) and focusout (50ms) timeouts
+                // Clear the timestamp after a delay longer than blur and focusout timeouts
                 setTimeout(() => {
                     lastCollapseClickTimestamp = 0;
-                }, 250);
+                }, COLLAPSE_CLICK_TIMEOUT_MS);
             });
             item.appendChild(collapseBtn);
         }
