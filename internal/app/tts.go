@@ -88,8 +88,9 @@ func (a *App) generateAndSaveAudio(text string, filename string) (string, error)
 	apiURL := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
 
 	requestBody, err := json.Marshal(map[string]interface{}{
-		"text":     text,
-		"model_id": a.ElevenLabs.ModelID,
+		"text":          text,
+		"model_id":      a.ElevenLabs.ModelID,
+		"language_code": "de",
 		"voice_settings": map[string]interface{}{
 			"stability":         0.5,
 			"similarity_boost":  0.75,
