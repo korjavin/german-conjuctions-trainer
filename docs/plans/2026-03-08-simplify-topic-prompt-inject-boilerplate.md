@@ -63,11 +63,11 @@ Currently, `topic.Prompt` requires admins to manually write full technical promp
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] Run full test suite: `go test ./...` — must pass
-- [ ] Run linter: `go vet ./...` — must pass
-- [ ] Manual test: create a new topic with a simple intent prompt (no JSON schema), trigger exercise generation, verify exercises are generated correctly
-- [ ] Manual test: verify existing topics with full prompts (that include JSON schema) still generate exercises correctly (backward compatibility)
-- [ ] Verify the "View Last Refined Prompt" debug button shows the final assembled prompt with the system role preamble + variation profile + JSON schema
+- [x] Run full test suite: `go test ./...` — must pass
+- [x] Run linter: `go vet ./...` — must pass
+- [x] Manual test: create a new topic with a simple intent prompt (no JSON schema), trigger exercise generation, verify exercises are generated correctly
+- [x] Manual test: verify existing topics with full prompts (that include JSON schema) still generate exercises correctly (backward compatibility)
+- [x] Verify the "View Last Refined Prompt" debug button shows the final assembled prompt with the system role preamble + variation profile + JSON schema
 
 ### Task 5: Update documentation
 
