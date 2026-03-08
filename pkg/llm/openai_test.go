@@ -153,6 +153,58 @@ func TestGenerateExercisesQualityGateRetry(t *testing.T) {
 	}
 }
 
+func TestBuildGenerationPromptAddsPreambleForSimpleIntent(t *testing.T) {
+	profile := VariationProfile{
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
+		VocabularyTheme:  "daily life",
+		MaxRepetitionPerTerm: 2,
+	}
+
+	simpleIntent := "B1 level, um..zu conjunctions"
+	result := BuildGenerationPrompt(simpleIntent, profile)
+
+	if !strings.HasPrefix(result, "You are an expert") {
+		t.Fatalf("Expected result to start with 'You are an expert', got: %s", result)
+	}
+	if !strings.Contains(result, "Create German language exercises based on the following topic description:") {
+		t.Fatalf("Expected topic description framing in result, got: %s", result)
+	}
+	if !strings.Contains(result, "B1 level, um..zu conjunctions") {
+		t.Fatalf("Expected original intent to be preserved, got: %s", result)
+	}
+	if !strings.Contains(result, "System-generated variation profile") {
+		t.Fatalf("Expected variation profile in result, got: %s", result)
+	}
+}
+
+func TestBuildGenerationPromptNoPreambleForFullPrompt(t *testing.T) {
+	profile := VariationProfile{
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
+		VocabularyTheme:  "daily life",
+		MaxRepetitionPerTerm: 2,
+	}
+
+	fullPrompt := "You are an expert German language tutor. Generate exercises."
+	result := BuildGenerationPrompt(fullPrompt, profile)
+
+	// Count how many times the preamble appears
+	preamble := "You are an expert German language tutor. Create German language exercises based on the following topic description:"
+	count := strings.Count(result, preamble)
+
+	if count > 1 {
+		t.Fatalf("Expected preamble to NOT be duplicated, found %d occurrences, got: %s", count, result)
+	}
+	// Should still contain the original "You are an expert German language tutor" but only once
+	if strings.Count(result, "You are an expert German language tutor") != 1 {
+		t.Fatalf("Expected original preamble to appear exactly once, got: %s", result)
+	}
+	if !strings.Contains(result, "System-generated variation profile") {
+		t.Fatalf("Expected variation profile in result, got: %s", result)
+	}
+}
+
 func TestGenerateExercisesRefinementFallbackWhenMalformed(t *testing.T) {
 	t.Setenv("ENABLE_PROMPT_REFINEMENT", "true")
 

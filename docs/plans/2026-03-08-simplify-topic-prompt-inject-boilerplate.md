@@ -39,11 +39,11 @@ Currently, `topic.Prompt` requires admins to manually write full technical promp
 **Files:**
 - Modify: `pkg/llm/prompt_builder.go`
 
-- [ ] At the top of `BuildGenerationPrompt`, check if `trimmedBase` already starts with "you are" (case-insensitive). If not, prepend: `"You are an expert German language tutor. Create German language exercises based on the following topic description:\n\n"`. This ensures simple intents get proper system role framing without duplicating the header for old full prompts.
-- [ ] Add tests in `openai_test.go` (or a new `prompt_builder_test.go`):
+- [x] At the top of `BuildGenerationPrompt`, check if `trimmedBase` already starts with "you are" (case-insensitive). If not, prepend: `"You are an expert German language tutor. Create German language exercises based on the following topic description:\n\n"`. This ensures simple intents get proper system role framing without duplicating the header for old full prompts.
+- [x] Add tests in `openai_test.go` (or a new `prompt_builder_test.go`):
   - `TestBuildGenerationPromptAddsPreambleForSimpleIntent`: a simple intent like `"B1 level, um..zu conjunctions"` → result must start with "You are an expert"
   - `TestBuildGenerationPromptNoPreambleForFullPrompt`: a prompt starting with `"You are an expert..."` → preamble NOT duplicated
-- [ ] Run `go test ./pkg/llm/... -run TestBuildGeneration` — must pass
+- [x] Run `go test ./pkg/llm/... -run TestBuildGeneration` — must pass
 
 ### Task 3: Update frontend UI prompt fields
 
