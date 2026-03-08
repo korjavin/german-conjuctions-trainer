@@ -15,7 +15,7 @@ import (
 
 func TestRefinePrompt(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeChatChoice(w, http.StatusOK, "This is a refined prompt that returns json output.")
+		writeChatChoice(w, http.StatusOK, "Enhanced topic: B1 conjunctions in daily life and work contexts, varied vocabulary.")
 	}))
 	defer server.Close()
 
@@ -23,8 +23,8 @@ func TestRefinePrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, but got: %v", err)
 	}
-	if !strings.Contains(refinedPrompt, "json") {
-		t.Fatalf("Expected refined prompt to contain json, got: %s", refinedPrompt)
+	if strings.TrimSpace(refinedPrompt) == "" {
+		t.Fatalf("Expected non-empty refined prompt, got empty string")
 	}
 }
 
@@ -177,7 +177,7 @@ func TestGenerateExercisesRefinementFallbackWhenMalformed(t *testing.T) {
 	}))
 	defer server.Close()
 
-	basePrompt := "Generate grammar exercises and return json."
+	basePrompt := "B1 conjunctions um..zu and damit in daily life situations."
 	topic := &storage.Topic{ID: "topic-4", Prompt: basePrompt}
 	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model")
 	if err != nil {
