@@ -212,15 +212,8 @@ async function handleSentenceCompletion(exercise, correctWordArray, lastWord = '
         dom.skipExerciseBtn.classList.add('hidden');
 
         // Show explain button if mistakes were made on this exercise using actual ID
-        const exerciseId = state.exerciseIds[state.currentExerciseIndex];
         if (state.exerciseMistakes[exerciseId] && state.exerciseMistakes[exerciseId].size > 0) {
             dom.explainBtn.classList.remove('hidden');
-
-            // If we already have an explanation text, show it
-            if (state.explanationText) {
-                dom.explanationText.textContent = state.explanationText;
-                dom.explanationContainer.classList.remove('hidden');
-            }
         }
     } else {
         state.mistakes++;
@@ -321,11 +314,11 @@ export async function handleExplainClick() {
 
     try {
         const data = await fetchExplainAPI(topic, correctSentence, mistakesArray);
-        state.explanationText = data.explanation;
 
-        // Only update UI if the user hasn't navigated to the next exercise
+        // Only update UI and state if the user hasn't navigated to the next exercise
         const currentExerciseId = state.exerciseIds[state.currentExerciseIndex];
         if (currentExerciseId === requestingExerciseId) {
+            state.explanationText = data.explanation;
             dom.explanationText.textContent = state.explanationText;
             dom.explanationContainer.classList.remove('hidden');
         }
