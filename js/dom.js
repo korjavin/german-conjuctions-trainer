@@ -87,6 +87,7 @@ export const dom = {
     skipRemoveBtn: document.getElementById('skip-remove-btn'),
     skipCancelBtn: document.getElementById('skip-cancel-btn'),
     exerciseControls: document.getElementById('exercise-controls'),
+    completionStatusIndicator: document.getElementById('completion-status-indicator'),
 
     historyModal: document.getElementById('history-modal'),
     historyCloseBtn: document.getElementById('history-close-btn'),
