@@ -71,20 +71,22 @@ func BuildExplanationPrompt(topic string, correctSentence string, mistakes []str
 	var b strings.Builder
 
 	b.WriteString("You are a helpful and concise German language tutor. ")
-	b.WriteString("A student is practicing translating sentences or assembling German sentences and made some mistakes.\n\n")
+	b.WriteString("A student is practicing assembling German sentences and made some mistakes.\n\n")
 
 	b.WriteString(fmt.Sprintf("Topic/Grammar Rule: %s\n", topic))
-	b.WriteString(fmt.Sprintf("Target Correct Sentence: %s\n", correctSentence))
+	b.WriteString(fmt.Sprintf("The target CORRECT sentence is: \"%s\"\n", correctSentence))
 
 	if len(mistakes) > 0 {
-		b.WriteString(fmt.Sprintf("The student incorrectly clicked or chose the following words during assembly: %s\n\n", strings.Join(mistakes, ", ")))
+		b.WriteString(fmt.Sprintf("However, while trying to build this correct sentence, the student incorrectly chose or inserted the following wrong words/forms: [%s]\n\n", strings.Join(mistakes, ", ")))
 	} else {
-		b.WriteString("The student made some mistakes during assembly.\n\n")
+		b.WriteString("However, the student failed to assemble this correct sentence properly.\n\n")
 	}
 
 	b.WriteString("Provide a short, concise explanation (1-3 sentences) focusing specifically on the grammar rules relevant to the student's mistakes or the topic. ")
-	b.WriteString("Explain *why* those specific words were wrong in that context or explain the correct word order/grammar rule that applies. ")
-	b.WriteString("Keep the tone encouraging. Address the student directly.\n\n")
+	b.WriteString("Explain *why* their specific choices were wrong in the context of the correct sentence, or explain the correct word order/grammar rule that applies. ")
+	b.WriteString("Keep the tone encouraging. Address the student directly.\n")
+	b.WriteString("IMPORTANT: You MUST write your explanation ALWAYS IN ENGLISH, regardless of the language of the prompt or the topic.\n\n")
+
 	b.WriteString("Output contract:\n")
 	b.WriteString("- Return only valid JSON.\n")
 	b.WriteString("- Top-level object must contain the key \"explanation\" with a string value.\n")
