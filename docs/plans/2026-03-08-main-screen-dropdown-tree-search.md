@@ -61,11 +61,11 @@ Replace the flat list in the main screen topic dropdown with an interactive tree
 **Files:**
 - Modify: `style.css`
 
-- [ ] Increase `.topic-dropdown` max-height from `16rem` to `24rem`
-- [ ] Add `.topic-dropdown-tree-item` styles: cursor pointer, padding (`0.6rem 1rem`), transition, border-bottom, font-size, color; hover: background highlight
-- [ ] Add `.topic-dropdown-collapse-btn` styles: small inline button, hover background, no border
-- [ ] Add `.topic-dropdown-tree-item .search-highlight` style (reuse existing `search-highlight` mark style if already defined, otherwise add)
-- [ ] run project test suite: `go test ./...` must pass before task 4
+- [x] Increase `.topic-dropdown` max-height from `16rem` to `24rem`
+- [x] Add `.topic-dropdown-tree-item` styles: cursor pointer, padding (`0.6rem 1rem`), transition, border-bottom, font-size, color; hover: background highlight
+- [x] Add `.topic-dropdown-collapse-btn` styles: small inline button, hover background, no border
+- [x] Add `.topic-dropdown-tree-item .search-highlight` style (reuse existing `search-highlight` mark style if already defined, otherwise add)
+- [x] run project test suite: `go test ./...` must pass before task 4
 
 ### Task 4: Add browser-console test file for dropdown tree
 
