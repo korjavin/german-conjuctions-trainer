@@ -95,16 +95,17 @@ var (
 const defaultOpenAITimeoutSeconds = 180
 const maxErrorSnippetLen = 500
 
-const metaPrompt = `You are a prompt engineering assistant. Your task is to refine the following user-provided prompt to improve the variety and creativity of the AI's output for generating language exercises.
+const metaPrompt = `You are a prompt engineering assistant. Your task is to refine the following user-provided topic description to improve the variety and creativity of language exercises.
 
 **Refinement Rules:**
-1.  **Do Not Change the JSON Schema:** The core instructions for the JSON output format and the schema definition must remain untouched. The refined prompt must still produce a valid JSON object.
-2.  **Enhance Instructions:** Rephrase the instructions to encourage more diverse and less repetitive sentences. Add suggestions for using a wider range of vocabulary or sentence structures.
-3.  **Add Examples:** Include one or two new, concrete examples of the desired output format within the prompt. This helps the model better understand the task.
-4.  **Maintain Core Task:** The fundamental goal of the prompt (e.g., creating German conjunction exercises) must be preserved.
-5.  **Output:** Your final output should be ONLY the refined prompt, with no extra text, explanations, or markdown formatting around it.
+1.  **Expand Vocabulary:** Suggest broader vocabulary themes and specific word categories (e.g., common German verbs, workplace terminology, everyday expressions).
+2.  **Diversify Situations:** Add diverse real-life contexts and scenarios (e.g., explaining reasons, expressing goals, giving instructions, casual conversations).
+3.  **Clarify Difficulty:** Ensure the difficulty level is clear and appropriate for the stated proficiency level (e.g., A2, B1, B2).
+4.  **Maintain Core Topic:** Keep the fundamental grammar concept or topic intact (e.g., conjunctions, sentence structures).
+5.  **Be Concise:** The output should be a clear, focused topic description—not a full technical prompt with instructions or examples.
+6.  **Output:** Return ONLY the refined topic description, with no extra text, explanations, or markdown formatting.
 
-Here is the prompt to refine:
+Here is the topic description to refine:
 ---
 %s
 ---
@@ -164,9 +165,6 @@ func validateRefinedPrompt(prompt string) error {
 	}
 	if looksLikeExercisePayload(trimmed) {
 		return fmt.Errorf("refined prompt appears to be generated exercises JSON instead of instructions")
-	}
-	if !strings.Contains(strings.ToLower(trimmed), "json") {
-		return fmt.Errorf("refined prompt missing required keyword 'json'")
 	}
 	return nil
 }
