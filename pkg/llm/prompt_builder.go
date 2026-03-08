@@ -82,9 +82,13 @@ func BuildExplanationPrompt(topic string, correctSentence string, mistakes []str
 		b.WriteString("However, the student failed to assemble this correct sentence properly.\n\n")
 	}
 
-	b.WriteString("Provide a short, concise explanation (1-3 sentences) focusing specifically on the grammar rules relevant to the student's mistakes or the topic. ")
-	b.WriteString("Explain *why* their specific choices were wrong given the context of what they had already successfully built, or explain the correct word order/grammar rule that applies for the next word. ")
-	b.WriteString("Keep the tone encouraging. Address the student directly.\n")
+	b.WriteString("Provide a very short, concise explanation (1-2 sentences maximum) focusing specifically on the critical grammar rules relevant to the mistake.\n")
+	b.WriteString("If relevant to the mistake, explicitly mention:\n")
+	b.WriteString("- Conjunctions and sentence combination rules.\n")
+	b.WriteString("- Verb position and word order (e.g., verb at the end, V2).\n")
+	b.WriteString("- Grammatical cases (e.g., Dative vs. Accusative, prepositions).\n")
+	b.WriteString("Explain *why* their choice was wrong given their current sentence prefix, and state the correct rule for the next word.\n")
+	b.WriteString("IMPORTANT: Be strictly direct and educational. DO NOT include any praise, encouragement, or conversational filler (no 'Good try', 'Almost', etc.). Address the student directly.\n")
 	b.WriteString("IMPORTANT: You MUST write your explanation ALWAYS IN ENGLISH, regardless of the language of the prompt or the topic.\n\n")
 
 	b.WriteString("Output contract:\n")
