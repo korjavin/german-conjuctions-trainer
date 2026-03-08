@@ -146,8 +146,19 @@ dom.audioToggleBtn.addEventListener('click', handleAudioToggle);
 dom.hintBtn.addEventListener('click', handleHintClick);
 dom.replayAudioBtn.addEventListener('click', handleReplayAudio);
 dom.toggleFavoriteBtn.addEventListener('click', handleToggleFavorite);
-dom.skipExerciseBtn.addEventListener('click', handleSkipExercise);
-dom.hideExerciseBtn.addEventListener('click', handleHideExercise);
+
+// Skip Dialog handling
+dom.skipExerciseBtn.addEventListener('click', () => dom.skipDialog.showModal());
+dom.skipSessionBtn.addEventListener('click', () => {
+    handleSkipExercise();
+    dom.skipDialog.close();
+});
+dom.skipRemoveBtn.addEventListener('click', () => {
+    handleHideExercise();
+    dom.skipDialog.close();
+});
+dom.skipCancelBtn.addEventListener('click', () => dom.skipDialog.close());
+
 dom.nextExerciseBtn.addEventListener('click', handleNextExercise);
 document.addEventListener('keydown', handleKeyPress);
 

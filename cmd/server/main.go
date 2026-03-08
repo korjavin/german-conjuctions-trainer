@@ -117,6 +117,20 @@ func main() {
 		log.Printf("CORS allowed origins configured: %s", corsAllowedOrigins)
 	}
 
+	cacheSizeStr := os.Getenv("AUDIO_CACHE_MAX_SIZE_MB")
+	if cacheSizeStr == "" {
+		el.AudioCacheMaxSizeMB = 2048 // Default 2GB
+	} else {
+		size, err := strconv.ParseInt(cacheSizeStr, 10, 64)
+		if err != nil || size <= 0 {
+			el.AudioCacheMaxSizeMB = 2048
+			log.Printf("Invalid AUDIO_CACHE_MAX_SIZE_MB value: '%s'. Using default: 2048 MB", cacheSizeStr)
+		} else {
+			el.AudioCacheMaxSizeMB = size
+		}
+	}
+	log.Printf("Audio cache max size set to %d MB", el.AudioCacheMaxSizeMB)
+
 	db.InitializeDefaultTopics()
 
 	a := app.New(db, sc, oauthConfig, oauthState, adminGoogleID, el, corsAllowedOrigins)

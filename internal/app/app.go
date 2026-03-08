@@ -28,10 +28,11 @@ type App struct {
 
 // ElevenLabsConfig holds ElevenLabs TTS configuration.
 type ElevenLabsConfig struct {
-	APIKey    string
-	VoiceName string
-	ModelID   string
-	Speed     float64
+	APIKey              string
+	VoiceName           string
+	ModelID             string
+	Speed               float64
+	AudioCacheMaxSizeMB int64
 }
 
 // getCORSOrigin returns the appropriate CORS origin for the request.
@@ -93,6 +94,16 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 			}
 		}
 	}()
+
+	// Start background job to manage audio_cache size
+	if a.ElevenLabs.AudioCacheMaxSizeMB > 0 {
+		go func() {
+			for {
+				time.Sleep(10 * time.Minute)
+				a.cleanupAudioCache()
+			}
+		}()
+	}
 
 	return a
 }

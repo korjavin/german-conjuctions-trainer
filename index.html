@@ -18,37 +18,9 @@
 <body class="app-body">
 
     <header class="app-header">
-        <nav class="container header-nav">
-            <!-- Top row: Title and buttons -->
-            <div class="header-top-row">
-                <h1 class="header-title">German Grammar Trainer</h1>
-                <div class="header-actions">
-                    <button id="login-btn" class="btn-primary header-btn">
-                        <span class="desktop-only">Login with Google</span>
-                        <span class="mobile-only">Login</span>
-                    </button>
-                    <button id="stats-btn" class="btn-primary header-btn hidden">
-                        <span class="desktop-only">Stats</span>
-                        <span class="mobile-only">📊</span>
-                    </button>
-                    <button id="history-btn" class="btn-primary header-btn hidden">
-                        <span class="desktop-only">History</span>
-                        <span class="mobile-only">📜</span>
-                    </button>
-                    <button id="logout-btn" class="btn-primary header-btn hidden">
-                        <span class="desktop-only">Logout</span>
-                        <span class="mobile-only">👋</span>
-                    </button>
-                    <button id="settings-btn" class="btn-primary header-btn">
-                        <span class="desktop-only">Settings</span>
-                        <span class="mobile-only">⚙️</span>
-                    </button>
-                    <a href="/privacy.html" class="header-privacy-link desktop-only">Privacy</a>
-                </div>
-            </div>
-            <!-- Bottom row: Topic selector and Start button -->
-            <div id="topic-selection-section" class="topic-selection-row">
-                <div id="topic-selector-container" class="topic-selector-container relative">
+        <nav class="container flex flex-wrap gap-3 items-center justify-between py-4 px-4">
+            <div id="topic-selection-section" class="flex flex-1 items-center gap-3">
+                <div id="topic-selector-container" class="topic-selector-container relative flex-1">
                     <input type="text" id="topic-search" class="topic-search-input w-full" placeholder="Select topic...">
                     <svg class="search-icon absolute top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
@@ -60,6 +32,30 @@
                 <button id="audio-toggle-btn" class="btn-primary audio-toggle-btn whitespace-nowrap" title="Sound: on" aria-label="Disable sound">
                     <span id="audio-toggle-icon" aria-hidden="true">🔊</span>
                 </button>
+            </div>
+
+            <div class="header-actions flex items-center gap-3">
+                <button id="login-btn" class="btn-primary header-btn">
+                    <span class="desktop-only">Login with Google</span>
+                    <span class="mobile-only">Login</span>
+                </button>
+                <button id="stats-btn" class="btn-primary header-btn hidden">
+                    <span class="desktop-only">Stats</span>
+                    <span class="mobile-only">📊</span>
+                </button>
+                <button id="history-btn" class="btn-primary header-btn hidden">
+                    <span class="desktop-only">History</span>
+                    <span class="mobile-only">📜</span>
+                </button>
+                <button id="logout-btn" class="btn-primary header-btn hidden">
+                    <span class="desktop-only">Logout</span>
+                    <span class="mobile-only">👋</span>
+                </button>
+                <button id="settings-btn" class="btn-primary header-btn">
+                    <span class="desktop-only">Settings</span>
+                    <span class="mobile-only">⚙️</span>
+                </button>
+                <a href="/privacy.html" class="header-privacy-link desktop-only text-sm text-white/60 hover:text-white/90 transition-colors">Privacy</a>
             </div>
         </nav>
     </header>
@@ -97,7 +93,6 @@
                 </div>
 
                 <div id="exercise-content">
-                    <p class="hint-label mb-2">English Hint:</p>
                     <p id="english-hint" class="english-hint mb-6">Loading exercise...</p>
 
                     <div id="answer-area" class="answer-area mb-8 flex items-center justify-center transition-all duration-300">
@@ -105,20 +100,13 @@
                         <div id="constructed-sentence" class="constructed-sentence flex flex-wrap gap-3"></div>
                     </div>
 
-                    <div class="scrambled-words-header flex justify-between items-center mb-6">
-                        <p class="scrambled-words-label">Scrambled Words:</p>
+                    <div class="scrambled-words-header flex justify-end items-center mb-6">
                         <div class="exercise-actions flex items-center gap-2">
                             <button id="skip-exercise-btn" class="btn-secondary exercise-action-btn flex items-center space-x-2" title="Skip this exercise for the current session">
                                 <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
                                 </svg>
                                 <span>Skip</span>
-                            </button>
-                            <button id="hide-exercise-btn" class="btn-secondary exercise-action-btn action-danger flex items-center space-x-2" title="Remove this exercise (you won't see it again)">
-                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
-                                </svg>
-                                <span>Remove</span>
                             </button>
                             <button id="hint-btn" class="btn-primary exercise-action-btn flex items-center space-x-2">
                                 <svg class="action-icon" fill="currentColor" viewBox="0 0 20 20">
@@ -338,6 +326,19 @@
                     <span class="stat-label">Trained (Strengthening)</span>
                     <span id="stats-trained" class="stat-value">0</span>
                 </div>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Skip Exercise Modal -->
+    <dialog id="skip-dialog" class="modal-backdrop">
+        <div class="card modal-content modal-md text-center">
+            <h2 class="modal-title mb-4">Skip or Remove?</h2>
+            <p class="mb-6 text-gray-600">Do you want to skip this exercise for the current session, or remove it completely from your practice list?</p>
+            <div class="flex flex-col gap-3">
+                <button id="skip-session-btn" class="btn-secondary w-full">Skip for this session</button>
+                <button id="skip-remove-btn" class="btn-secondary action-danger text-red-600 w-full hidden">Remove completely</button>
+                <button id="skip-cancel-btn" class="btn-primary w-full mt-2">Cancel</button>
             </div>
         </div>
     </dialog>
