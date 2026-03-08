@@ -26,25 +26,35 @@ const SEARCH_DEBOUNCE_MS = 300; // Debounce delay for search input in millisecon
 // UI timing constants (milliseconds)
 export const BLUR_TIMEOUT_MS = 200; // Timeout for search blur handler
 export const FOCUSOUT_TIMEOUT_MS = 50; // Timeout for search focusout handler
-export const COLLAPSE_CLICK_TIMEOUT_MS = 250; // Timeout for collapse click race condition prevention
 
 // Module-level state for topic dropdown collapse (not persisted, separate from settings modal tree)
 const dropdownCollapsedTopicIds = new Set();
 
-// Timestamp of last collapse button click to prevent dropdown from closing unexpectedly
-// This prevents the dropdown from closing due to blur race condition during rapid clicks
-let lastCollapseClickTimestamp = 0;
+// Timestamp of the last collapse/expand button click
+// Used to suppress dropdown close from blur/focusout handlers for a short duration
+// This prevents the dropdown from closing due to blur when clicking collapse buttons
+let lastCollapseClickTime = 0;
+
+// Duration in ms to suppress dropdown close after a collapse button click
+// This must be longer than BLUR_TIMEOUT_MS to allow the blur handler to check suppression
+const SUPPRESS_CLOSE_DURATION_MS = 250;
 
 // Reset dropdown collapse state (for testing)
 export function resetDropdownCollapseState() {
     dropdownCollapsedTopicIds.clear();
-    lastCollapseClickTimestamp = 0;
+    lastCollapseClickTime = 0;
 }
 
-// Check if renderTopicDropdown is currently being called from a collapse button click
-// Returns true if a collapse render is in progress (within COLLAPSE_CLICK_TIMEOUT_MS of last click)
-export function isDropdownRenderFromCollapseClick() {
-    return Date.now() - lastCollapseClickTimestamp < COLLAPSE_CLICK_TIMEOUT_MS;
+// Check if the next dropdown close should be suppressed
+// Returns true if we're within the suppression window after a collapse button click
+export function shouldSuppressDropdownClose() {
+    const now = Date.now();
+    return (now - lastCollapseClickTime) < SUPPRESS_CLOSE_DURATION_MS;
+}
+
+// Record the timestamp of a collapse button click
+export function setSuppressDropdownClose() {
+    lastCollapseClickTime = Date.now();
 }
 
 // Debounce utility function
@@ -1892,14 +1902,10 @@ export function renderTopicDropdown(searchQuery = '') {
                 } else {
                     dropdownCollapsedTopicIds.add(node.id);
                 }
-                // Set timestamp to prevent blur/focusout from closing the dropdown
-                lastCollapseClickTimestamp = Date.now();
+                // Set flag to prevent blur/focusout from closing the dropdown
+                setSuppressDropdownClose();
                 // Re-render the dropdown with current search value
                 renderTopicDropdown(dom.topicSearch.value);
-                // Clear the timestamp after a delay longer than blur and focusout timeouts
-                setTimeout(() => {
-                    lastCollapseClickTimestamp = 0;
-                }, COLLAPSE_CLICK_TIMEOUT_MS);
             });
             item.appendChild(collapseBtn);
         }
