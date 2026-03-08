@@ -32,7 +32,19 @@ For more information on the data we store, please see our [Privacy Policy](priva
 
 ## Prompt Refinement
 
-This application uses a unique **Prompt Refinement** feature to enhance the quality of the generated exercises. When you request new exercises, the application first sends your custom prompt to a language model with a "meta-prompt". This meta-prompt instructs the model to refine your original prompt for better clarity, creativity, and variety, all while preserving the core task and required JSON output format.
+This application uses a **Simple Intent** approach combined with optional **Prompt Refinement** to enhance the quality of generated exercises.
+
+**Simple Intent Prompts**: When creating topics, you only need to describe what you want to practice—grammar topic, vocabulary themes, and situations. The backend automatically adds all technical details (system role instructions, variation profiles, JSON output format) before sending to the language model.
+
+Example simple intent prompt:
+```
+Topic: um...zu and damit conjunctions
+Level: B1
+Vocabulary: daily life, travel, work
+Situations: explaining reasons, expressing goals, giving instructions
+```
+
+**Optional Refinement**: If enabled, the application can send your simple intent to a language model with a meta-prompt that expands vocabulary range, suggests diverse real-life situations, and clarifies difficulty level while keeping the result concise.
 
 This ensures that the exercises you receive are not repetitive and are of higher pedagogical quality.
 
