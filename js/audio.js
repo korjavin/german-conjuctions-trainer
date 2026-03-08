@@ -149,11 +149,15 @@ async function ensureWordAudioCached(word) {
         return cachedFilePath;
     }
 
-    if (state.wordAudioInflight.has(normalizedWord)) {
-        return state.wordAudioInflight.get(normalizedWord);
+    // Check if already in flight and return existing promise if so
+    let promise = state.wordAudioInflight.get(normalizedWord);
+    if (promise) {
+        return promise;
     }
 
-    const preloadPromise = (async () => {
+    // Create and store the promise immediately to minimize race condition
+    // Multiple concurrent calls will get the same promise
+    promise = (async () => {
         const generatedFilePath = await fetchTTSFilePath(normalizedWord);
         if (!generatedFilePath) {
             return '';
@@ -163,9 +167,9 @@ async function ensureWordAudioCached(word) {
         return generatedFilePath;
     })();
 
-    state.wordAudioInflight.set(normalizedWord, preloadPromise);
+    state.wordAudioInflight.set(normalizedWord, promise);
     try {
-        return await preloadPromise;
+        return await promise;
     } finally {
         state.wordAudioInflight.delete(normalizedWord);
     }

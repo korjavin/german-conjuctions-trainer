@@ -396,7 +396,9 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if prompt == "" {
+			// Only validate prompt emptiness when a new value is being provided
+			// This allows name-only updates to topics with legacy whitespace-only prompts
+			if promptProvided && prompt == "" {
 				http.Error(w, "Prompt is required", http.StatusBadRequest)
 				return
 			}

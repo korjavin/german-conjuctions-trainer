@@ -683,6 +683,9 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
         collapseBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleTopicCollapse(topic.id);
+            // Accessibility: Announce the action to screen readers
+            const isNowCollapsed = isTopicCollapsed(topic.id);
+            announceToScreenReader(`${topic.name} ${isNowCollapsed ? 'collapsed' : 'expanded'}`);
             renderTopicsList();
         });
     }
@@ -1193,145 +1196,8 @@ function renderAllTopics(flattenedNodes, nodesById) {
         const beforeZone = createSiblingDropZone(depth, parentId, indexInParent, nodesById);
         dom.topicsList.appendChild(beforeZone);
 
-        const topicDiv = document.createElement('div');
-        topicDiv.className = 'topic-list-item topic-tree-item flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 mb-2 rounded border border-gray-200';
-        topicDiv.draggable = true;
-        topicDiv.dataset.topicId = topic.id;
-        topicDiv.style.marginLeft = `${depth * 20}px`;
-
-        // Calculate child status before using it for ARIA attributes
-        const hasChildren = topic.children.length > 0;
-        const isCollapsed = hasChildren && isTopicCollapsed(topic.id);
-
-        // Accessibility: Add ARIA attributes
-        topicDiv.setAttribute('role', 'treeitem');
-        topicDiv.setAttribute('tabindex', '0');
-        if (hasChildren) {
-            topicDiv.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
-        }
-        topicDiv.setAttribute('aria-level', depth + 1);
-        topicDiv.setAttribute('aria-selected', 'false');
-        topicDiv.setAttribute('aria-label', `${topic.name}${hasChildren ? `, ${isCollapsed ? 'collapsed' : 'expanded'} with ${topic.children.length} children` : ''}`);
-        topicDiv.setAttribute('aria-describedby', `topic-date-${topic.id}`);
-        const chevronDirection = isCollapsed ? 'right' : 'down';
-        const chevronClass = isCollapsed ? 'chevron-right' : 'chevron-down';
-        const childBadge = hasChildren ? `<span class="text-xs text-gray-500 ml-2">(${topic.children.length})</span>` : '';
-
-        const displayName = state.topicsSearchQuery
-            ? highlightText(escapeHtml(topic.name), state.topicsSearchQuery)
-            : escapeHtml(topic.name);
-
-        topicDiv.innerHTML = `
-            <div class="flex flex-col min-w-0">
-                <div class="font-semibold topic-item-name flex items-center">
-                    ${hasChildren ? `<button class="topic-collapse-btn ${chevronClass} mr-2 p-1 hover:bg-gray-200 rounded" data-topic-id="${topic.id}" aria-label="${isCollapsed ? 'Expand' : 'Collapse'} ${escapeHtml(topic.name)}" aria-expanded="${isCollapsed ? 'false' : 'true'}">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <path d="M4 6H8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M6 4V8" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="${chevronClass === 'chevron-right' ? '' : 'hidden'}"/>
-                        </svg>
-                    </button>` : '<span class="w-6 mr-2" aria-hidden="true"></span>'}
-                    <span class="topic-icon mr-2" data-topic-id="${topic.id}" aria-hidden="true">
-                        ${hasChildren ? getFolderIcon() : getFileIcon()}
-                    </span>
-                    <span class="text-gray-400 mr-2 select-none" aria-hidden="true">::</span>
-                    <span class="truncate">${displayName}</span>
-                    ${childBadge}
-                </div>
-                <div class="topic-item-date" id="topic-date-${topic.id}">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
-            </div>
-            <div class="flex gap-2 mt-2 sm:mt-0" role="toolbar" aria-label="Topic actions">
-                <button class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn" data-topic-id="${topic.id}" aria-label="Add child topic to ${escapeHtml(topic.name)}">Add child</button>
-                <button class="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 edit-topic-btn" data-topic-id="${topic.id}" aria-label="Edit topic ${escapeHtml(topic.name)}">Edit</button>
-                <button class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn" data-topic-id="${topic.id}" aria-label="Delete topic ${escapeHtml(topic.name)}">Delete</button>
-            </div>
-        `;
-
-        // Add tree lines for visual hierarchy (after innerHTML so it's not overwritten)
-        if (depth > 0) {
-            const treeLinesContainer = createTreeLines(depth, indexInParent, totalSiblings);
-            topicDiv.insertBefore(treeLinesContainer, topicDiv.firstChild);
-        }
-
+        const topicDiv = createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, nodesById);
         dom.topicsList.appendChild(topicDiv);
-
-        // Add collapse button click handler
-        const collapseBtn = topicDiv.querySelector('.topic-collapse-btn');
-        if (collapseBtn) {
-            collapseBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleTopicCollapse(topic.id);
-                // Accessibility: Announce the action to screen readers
-                const isNowCollapsed = isTopicCollapsed(topic.id);
-                announceToScreenReader(`${topic.name} ${isNowCollapsed ? 'collapsed' : 'expanded'}`);
-                renderTopicsList();
-            });
-        }
-
-        const addChildBtn = topicDiv.querySelector('.add-child-btn');
-        const editBtn = topicDiv.querySelector('.edit-topic-btn');
-        const deleteBtn = topicDiv.querySelector('.delete-topic-btn');
-
-        addChildBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            showAddTopicForm(e.currentTarget.dataset.topicId);
-        });
-
-        editBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            showPromptEditor(e.currentTarget.dataset.topicId);
-        });
-
-        deleteBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            deleteTopic(e.currentTarget.dataset.topicId);
-        });
-
-        // Accessibility: Add keyboard navigation handler
-        topicDiv.addEventListener('keydown', handleTopicKeyboard);
-
-        // Accessibility: Handle focus events to update aria-selected
-        topicDiv.addEventListener('focus', () => {
-            getVisibleTopicItems().forEach(item => {
-                item.setAttribute('aria-selected', 'false');
-            });
-            topicDiv.setAttribute('aria-selected', 'true');
-        });
-
-        topicDiv.addEventListener('blur', () => {
-            topicDiv.setAttribute('aria-selected', 'false');
-        });
-
-        topicDiv.addEventListener('dragstart', (event) => {
-            draggedTopicId = topic.id;
-            topicDiv.classList.add('topic-dragging');
-
-            // Create ghost element
-            dragGhostElement = createDragGhost(topicDiv);
-            updateDragGhostPosition(event);
-
-            if (event.dataTransfer) {
-                event.dataTransfer.effectAllowed = 'move';
-                event.dataTransfer.setData('text/plain', topic.id);
-                // Use a transparent image to hide default drag image
-                const emptyImg = new Image();
-                emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-                event.dataTransfer.setDragImage(emptyImg, 0, 0);
-            }
-        });
-
-        topicDiv.addEventListener('dragend', () => {
-            draggedTopicId = null;
-            topicDiv.classList.remove('topic-dragging');
-            clearDropHighlights();
-            removeDragGhost();
-        });
-
-        attachDropHandlers(topicDiv, {
-            targetParentId: topic.id,
-            targetPosition: null,
-            nodesById,
-            isChildDrop: true,
-        });
 
         if (indexInParent === totalSiblings - 1) {
             const afterZone = createSiblingDropZone(depth, parentId, totalSiblings, nodesById);
