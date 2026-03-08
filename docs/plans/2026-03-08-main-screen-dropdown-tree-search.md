@@ -72,13 +72,13 @@ Replace the flat list in the main screen topic dropdown with an interactive tree
 **Files:**
 - Create: `js/topics-dropdown-tree-test.js`
 
-- [ ] Test: dropdown `#topic-dropdown` element exists
-- [ ] Test: after focusing `#topic-search`, dropdown contains `.topic-dropdown-tree-item` elements (not `.topic-item`)
-- [ ] Test: topics with children render a collapse button
-- [ ] Test: clicking collapse button changes child count in rendered list
-- [ ] Test: typing in `#topic-search` filters items and renders highlights (`.search-highlight`)
-- [ ] Test: clearing search restores full tree
-- [ ] run project test suite: `go test ./...` must pass before task 5
+- [x] Test: dropdown `#topic-dropdown` element exists
+- [x] Test: after focusing `#topic-search`, dropdown contains `.topic-dropdown-tree-item` elements (not `.topic-item`)
+- [x] Test: topics with children render a collapse button
+- [x] Test: clicking collapse button changes child count in rendered list
+- [x] Test: typing in `#topic-search` filters items and renders highlights (`.search-highlight`)
+- [x] Test: clearing search restores full tree
+- [x] run project test suite: `go test ./...` must pass before task 5
 
 ### Task 5: Verify acceptance criteria
 
