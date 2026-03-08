@@ -1494,6 +1494,22 @@ button:disabled.is-audio-off {
     transform: translateY(-2px);
 }
 
+/* Explanation */
+.explanation-container {
+    background: linear-gradient(145deg, #f3f8ff 0%, #e0edff 100%);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-4);
+    text-align: left;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+}
+
+.explanation-text {
+    color: #1e3a8a;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
 .code-block {
     background: #f3f4f6;
     padding: var(--spacing-4);

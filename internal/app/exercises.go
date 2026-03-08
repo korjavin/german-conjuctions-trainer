@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"german-conjunctions-trainer/pkg/llm"
@@ -284,6 +285,56 @@ func (a *App) handleExerciseHide(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "hidden"})
+}
+
+func (a *App) handleExplain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "", false)
+		return
+	}
+
+	var req struct {
+		Topic           string   `json:"topic"`
+		CorrectSentence string   `json:"correct_sentence"`
+		Mistakes        []string `json:"mistakes"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST_BODY", "Invalid request body", err.Error(), false)
+		return
+	}
+
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		writeJSONError(w, http.StatusInternalServerError, "MISSING_CONFIG", "OPENAI_API_KEY is not configured", "", false)
+		return
+	}
+	openaiURL := os.Getenv("OPENAI_URL")
+	if openaiURL == "" {
+		openaiURL = "https://api.openai.com/v1"
+	}
+	modelName := os.Getenv("MODEL_NAME")
+	if modelName == "" {
+		modelName = "gpt-3.5-turbo-1106"
+	}
+
+	explanation, err := llm.GenerateExplanation(apiKey, openaiURL, modelName, req.Topic, req.CorrectSentence, req.Mistakes)
+	if err != nil {
+		status := http.StatusBadGateway
+		code := "EXPLANATION_GENERATION_FAILED"
+		message := "Failed to generate explanation from AI provider."
+		if llm.IsTimeoutError(err) {
+			status = http.StatusGatewayTimeout
+			code = "UPSTREAM_TIMEOUT"
+			message = "Explanation generation timed out while waiting for AI provider. Please try again."
+		}
+		log.Printf("[EXPLAIN] ERROR generating explanation for topic %s: %v", req.Topic, err)
+		writeJSONError(w, status, code, message, err.Error(), true)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"explanation": explanation})
 }
 
 func (a *App) handleExerciseHistory(w http.ResponseWriter, r *http.Request) {

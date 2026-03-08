@@ -371,6 +371,40 @@ func RefinePrompt(originalPrompt, apiKey, openaiURL, modelName string) (string, 
 	return refinedPrompt, nil
 }
 
+// GenerateExplanation requests a short grammar explanation from the LLM based on user mistakes.
+func GenerateExplanation(apiKey, openaiURL, modelName, topic, correctSentence string, mistakes []string) (string, error) {
+	prompt := BuildExplanationPrompt(topic, correctSentence, mistakes)
+
+	timeout := getOpenAITimeout()
+	client := &http.Client{Timeout: timeout}
+
+	openaiReq := OpenAIRequest{
+		Model:          modelName,
+		Messages:       []Message{{Role: "user", Content: prompt}},
+		ResponseFormat: &ResponseFormat{Type: "json_object"},
+	}
+
+	openaiResp, elapsed, err := callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, "explanation generation")
+	if err != nil {
+		return "", err
+	}
+
+	content := openaiResp.Choices[0].Message.Content
+	var respData struct {
+		Explanation string `json:"explanation"`
+	}
+	if err := json.Unmarshal([]byte(content), &respData); err != nil {
+		return "", fmt.Errorf("failed to parse explanation from provider response: %w", err)
+	}
+
+	if strings.TrimSpace(respData.Explanation) == "" {
+		return "", fmt.Errorf("provider returned empty explanation")
+	}
+
+	log.Printf("[EXPLANATION] generated successfully in %s", elapsed.Round(time.Millisecond))
+	return strings.TrimSpace(respData.Explanation), nil
+}
+
 // GenerateExercises calls the LLM and returns generated exercises without saving them.
 func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string) ([]GeneratedExercise, error) {
 	batchID := uuid.NewString()

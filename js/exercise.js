@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
 import { isPunctuation, playWordAudio, playSentenceAudio, preloadExerciseWordAudio } from './audio.js';
-import { toggleFavoriteAPI, hideExerciseAPI } from './api.js';
+import { toggleFavoriteAPI, hideExerciseAPI, fetchExplainAPI } from './api.js';
 
 let _onSessionComplete = () => {};
 
@@ -74,6 +74,11 @@ export function renderExercise() {
     dom.scrambledWordsContainer.innerHTML = '';
     dom.constructedSentenceEl.innerHTML = '';
     dom.correctSentenceDisplay.textContent = '';
+
+    // Reset explanation state
+    dom.explanationContainer.classList.add('hidden');
+    dom.explainBtn.classList.add('hidden');
+    state.explanationText = '';
 
     // Display initial punctuation if any
     if (state.userSentence.length > 0) {
@@ -161,6 +166,12 @@ export function handleWordClick(word, button) {
         state.mistakes++;
         state.exercisesWithMistakes.add(state.currentExerciseIndex);
 
+        // Track specific wrong words for explanations
+        if (!state.exerciseMistakes[state.currentExerciseIndex]) {
+            state.exerciseMistakes[state.currentExerciseIndex] = new Set();
+        }
+        state.exerciseMistakes[state.currentExerciseIndex].add(word);
+
         // Track per-exercise mistake
         const exerciseId = state.exerciseIds[state.currentExerciseIndex];
         if (exerciseId && state.exercisePerformance.has(exerciseId)) {
@@ -198,6 +209,17 @@ async function handleSentenceCompletion(exercise, correctWordArray, lastWord = '
         dom.exerciseControls.classList.remove('hidden');
         dom.hintBtn.classList.add('hidden');
         dom.skipExerciseBtn.classList.add('hidden');
+
+        // Show explain button if mistakes were made on this exercise
+        if (state.exerciseMistakes[state.currentExerciseIndex] && state.exerciseMistakes[state.currentExerciseIndex].size > 0) {
+            dom.explainBtn.classList.remove('hidden');
+
+            // If we already have an explanation text, show it
+            if (state.explanationText) {
+                dom.explanationText.textContent = state.explanationText;
+                dom.explanationContainer.classList.remove('hidden');
+            }
+        }
     } else {
         state.mistakes++;
 
@@ -263,6 +285,50 @@ export function handleKeyPress(event) {
         if (button.dataset.hotkey === key) {
             button.click();
             break;
+        }
+    }
+}
+
+export async function handleExplainClick() {
+    if (state.isExplaining) return;
+
+    const exercise = state.exercises[state.currentExerciseIndex];
+    const correctSentence = exercise.correct_german_sentence;
+    const topic = exercise.conjunction_topic || "Grammar Rule";
+
+    let mistakesArray = [];
+    if (state.exerciseMistakes[state.currentExerciseIndex]) {
+        mistakesArray = Array.from(state.exerciseMistakes[state.currentExerciseIndex]);
+    }
+
+    state.isExplaining = true;
+
+    // UI Loading state
+    dom.explainBtn.disabled = true;
+    const btnText = dom.explainBtn.querySelector('span:first-child');
+    const spinner = dom.explainBtn.querySelector('.loading-spinner');
+
+    if (btnText && spinner) {
+        btnText.textContent = 'Explaining...';
+        spinner.classList.remove('hidden');
+    }
+
+    try {
+        const data = await fetchExplainAPI(topic, correctSentence, mistakesArray);
+        state.explanationText = data.explanation;
+
+        dom.explanationText.textContent = state.explanationText;
+        dom.explanationContainer.classList.remove('hidden');
+    } catch (error) {
+        console.error('Error fetching explanation:', error);
+        alert('Failed to load explanation. Please try again.');
+    } finally {
+        state.isExplaining = false;
+        dom.explainBtn.disabled = false;
+
+        if (btnText && spinner) {
+            btnText.textContent = '💡 Explain Mistakes';
+            spinner.classList.add('hidden');
         }
     }
 }

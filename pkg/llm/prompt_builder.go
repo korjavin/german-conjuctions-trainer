@@ -66,6 +66,32 @@ func BuildGenerationPrompt(basePrompt string, profile VariationProfile) string {
 	return b.String()
 }
 
+// BuildExplanationPrompt creates a prompt for explaining user mistakes.
+func BuildExplanationPrompt(topic string, correctSentence string, mistakes []string) string {
+	var b strings.Builder
+
+	b.WriteString("You are a helpful and concise German language tutor. ")
+	b.WriteString("A student is practicing translating sentences or assembling German sentences and made some mistakes.\n\n")
+
+	b.WriteString(fmt.Sprintf("Topic/Grammar Rule: %s\n", topic))
+	b.WriteString(fmt.Sprintf("Target Correct Sentence: %s\n", correctSentence))
+
+	if len(mistakes) > 0 {
+		b.WriteString(fmt.Sprintf("The student incorrectly clicked or chose the following words during assembly: %s\n\n", strings.Join(mistakes, ", ")))
+	} else {
+		b.WriteString("The student made some mistakes during assembly.\n\n")
+	}
+
+	b.WriteString("Provide a short, concise explanation (1-3 sentences) focusing specifically on the grammar rules relevant to the student's mistakes or the topic. ")
+	b.WriteString("Explain *why* those specific words were wrong in that context or explain the correct word order/grammar rule that applies. ")
+	b.WriteString("Keep the tone encouraging. Address the student directly.\n\n")
+	b.WriteString("Output contract:\n")
+	b.WriteString("- Return only valid JSON.\n")
+	b.WriteString("- Top-level object must contain the key \"explanation\" with a string value.\n")
+
+	return b.String()
+}
+
 // BuildCorrectivePrompt appends corrective constraints when quality checks fail.
 func BuildCorrectivePrompt(previousPrompt string, profile VariationProfile, qualityFailure string) string {
 	var b strings.Builder
