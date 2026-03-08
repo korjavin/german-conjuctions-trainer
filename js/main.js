@@ -26,7 +26,7 @@ import {
     showVersionHistory,
     showLastRefinedPrompt,
     renderTopicDropdown,
-    isDropdownRenderFromCollapseClick,
+    shouldSuppressDropdownClose,
     selectTopic,
     positionDropdown,
     saveTopic,
@@ -183,7 +183,7 @@ dom.topicSearch.addEventListener('blur', (e) => {
     // Delay hiding so that a click on a dropdown item can be registered
     setTimeout(() => {
         // Don't close if a collapse button click just triggered a re-render
-        if (isDropdownRenderFromCollapseClick()) {
+        if (shouldSuppressDropdownClose()) {
             return;
         }
 
@@ -241,7 +241,7 @@ dom.topicDropdown.addEventListener('focusout', (e) => {
     // Small delay to allow the focus transition to complete
     setTimeout(() => {
         // Don't close if a collapse button click just triggered a re-render
-        if (isDropdownRenderFromCollapseClick()) {
+        if (shouldSuppressDropdownClose()) {
             return;
         }
 
@@ -349,8 +349,10 @@ function init() {
     renderExercise();
 
     // Expose functions to global scope for testing (only in development mode)
+    const urlParams = new URLSearchParams(window.location.search);
+    const isDebugMode = urlParams.get('debug') === 'true';
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ||
-        window.location.search.includes('debug=true')) {
+        isDebugMode) {
         window.state = state;
         window.renderTopicsList = renderTopicsList;
         window.toggleTopicCollapse = toggleTopicCollapse;

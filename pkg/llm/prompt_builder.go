@@ -13,8 +13,12 @@ func BuildGenerationPrompt(basePrompt string, profile VariationProfile) string {
 	}
 
 	// Check if the prompt already starts with a system role preamble
-	hasPreamble := strings.HasPrefix(strings.ToLower(trimmedBase), "you are")
-	if !hasPreamble {
+	// This avoids duplicating the preamble for existing full prompts while still
+	// adding it for simple intents (topic + vocab + situations descriptions)
+	// Case-insensitive check to handle variations in capitalization
+	// Any prompt starting with "you are" is considered to have a preamble
+	const youArePrefix = "you are"
+	if !strings.HasPrefix(strings.ToLower(trimmedBase), youArePrefix) {
 		trimmedBase = "You are an expert German language tutor. Create German language exercises based on the following topic description:\n\n" + trimmedBase
 	}
 

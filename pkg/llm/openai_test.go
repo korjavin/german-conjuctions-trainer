@@ -205,6 +205,109 @@ func TestBuildGenerationPromptNoPreambleForFullPrompt(t *testing.T) {
 	}
 }
 
+func TestBuildGenerationPromptNoPreambleForIntentStartingWithYouAre(t *testing.T) {
+	// Test that a prompt starting with "You are" (even without expert role keywords)
+	// does NOT get duplicate boilerplate. Any prompt starting with "you are" is
+	// considered to have a preamble.
+	profile := VariationProfile{
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
+		VocabularyTheme:  "daily life",
+		MaxRepetitionPerTerm: 2,
+	}
+
+	intentWithYouAre := "You are a traveler in Germany wanting to practice ordering food"
+	result := BuildGenerationPrompt(intentWithYouAre, profile)
+
+	// Should NOT have the expert tutor preamble (the prompt already starts with "you are")
+	if strings.Contains(result, "You are an expert German language tutor") {
+		t.Fatalf("Expected expert tutor preamble to NOT be added, got: %s", result)
+	}
+	// Should contain the original intent
+	if !strings.Contains(result, "You are a traveler in Germany wanting to practice ordering food") {
+		t.Fatalf("Expected original intent to be preserved, got: %s", result)
+	}
+	// Should NOT have the framing text
+	if strings.Contains(result, "Create German language exercises based on the following topic description:") {
+		t.Fatalf("Expected topic description framing to NOT be present, got: %s", result)
+	}
+}
+
+func TestBuildGenerationPromptCaseInsensitivePreambleDetection(t *testing.T) {
+	profile := VariationProfile{
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
+		VocabularyTheme:  "daily life",
+		MaxRepetitionPerTerm: 2,
+	}
+
+	// Test with lowercase preamble - should NOT add duplicate
+	lowercasePreamble := "you are an expert German language tutor. Generate exercises."
+	result := BuildGenerationPrompt(lowercasePreamble, profile)
+
+	// Should still contain the preamble (preserving original case)
+	if !strings.Contains(result, "you are an expert German language tutor") {
+		t.Fatalf("Expected lowercase preamble to be preserved, got: %s", result)
+	}
+	// Count how many times the expert tutor phrase appears
+	count := strings.Count(strings.ToLower(result), strings.ToLower("you are an expert German language tutor"))
+	if count > 1 {
+		t.Fatalf("Expected preamble to NOT be duplicated even with different case, found %d occurrences, got: %s", count, result)
+	}
+	// Should still contain the variation profile
+	if !strings.Contains(result, "System-generated variation profile") {
+		t.Fatalf("Expected variation profile in result, got: %s", result)
+	}
+}
+
+func TestBuildGenerationPromptNoPreambleForExpertTeacher(t *testing.T) {
+	// Test that a full prompt with "teacher" role does NOT get duplicate boilerplate
+	profile := VariationProfile{
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
+		VocabularyTheme:  "daily life",
+		MaxRepetitionPerTerm: 2,
+	}
+
+	teacherPrompt := "You are a German language teacher. Generate exercises about conjunctions."
+	result := BuildGenerationPrompt(teacherPrompt, profile)
+
+	// Should contain original teacher preamble exactly once
+	count := strings.Count(result, "You are a German language teacher")
+	if count != 1 {
+		t.Fatalf("Expected teacher preamble to appear exactly once, got: %d occurrences in:\n%s", count, result)
+	}
+
+	// Should NOT contain the expert tutor preamble
+	if strings.Contains(result, "You are an expert German language tutor") {
+		t.Fatalf("Expected expert tutor preamble to NOT be added, got:\n%s", result)
+	}
+}
+
+func TestBuildGenerationPromptNoPreambleForExpertTutor(t *testing.T) {
+	// Test that a full prompt with "tutor" role does NOT get duplicate boilerplate
+	profile := VariationProfile{
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
+		VocabularyTheme:  "daily life",
+		MaxRepetitionPerTerm: 2,
+	}
+
+	tutorPrompt := "You are a German tutor specializing in conjunctions. Generate exercises."
+	result := BuildGenerationPrompt(tutorPrompt, profile)
+
+	// Should contain original tutor preamble exactly once
+	count := strings.Count(result, "You are a German tutor")
+	if count != 1 {
+		t.Fatalf("Expected tutor preamble to appear exactly once, got: %d occurrences in:\n%s", count, result)
+	}
+
+	// Should NOT contain the expert tutor preamble
+	if strings.Contains(result, "You are an expert German language tutor") {
+		t.Fatalf("Expected expert tutor preamble to NOT be added, got:\n%s", result)
+	}
+}
+
 func TestGenerateExercisesRefinementFallbackWhenMalformed(t *testing.T) {
 	t.Setenv("ENABLE_PROMPT_REFINEMENT", "true")
 
