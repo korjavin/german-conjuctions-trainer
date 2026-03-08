@@ -77,13 +77,13 @@ func BuildExplanationPrompt(topic string, correctSentence string, mistakes []str
 	b.WriteString(fmt.Sprintf("The target CORRECT sentence is: \"%s\"\n", correctSentence))
 
 	if len(mistakes) > 0 {
-		b.WriteString(fmt.Sprintf("However, while trying to build this correct sentence, the student incorrectly chose or inserted the following wrong words/forms: [%s]\n\n", strings.Join(mistakes, ", ")))
+		b.WriteString(fmt.Sprintf("However, while trying to assemble this exact sentence word by word, the student made the following mistakes:\n- %s\n\n", strings.Join(mistakes, "\n- ")))
 	} else {
 		b.WriteString("However, the student failed to assemble this correct sentence properly.\n\n")
 	}
 
 	b.WriteString("Provide a short, concise explanation (1-3 sentences) focusing specifically on the grammar rules relevant to the student's mistakes or the topic. ")
-	b.WriteString("Explain *why* their specific choices were wrong in the context of the correct sentence, or explain the correct word order/grammar rule that applies. ")
+	b.WriteString("Explain *why* their specific choices were wrong given the context of what they had already successfully built, or explain the correct word order/grammar rule that applies for the next word. ")
 	b.WriteString("Keep the tone encouraging. Address the student directly.\n")
 	b.WriteString("IMPORTANT: You MUST write your explanation ALWAYS IN ENGLISH, regardless of the language of the prompt or the topic.\n\n")
 

@@ -171,11 +171,17 @@ export function handleWordClick(word, button) {
         // Track per-exercise mistake using actual ID instead of index
         const exerciseId = state.exerciseIds[state.currentExerciseIndex];
 
-        // Track specific wrong words for explanations
+        // Track specific wrong words along with their context for better explanations
         if (!state.exerciseMistakes[exerciseId]) {
             state.exerciseMistakes[exerciseId] = new Set();
         }
-        state.exerciseMistakes[exerciseId].add(word);
+        
+        let contextStr = state.userSentence.join(' ').trim();
+        let mistakeDesc = contextStr 
+            ? `Tried to use "${word}" as the next word after successfully building: "${contextStr} "`
+            : `Tried to use "${word}" as the very first word of the sentence`;
+            
+        state.exerciseMistakes[exerciseId].add(mistakeDesc);
 
         if (exerciseId && state.exercisePerformance.has(exerciseId)) {
             const perf = state.exercisePerformance.get(exerciseId);
