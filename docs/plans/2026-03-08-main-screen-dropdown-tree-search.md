@@ -82,14 +82,14 @@ Replace the flat list in the main screen topic dropdown with an interactive tree
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] manual test: open page, click topic search input, verify tree renders with indentation and icons
-- [ ] manual test: click collapse button on a parent topic, verify children hide
-- [ ] manual test: type partial topic name, verify matching topics shown with text highlighted and parents expanded
-- [ ] manual test: clear search field, verify full tree restored with previous collapse state
-- [ ] manual test: click a topic to select it, verify search input shows full path
-- [ ] run full test suite: `go test ./...`
-- [ ] run linter: `go vet ./...`
-- [ ] verify test coverage is maintained
+- [x] manual test: open page, click topic search input, verify tree renders with indentation and icons
+- [x] manual test: click collapse button on a parent topic, verify children hide
+- [x] manual test: type partial topic name, verify matching topics shown with text highlighted and parents expanded
+- [x] manual test: clear search field, verify full tree restored with previous collapse state
+- [x] manual test: click a topic to select it, verify search input shows full path
+- [x] run full test suite: `go test ./...`
+- [x] run linter: `go vet ./...`
+- [x] verify test coverage is maintained
 
 ### Task 6: Update documentation
 
