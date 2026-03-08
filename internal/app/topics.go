@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strings"
@@ -18,11 +19,48 @@ type TopicRequest struct {
 	SortOrder int     `json:"sort_order"`
 }
 
-type UpdateTopicRequest struct {
-	Name      string  `json:"name"`
-	Prompt    string  `json:"prompt"`
-	ParentID  *string `json:"parent_id"`
-	SortOrder int     `json:"sort_order"`
+// ErrTopicNameAlreadyExists is returned when a topic name already exists at the same parent level
+var ErrTopicNameAlreadyExists = fmt.Errorf("a topic with this name already exists at this level")
+
+const (
+	maxTreeDepth    = 100  // Maximum allowed depth of topic tree hierarchy
+	maxSortOrder    = 999999 // Maximum allowed value for sort_order field
+)
+
+// validateTopicName checks for duplicate topic names at the same parent level
+func (a *App) validateTopicName(name string, parentID *string, excludeTopicID *string) error {
+	topics, err := a.DB.GetAllTopics()
+	if err != nil {
+		return err // Return the actual DB error so caller can distinguish from validation errors
+	}
+
+	normalizedParentID := normalizeStringPtr(parentID)
+	normalizedName := strings.TrimSpace(strings.ToLower(name))
+
+	for _, topic := range topics {
+		// Skip the topic being edited (excludeTopicID)
+		if excludeTopicID != nil && topic.ID == *excludeTopicID {
+			continue
+		}
+
+		topicParentID := normalizeStringPtr(topic.ParentID)
+		topicName := strings.TrimSpace(strings.ToLower(topic.Name))
+
+		// Check if topic has same name at same parent level
+		if topicName == normalizedName && topicParentID == normalizedParentID {
+			return ErrTopicNameAlreadyExists
+		}
+	}
+
+	return nil
+}
+
+// normalizeStringPtr converts *string to comparable value, treating empty string and nil as equivalent
+func normalizeStringPtr(s *string) string {
+	if s == nil || strings.TrimSpace(*s) == "" {
+		return ""
+	}
+	return strings.TrimSpace(*s)
 }
 
 // validateTopicTree ensures we don't create cycles and the parent exists
@@ -41,19 +79,23 @@ func (a *App) validateTopicTree(topicID *string, parentID *string) error {
 		return fmt.Errorf("parent topic not found")
 	}
 
-	// Check for cycles
-	if topicID != nil {
-		currentParent := parent.ParentID
-		for currentParent != nil {
-			if *currentParent == *topicID {
-				return fmt.Errorf("cannot create a cycle in the topic tree")
-			}
-			p, err := a.DB.GetTopic(*currentParent)
-			if err != nil {
-				return fmt.Errorf("invalid parent reference in tree")
-			}
-			currentParent = p.ParentID
+	// Check for cycles and maximum depth
+	depth := 1 // Start at 1 for the parent itself
+	currentParent := parent.ParentID
+	for currentParent != nil {
+		depth++
+		if depth >= maxTreeDepth {
+			return fmt.Errorf("topic tree depth exceeds maximum of %d levels", maxTreeDepth)
 		}
+		// Only check for cycles when topicID is not nil (new topics can't create cycles)
+		if topicID != nil && *currentParent == *topicID {
+			return fmt.Errorf("cannot create a cycle in the topic tree")
+		}
+		p, err := a.DB.GetTopic(*currentParent)
+		if err != nil {
+			return fmt.Errorf("invalid parent reference in tree")
+		}
+		currentParent = p.ParentID
 	}
 
 	return nil
@@ -65,9 +107,19 @@ type MoveTopicRequest struct {
 }
 
 func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	// Set CORS headers - check if request origin is in allowed list
+	corsOrigin := a.getCORSOrigin(r)
+	if corsOrigin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Vary", "Origin")
+	} else if a.CORSAllowedOrigins != "" && a.CORSAllowedOrigins != "*" && r.Header.Get("Origin") != "" {
+		// Set Vary: Origin when CORS behavior depends on Origin (allowlist mode with denied origin)
+		// This prevents caches from serving the same response variant to different origins
+		w.Header().Set("Vary", "Origin")
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
@@ -78,7 +130,8 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		topicsList, err := a.DB.GetAllTopics()
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to get topics: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to get topics: %v", err)
+			http.Error(w, "Failed to retrieve topics. Please try again.", http.StatusInternalServerError)
 			return
 		}
 
@@ -93,8 +146,35 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			req.Name = strings.TrimSpace(req.Name)
+			req.Prompt = strings.TrimSpace(req.Prompt)
 			if req.Name == "" || req.Prompt == "" {
 				http.Error(w, "Name and prompt are required", http.StatusBadRequest)
+				return
+			}
+
+			// Validate name length (matches frontend MAX_TOPIC_NAME_LENGTH of 200)
+			if len(req.Name) > 200 {
+				http.Error(w, "Topic name must be less than 200 characters", http.StatusBadRequest)
+				return
+			}
+
+			// Validate prompt length (matches frontend MIN_PROMPT_LENGTH of 10 and MAX_PROMPT_LENGTH of 10000)
+			if len(req.Prompt) < 10 {
+				http.Error(w, "Prompt must be at least 10 characters", http.StatusBadRequest)
+				return
+			}
+			if len(req.Prompt) > 10000 {
+				http.Error(w, "Prompt must be less than 10000 characters", http.StatusBadRequest)
+				return
+			}
+
+			if req.SortOrder < 0 {
+				http.Error(w, "sort_order must be a non-negative integer", http.StatusBadRequest)
+				return
+			}
+			if req.SortOrder > maxSortOrder {
+				http.Error(w, "sort_order must be less than 1000000", http.StatusBadRequest)
 				return
 			}
 
@@ -103,9 +183,30 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			// Validate no duplicate name at same parent level
+			if err := a.validateTopicName(req.Name, req.ParentID, nil); err != nil {
+				// Check if this is a validation error or a database error
+				if errors.Is(err, ErrTopicNameAlreadyExists) {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+				} else {
+					// Database error - return 500
+					log.Printf("Failed to validate topic name: %v", err)
+					http.Error(w, "Failed to validate topic name. Please try again.", http.StatusInternalServerError)
+				}
+				return
+			}
+
 			topic, err := a.DB.CreateTopic(req.Name, req.Prompt, req.ParentID, req.SortOrder)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to create topic: %v", err), http.StatusInternalServerError)
+				// Check for unique constraint violation (race condition between validation and insert)
+				if strings.Contains(err.Error(), "UNIQUE constraint failed") ||
+					strings.Contains(err.Error(), "constraint violated") {
+					log.Printf("Unique constraint violation while creating topic: %v", err)
+					http.Error(w, "a topic with this name already exists at this level", http.StatusConflict)
+					return
+				}
+				log.Printf("Failed to create topic: %v", err)
+				http.Error(w, "Failed to create topic. Please try again.", http.StatusInternalServerError)
 				return
 			}
 
@@ -120,9 +221,19 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	// Set CORS headers - check if request origin is in allowed list
+	corsOrigin := a.getCORSOrigin(r)
+	if corsOrigin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Vary", "Origin")
+	} else if a.CORSAllowedOrigins != "" && a.CORSAllowedOrigins != "*" && r.Header.Get("Origin") != "" {
+		// Set Vary: Origin when CORS behavior depends on Origin (allowlist mode with denied origin)
+		// This prevents caches from serving the same response variant to different origins
+		w.Header().Set("Vary", "Origin")
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
@@ -164,10 +275,11 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				switch {
 				case strings.Contains(errMsg, "not found"):
 					http.Error(w, errMsg, http.StatusNotFound)
-				case strings.Contains(errMsg, "invalid"):
+				case strings.Contains(errMsg, "invalid parent") || strings.Contains(errMsg, "cycle"):
 					http.Error(w, errMsg, http.StatusBadRequest)
 				default:
-					http.Error(w, fmt.Sprintf("Failed to move topic: %v", err), http.StatusInternalServerError)
+					log.Printf("Failed to move topic: %v", err)
+					http.Error(w, "Failed to move topic. Please try again.", http.StatusInternalServerError)
 				}
 				return
 			}
@@ -228,7 +340,9 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 			}
 
 			prompt := existingTopic.Prompt
+			promptProvided := false
 			if val, exists := rawReq["prompt"]; exists {
+				promptProvided = true
 				if strVal, ok := val.(string); ok {
 					prompt = strVal
 				} else {
@@ -260,6 +374,10 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 						http.Error(w, "sort_order must be a non-negative integer", http.StatusBadRequest)
 						return
 					}
+					if floatVal > 999999 {
+						http.Error(w, "sort_order must be less than 1000000", http.StatusBadRequest)
+						return
+					}
 					sortOrder = int(floatVal)
 				} else {
 					http.Error(w, "sort_order must be a number", http.StatusBadRequest)
@@ -267,8 +385,38 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			if prompt == "" {
+			name = strings.TrimSpace(name)
+			// Only trim prompt when it's provided, not when using existing value
+			// This preserves whitespace-only legacy prompts and allows name-only updates
+			if promptProvided {
+				prompt = strings.TrimSpace(prompt)
+			}
+			if name == "" {
+				http.Error(w, "Name is required", http.StatusBadRequest)
+				return
+			}
+
+			// Only validate prompt emptiness when a new value is being provided
+			// This allows name-only updates to topics with legacy whitespace-only prompts
+			if promptProvided && prompt == "" {
 				http.Error(w, "Prompt is required", http.StatusBadRequest)
+				return
+			}
+
+			// Validate name length (matches frontend MAX_TOPIC_NAME_LENGTH of 200)
+			if len(name) > 200 {
+				http.Error(w, "Topic name must be less than 200 characters", http.StatusBadRequest)
+				return
+			}
+
+			// Validate prompt length (matches frontend MIN_PROMPT_LENGTH of 10 and MAX_PROMPT_LENGTH of 10000)
+			// Only validate minimum length when a new value is being provided
+			if promptProvided && len(prompt) < 10 {
+				http.Error(w, "Prompt must be at least 10 characters", http.StatusBadRequest)
+				return
+			}
+			if len(prompt) > 10000 {
+				http.Error(w, "Prompt must be less than 10000 characters", http.StatusBadRequest)
 				return
 			}
 
@@ -277,9 +425,30 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			// Validate no duplicate name at same parent level (exclude the current topic being edited)
+			if err := a.validateTopicName(name, parentID, &topicID); err != nil {
+				// Check if this is a validation error or a database error
+				if errors.Is(err, ErrTopicNameAlreadyExists) {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+				} else {
+					// Database error - return 500
+					log.Printf("Failed to validate topic name: %v", err)
+					http.Error(w, "Failed to validate topic name. Please try again.", http.StatusInternalServerError)
+				}
+				return
+			}
+
 			topic, err := a.DB.UpdateTopic(topicID, name, prompt, parentID, sortOrder)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to update topic: %v", err), http.StatusInternalServerError)
+				// Check for unique constraint violation (race condition between validation and update)
+				if strings.Contains(err.Error(), "UNIQUE constraint failed") ||
+					strings.Contains(err.Error(), "constraint violated") {
+					log.Printf("Unique constraint violation while updating topic: %v", err)
+					http.Error(w, "a topic with this name already exists at this level", http.StatusConflict)
+					return
+				}
+				log.Printf("Failed to update topic: %v", err)
+				http.Error(w, "Failed to update topic. Please try again.", http.StatusInternalServerError)
 				return
 			}
 
@@ -294,7 +463,8 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				if errors.Is(err, storage.ErrTopicHasChildren) {
 					http.Error(w, err.Error(), http.StatusConflict) // 409 Conflict for business rule violation
 				} else {
-					http.Error(w, fmt.Sprintf("Failed to delete topic: %v", err), http.StatusInternalServerError)
+					log.Printf("Failed to delete topic: %v", err)
+					http.Error(w, "Failed to delete topic. Please try again.", http.StatusInternalServerError)
 				}
 				return
 			}
@@ -308,9 +478,19 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	// Set CORS headers - check if request origin is in allowed list
+	corsOrigin := a.getCORSOrigin(r)
+	if corsOrigin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Vary", "Origin")
+	} else if a.CORSAllowedOrigins != "" && a.CORSAllowedOrigins != "*" && r.Header.Get("Origin") != "" {
+		// Set Vary: Origin when CORS behavior depends on Origin (allowlist mode with denied origin)
+		// This prevents caches from serving the same response variant to different origins
+		w.Header().Set("Vary", "Origin")
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
@@ -329,7 +509,8 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		versions, err := a.DB.GetVersions(topicID)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to get versions: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to get versions: %v", err)
+			http.Error(w, "Failed to retrieve versions. Please try again.", http.StatusInternalServerError)
 			return
 		}
 
@@ -364,7 +545,8 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
 
 			topic, err := a.DB.UpdateTopic(topicID, currentTopic.Name, versionToRestore.Prompt, currentTopic.ParentID, currentTopic.SortOrder)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Failed to restore version: %v", err), http.StatusInternalServerError)
+				log.Printf("Failed to restore version: %v", err)
+				http.Error(w, "Failed to restore version. Please try again.", http.StatusInternalServerError)
 				return
 			}
 

@@ -79,12 +79,81 @@ docker run -p 8080:8080 \
 | `MODEL_NAME` | No | `gpt-3.5-turbo-1106` | Model name to use |
 | `SQLITE_PATH` | No | `german.db` | Path to the SQLite database file |
 | `PORT` | No | `8080` | Port for the web server |
+| `CORS_ALLOWED_ORIGINS` | No | `*` | Comma-separated list of allowed CORS origins. Defaults to wildcard (`*`) for development. **It is strongly recommended to set this to your specific domain(s) in production.** |
 | `AUDIO_CACHE_MAX_SIZE_MB` | No | `2048` | Maximum size of the local TTS audio cache in MB (e.g., `2048` for 2GB). Older files are removed when the limit is reached. |
 | `GOOGLE_CLIENT_ID` | No | - | Your Google OAuth 2.0 Client ID |
 | `GOOGLE_CLIENT_SECRET` | No | - | Your Google OAuth 2.0 Client Secret |
 | `GOOGLE_REDIRECT_URL` | No | - | Your Google OAuth 2.0 Redirect URL |
 | `COOKIE_HASH_KEY` | No | Randomly generated | A 64-byte key for HMAC authentication of cookies. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
 | `COOKIE_BLOCK_KEY` | No | Randomly generated | A 32-byte key for AES-256 encryption of cookie data. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
+
+## Database Migrations
+
+The application automatically runs database migrations on startup to update the schema. If you're upgrading from an older version:
+
+- Migrations will add `parent_id` and `sort_order` columns to the topics table
+- A unique constraint on (parent_id, name) will be added to prevent duplicate topic names at the same level
+- Additional tracking columns may be added for user exercise statistics
+
+**Important**: If you have duplicate topic names at the same parent level in your existing database, the migration will fail. You must manually resolve duplicates by renaming or deleting duplicate topics before the migration can complete.
+
+Migrations are designed to be idempotent - running them multiple times has no effect.
+
+## Running Tests
+
+The project includes comprehensive test suites for both backend and frontend functionality.
+
+### Backend Tests (Go)
+
+```bash
+# Run all tests
+go test ./...
+
+# Run tests for specific package
+go test ./internal/app/...
+go test ./pkg/storage/...
+
+# Run tests with verbose output
+go test -v ./...
+
+# Run tests with coverage
+go test -cover ./...
+```
+
+### Frontend Tests (JavaScript)
+
+JavaScript tests are designed for browser-based verification:
+
+1. **Browser Console Tests**:
+   - Open the application in your browser
+   - Open Developer Tools (F12)
+   - Go to Console tab
+   - Paste the contents of any test file from `js/topics-*-test.js`
+   - Tests will run automatically and report results
+
+2. **Performance Test Runner**:
+   - Open `js/topics-performance-test-runner.html` in your browser
+   - Click "Run All Tests" button
+   - Results appear in console and on the page
+
+3. **Test Guides**: Each feature has a corresponding test guide:
+   - `js/topics-accessibility-test-guide.md` - Accessibility feature verification
+   - `js/topics-collapse-test-guide.md` - Expand/collapse functionality
+   - `js/topics-dragdrop-test-guide.md` - Drag-and-drop behavior
+   - `js/topics-form-test-guide.md` - Form validation and UX
+   - `js/topics-icon-test-guide.md` - Topic icons rendering
+   - `js/topics-search-test-guide.md` - Search functionality
+   - `js/topics-sort-test-guide.md` - Sorting behavior
+
+### Test Coverage
+
+The comprehensive test suite covers:
+- Backend API validation and error handling
+- Database operations and migrations
+- Frontend UI interactions
+- Accessibility compliance (WCAG, ARIA)
+- Performance characteristics (virtual scrolling, debouncing)
+- User workflows (CRUD operations, drag-and-drop)
 
 ## Airtable Setup (Deprecated)
 
@@ -104,7 +173,42 @@ On first startup, the application will create two default topics:
 - **Verb + Preposition**: Verb-preposition combinations
 
 ### Topic Hierarchy
-Topics can be organized hierarchically in a tree structure. You can assign a parent topic to any new or existing topic to keep your exercises neatly categorized (e.g., "Grammar" -> "Verbs" -> "Verb + Preposition"). Deleting a topic that has children is prevented with a HTTP 409 Conflict to ensure data integrity.
+Topics can be organized hierarchically in a tree structure with advanced features:
+
+**Topic Hierarchy Features:**
+
+- **Visual Tree Lines**: Clear visual connectors show parent-child relationships at any depth level
+- **Expand/Collapse**: Collapse branches to reduce clutter, with state persisted across sessions
+- **Topic Icons**: Folder icons for topics with children, file icons for leaf topics
+- **Search & Filter**: Instant search with auto-expansion of parent topics and text highlighting
+- **Top-Level Sorting**: Sort top-level topics by name (A-Z, Z-A), date (newest/oldest), or custom order without affecting nested children
+- **Enhanced Drag-and-Drop**: Improved visual feedback with ghost preview, drop zone indicators, and animations
+- **Better Form UX**: Real-time validation, hierarchy preview, recently-used topics quick-select, and keyboard shortcuts (Ctrl+Enter to save, Escape to cancel)
+- **Accessibility**: Full keyboard navigation (Arrow keys, Home, End, Enter/Space to expand), ARIA attributes, and screen reader announcements
+- **Performance**: Virtual scrolling for large topic lists (100+ topics) and debounced search input
+
+**Topic Name Uniqueness:** Topic names must be unique at the same parent level (case-insensitive). You cannot create two topics with the same name that share the same parent, but you can reuse names at different levels (e.g., "Grammar" -> "Verbs" and "Adjectives" -> "Verbs" are both allowed).
+
+**Sort Order Field:** Topics have a `sort_order` field that determines their display position within their parent. Lower values appear first. When using the "Custom Order" sort option, topics are displayed based on their `sort_order` value.
+
+**Tree Depth Limit:** Topic trees are limited to a maximum depth of 100 levels to prevent performance issues.
+
+**Topic Creation Rules:**
+
+When creating or editing topics, the following validation rules apply:
+- **Topic Name**: Required, max 200 characters
+- **Prompt**: Required, min 10 characters, max 10,000 characters
+- **Sort Order**: Required, must be a non-negative integer (0-999,999)
+
+You can assign a parent topic to any new or existing topic to keep your exercises neatly categorized (e.g., "Grammar" -> "Verbs" -> "Verb + Preposition"). Deleting a topic that has children is prevented with a HTTP 409 Conflict to ensure data integrity.
+
+**Keyboard Shortcuts for Topic Tree:**
+- Arrow Up/Down/Left/Right: Navigate between topics
+- Home: Jump to first topic
+- End: Jump to last topic
+- Enter or Space: Toggle expand/collapse for topics with children
+- Escape: Exit tree navigation
+- Ctrl+F or Cmd+F: Focus topic search input
 
 ## Custom API Providers
 

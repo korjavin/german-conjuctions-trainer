@@ -3,15 +3,15 @@ package app
 import (
 	"bytes"
 	"context"
+	"german-conjunctions-trainer/pkg/storage"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
-	"os"
-	"german-conjunctions-trainer/pkg/storage"
 )
 
 func setupTestApp(t *testing.T) *App {
-	dbPath := "test_app_db.sqlite"
+	dbPath := filepath.Join(t.TempDir(), "test.db")
 	store, err := storage.NewSQLiteStorage(dbPath)
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
@@ -21,16 +21,16 @@ func setupTestApp(t *testing.T) *App {
 }
 
 func cleanupTestApp(app *App) {
-	os.Remove("test_app_db.sqlite")
+	// t.TempDir() is cleaned up automatically
 }
 
 func TestValidateTopicTreeCycle(t *testing.T) {
 	app := setupTestApp(t)
 	defer cleanupTestApp(app)
 
-	a, _ := app.DB.CreateTopic("A", "prompt", nil, 0)
-	b, _ := app.DB.CreateTopic("B", "prompt", &a.ID, 0)
-	c, _ := app.DB.CreateTopic("C", "prompt", &b.ID, 0)
+	a, _ := app.DB.CreateTopic("A", "valid prompt", nil, 0)
+	b, _ := app.DB.CreateTopic("B", "valid prompt", &a.ID, 0)
+	c, _ := app.DB.CreateTopic("C", "valid prompt", &b.ID, 0)
 
 	// Attempt self-parenting: A -> A
 	err := app.validateTopicTree(&a.ID, &a.ID)
@@ -53,7 +53,7 @@ func TestHandleTopicByID_PutValidation(t *testing.T) {
 	app.AdminGoogleID = "admin123"
 	adminUser, _ := app.DB.CreateUser("admin123")
 
-	root, _ := app.DB.CreateTopic("Root", "prompt", nil, 5)
+	root, _ := app.DB.CreateTopic("Root", "valid prompt", nil, 5)
 
 	tests := []struct {
 		name           string
@@ -82,7 +82,7 @@ func TestHandleTopicByID_PutValidation(t *testing.T) {
 		},
 		{
 			name:           "Valid explicit null parent_id and zero sort",
-			payload:        `{"name": "test", "prompt": "test", "parent_id": null, "sort_order": 0}`,
+			payload:        `{"name": "test", "prompt": "valid prompt", "parent_id": null, "sort_order": 0}`,
 			expectedStatus: http.StatusOK,
 		},
 		{
@@ -95,7 +95,7 @@ func TestHandleTopicByID_PutValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// To isolate state, we reset the topic before each test
-			app.DB.UpdateTopic(root.ID, "Root", "prompt", nil, 5)
+			app.DB.UpdateTopic(root.ID, "Root", "valid prompt", nil, 5)
 
 			req, _ := http.NewRequest("PUT", "/api/topics/"+root.ID, bytes.NewBufferString(tt.payload))
 			req.Header.Set("Content-Type", "application/json")
@@ -114,8 +114,8 @@ func TestHandleTopicByID_PutValidation(t *testing.T) {
 				if updatedTopic.Name != "New Name" {
 					t.Errorf("Expected name 'New Name', got '%s'", updatedTopic.Name)
 				}
-				if updatedTopic.Prompt != "prompt" {
-					t.Errorf("Expected prompt 'prompt', got '%s'", updatedTopic.Prompt)
+				if updatedTopic.Prompt != "valid prompt" {
+					t.Errorf("Expected prompt 'valid prompt', got '%s'", updatedTopic.Prompt)
 				}
 				if updatedTopic.ParentID != nil {
 					t.Errorf("Expected ParentID to remain nil, got %v", updatedTopic.ParentID)

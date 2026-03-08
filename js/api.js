@@ -54,7 +54,10 @@ export async function fetchTTSFilePathAPI(text) {
 
 export async function fetchTopicsAPI() {
     const response = await fetch('/api/topics');
-    if (!response.ok) throw new Error('Failed to load topics');
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to load topics');
+        throw new Error(errorText || 'Failed to load topics');
+    }
     return response.json();
 }
 
@@ -64,7 +67,10 @@ export async function createTopicAPI(name, prompt, parentId = null, sortOrder = 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, prompt, parent_id: parentId, sort_order: sortOrder })
     });
-    if (!response.ok) throw new Error('Failed to create topic');
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to create topic');
+        throw new Error(errorText || 'Failed to create topic');
+    }
     return response.json();
 }
 
@@ -84,12 +90,18 @@ export async function updateTopicAPI(topicId, name, prompt, parentId = null, sor
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, prompt, parent_id: parentId, sort_order: sortOrder })
     });
-    if (!response.ok) throw new Error('Failed to update prompt');
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Failed to update topic');
+        throw new Error(errorText || 'Failed to update topic');
+    }
 }
 
 export async function moveTopicAPI(topicId, parentId, position = null) {
     const payload = { parent_id: parentId || '' };
     if (typeof position === 'number' && Number.isFinite(position)) {
+        if (position < 0) {
+            throw new Error('Invalid position: must be non-negative');
+        }
         payload.position = position;
     }
 
@@ -182,7 +194,17 @@ export async function loadExerciseStatsAPI() {
 
 export async function fetchVersionsAPI(topicId) {
     const response = await fetch(`/api/versions/${topicId}`);
-    if (!response.ok) throw new Error('Failed to load versions');
+    if (!response.ok) {
+        let errorMessage = 'Failed to load versions';
+        try {
+            const errorData = await response.json();
+            if (errorData.error) errorMessage = errorData.error;
+        } catch (e) {
+            // If error response is not JSON, use status text
+            errorMessage = response.statusText || errorMessage;
+        }
+        throw Object.assign(new Error(errorMessage), { status: response.status });
+    }
     return response.json();
 }
 

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -134,22 +135,168 @@ func (s *SQLiteStorage) runMigrations() error {
 		}
 	}
 
+	// Add unique constraint on (parent_id, name) to prevent duplicate names at same level
+	// SQLite doesn't support adding constraints to existing tables, so we need to recreate the table
+	if err := s.addTopicsUniqueConstraint(); err != nil {
+		return fmt.Errorf("failed to add topics unique constraint: %w", err)
+	}
+
 	log.Println("Database migrations completed successfully")
 	return nil
 }
 
-// isColumnExistsError checks if the error is due to column already existing
+// isColumnExistsError checks if the error is due to column or index already existing
 func isColumnExistsError(err error) bool {
-	return err != nil && (err.Error() == "duplicate column name: total_attempts" ||
-		err.Error() == "duplicate column name: successful_attempts" ||
-		err.Error() == "duplicate column name: failed_attempts" ||
-		err.Error() == "duplicate column name: hints_used" ||
-		err.Error() == "duplicate column name: mistakes_made" ||
-		err.Error() == "duplicate column name: is_favorite" ||
-		err.Error() == "duplicate column name: is_hidden" ||
-		err.Error() == "duplicate column name: parent_id" ||
-		err.Error() == "duplicate column name: sort_order" ||
-		err.Error() == "index idx_topics_parent already exists")
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "duplicate column name") ||
+		strings.Contains(errStr, "already exists")
+}
+
+// addTopicsUniqueConstraint adds a unique constraint on (parent_id, name) to prevent duplicate names at same level
+// Since SQLite doesn't support adding constraints to existing tables, we recreate the table with the constraint
+func (s *SQLiteStorage) addTopicsUniqueConstraint() error {
+	// Get a dedicated connection to ensure PRAGMA settings affect the same connection used by the transaction
+	// This is necessary because PRAGMA settings are connection-specific, and using s.db might give different
+	// connections from the pool, causing the migration to fail with cascade deletes or leaving FK state corrupted.
+	conn, err := s.db.Conn(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get dedicated connection: %w", err)
+	}
+	defer conn.Close()
+
+	// Check if we already ran this migration by checking for the generated column in the table schema
+	var sqlFromSchema string
+	err = conn.QueryRowContext(context.Background(), "SELECT sql FROM sqlite_master WHERE type='table' AND name='topics'").Scan(&sqlFromSchema)
+	if err == nil && strings.Contains(sqlFromSchema, "parent_key") {
+		// Migration already ran, skip
+		return nil
+	}
+
+	// Get the current foreign_keys setting so we can restore it after migration
+	// This respects the user's configuration (e.g., DSN with _foreign_keys=0)
+	var originalFKSetting int
+	err = conn.QueryRowContext(context.Background(), "PRAGMA foreign_keys").Scan(&originalFKSetting)
+	if err != nil {
+		// If we can't read the setting, assume it's ON (safe default)
+		log.Printf("Warning: could not read foreign_keys pragma, assuming ON: %v", err)
+		originalFKSetting = 1
+	}
+
+	// Disable foreign keys BEFORE starting the transaction to prevent cascade deletes when DROP TABLE is executed
+	// This is critical: even if app doesn't enable FKs, the DSN can include _foreign_keys=1
+	// which would enable them without code changes, causing data loss.
+	// PRAGMA foreign_keys must be set OUTSIDE the transaction because setting it inside a transaction
+	// is ignored by SQLite (the setting remains at its previous value).
+	_, err = conn.ExecContext(context.Background(), `PRAGMA foreign_keys = OFF`)
+	if err != nil {
+		return fmt.Errorf("failed to disable foreign keys: %w", err)
+	}
+
+	// Ensure FK state is restored even on error paths
+	// Note: PRAGMA statements don't support parameterized queries, so we use string literals
+	defer func() {
+		var restoreValue string = "OFF"
+		if originalFKSetting == 1 {
+			restoreValue = "ON"
+		}
+		_, restoreErr := conn.ExecContext(context.Background(), `PRAGMA foreign_keys = `+restoreValue)
+		if restoreErr != nil {
+			log.Printf("Warning: failed to restore foreign_keys pragma after migration error: %v", restoreErr)
+		}
+	}()
+
+	// Start transaction for atomic table recreation
+	tx, err := conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Create new table with unique constraint using a generated column to handle NULL parent_id
+	// The generated column 'parent_key' replaces NULL with a sentinel value to enforce uniqueness at root level
+	// Sentinel value is a UUID-like string that won't conflict with actual topic IDs
+	_, err = tx.Exec(`
+		CREATE TABLE topics_new (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			parent_id TEXT NULL,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL,
+			parent_key TEXT GENERATED ALWAYS AS (
+				CASE
+					WHEN parent_id IS NULL THEN '00000000-0000-0000-0000-000000000000'
+					ELSE parent_id
+				END
+			) STORED,
+			UNIQUE(parent_key, name COLLATE NOCASE)
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create topics_new table: %w", err)
+	}
+
+	// Check for duplicate topic names before proceeding
+	// We need to detect duplicates to fail fast instead of silently dropping data
+	var duplicateCount int
+	err = tx.QueryRow(`
+		SELECT COUNT(*)
+		FROM (
+			SELECT COUNT(*) as cnt
+			FROM topics
+			GROUP BY
+				CASE WHEN parent_id IS NULL THEN '00000000-0000-0000-0000-000000000000' ELSE parent_id END,
+				LOWER(name)
+			HAVING cnt > 1
+		)
+	`).Scan(&duplicateCount)
+	if err != nil {
+		return fmt.Errorf("failed to check for duplicate topics: %w", err)
+	}
+	if duplicateCount > 0 {
+		return fmt.Errorf("cannot add unique constraint: found %d duplicate topic name(s) at the same parent level. Please manually resolve duplicates by renaming or deleting duplicate topics before running the migration", duplicateCount)
+	}
+
+	// Copy data from old table to new table
+	// At this point, we know there are no duplicates, so all data will be copied
+	_, err = tx.Exec(`
+		INSERT INTO topics_new(id, name, prompt, parent_id, sort_order, created_at, updated_at)
+		SELECT id, name, prompt, parent_id, sort_order, created_at, updated_at FROM topics
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to copy data to topics_new: %w", err)
+	}
+
+	// Drop old table
+	// Foreign keys were disabled before starting the transaction, so this won't cascade-delete
+	_, err = tx.Exec(`DROP TABLE topics`)
+	if err != nil {
+		return fmt.Errorf("failed to drop topics table: %w", err)
+	}
+
+	// Rename new table to old name
+	_, err = tx.Exec(`ALTER TABLE topics_new RENAME TO topics`)
+	if err != nil {
+		return fmt.Errorf("failed to rename topics_new to topics: %w", err)
+	}
+
+	// Recreate indexes
+	_, err = tx.Exec(`CREATE INDEX IF NOT EXISTS idx_topics_parent ON topics(parent_id, sort_order, created_at)`)
+	if err != nil {
+		return fmt.Errorf("failed to recreate index: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration transaction: %w", err)
+	}
+
+	// Foreign keys will be restored by the defer function when conn.Close() is called
+	// The defer runs before the connection is returned to the pool, ensuring FK state is correct
+	return nil
 }
 
 // querier is an interface that can be a *sql.DB or *sql.Tx
@@ -280,7 +427,11 @@ func (s *SQLiteStorage) UpdateTopic(topicID, name, prompt string, parentID *stri
 		return nil, err
 	}
 
-	return topic, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit topic update: %w", err)
+	}
+
+	return topic, nil
 }
 
 // ErrTopicHasChildren is returned when attempting to delete a topic that has child topics.
@@ -869,7 +1020,6 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 	if err := row.Scan(&totalViews); err != nil {
 		return nil, err
 	}
-	log.Printf("[STATS_CALC] User %s has %d total exercise views", userID, totalViews)
 
 	// This logic mirrors the SRS logic from the main handler.
 	// It calculates the number of days since the last view and compares it to the repetition counter squared.
@@ -883,14 +1033,12 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 	if err := row.Scan(&readyToRepeatCount); err != nil {
 		return nil, err
 	}
-	log.Printf("[STATS_CALC] User %s has %d exercises ready to repeat (formula passed)", userID, readyToRepeatCount)
 
 	stats := &UserExerciseStats{
 		ReadyToRepeatCount: readyToRepeatCount,
 		TrainedCount:       totalViews - readyToRepeatCount,
 	}
 
-	log.Printf("[STATS_CALC] Final stats for user %s: ready=%d, trained=%d", userID, stats.ReadyToRepeatCount, stats.TrainedCount)
 	return stats, nil
 }
 

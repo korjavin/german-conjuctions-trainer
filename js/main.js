@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, toggleTopicCollapse, isTopicCollapsed, addRecentlyUsedTopic } from './state.js';
 import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
 import {
@@ -30,6 +30,20 @@ import {
     positionDropdown,
     saveTopic,
     savePrompt,
+    validateTopicName,
+    validateTopicPrompt,
+    showFieldError,
+    clearFieldError,
+    clearFormErrors,
+    renderRecentlyUsedTopics,
+    updateHierarchyPreview,
+    setFormLoading,
+    setupFormValidation,
+    setupFormKeyboardShortcuts,
+    getFolderIcon,
+    getFileIcon,
+    getTopicPath,
+    debounce,
 } from './topics.js';
 import {
     checkAuthStatus,
@@ -40,7 +54,6 @@ import {
     renderHistoryPage,
     updateHistoryFilterUI,
 } from './history.js';
-import { getTopicPath } from './topics.js';
 
 const sampleExercises = {
     "exercises": [
@@ -82,7 +95,11 @@ if (dom.topicSort) {
     dom.topicSort.value = state.topicSortOrder;
     dom.topicSort.addEventListener('change', (e) => {
         state.topicSortOrder = e.target.value;
-        localStorage.setItem('topicSortOrder', state.topicSortOrder);
+        try {
+            localStorage.setItem('topicSortOrder', state.topicSortOrder);
+        } catch (error) {
+            console.error('Failed to save topic sort order:', error);
+        }
         renderTopicsList();
     });
 }
@@ -92,6 +109,25 @@ dom.cancelAddBtn.addEventListener('click', hideAddTopicForm);
 dom.saveTopicBtn.addEventListener('click', saveTopic);
 dom.cancelEditBtn.addEventListener('click', hidePromptEditor);
 dom.savePromptBtn.addEventListener('click', savePrompt);
+
+// Topics search input with debouncing
+dom.topicsSearchInput.addEventListener('input', debounce(() => {
+    state.topicsSearchQuery = dom.topicsSearchInput.value.trim();
+    if (state.topicsSearchQuery) {
+        dom.topicsSearchClear.classList.remove('hidden');
+    } else {
+        dom.topicsSearchClear.classList.add('hidden');
+    }
+    renderTopicsList();
+}, 300));
+
+dom.topicsSearchClear.addEventListener('click', () => {
+    dom.topicsSearchInput.value = '';
+    state.topicsSearchQuery = '';
+    dom.topicsSearchClear.classList.add('hidden');
+    renderTopicsList();
+    dom.topicsSearchInput.focus();
+});
 
 dom.viewVersionsBtn.addEventListener('click', () => {
     if (state.editingTopicId) {
@@ -185,6 +221,20 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// Keyboard shortcut for topics search (Ctrl+F / Cmd+F)
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        // Prevent default browser find dialog
+        e.preventDefault();
+        // Open settings modal if not already open
+        if (!dom.settingsModal.open) {
+            dom.settingsModal.showModal();
+        }
+        // Focus search input
+        dom.topicsSearchInput.focus();
+    }
+});
+
 // Auth
 dom.loginBtn.addEventListener('click', () => {
     window.location.href = '/auth/google/login';
@@ -264,6 +314,26 @@ function init() {
     state.startTime = Date.now();
 
     renderExercise();
+
+    // Expose functions to global scope for testing
+    window.state = state;
+    window.renderTopicsList = renderTopicsList;
+    window.toggleTopicCollapse = toggleTopicCollapse;
+    window.isTopicCollapsed = isTopicCollapsed;
+    window.validateTopicName = validateTopicName;
+    window.validateTopicPrompt = validateTopicPrompt;
+    window.showFieldError = showFieldError;
+    window.clearFieldError = clearFieldError;
+    window.clearFormErrors = clearFormErrors;
+    window.renderRecentlyUsedTopics = renderRecentlyUsedTopics;
+    window.updateHierarchyPreview = updateHierarchyPreview;
+    window.setFormLoading = setFormLoading;
+    window.setupFormValidation = setupFormValidation;
+    window.setupFormKeyboardShortcuts = setupFormKeyboardShortcuts;
+    window.addRecentlyUsedTopic = addRecentlyUsedTopic;
+    window.getFolderIcon = getFolderIcon;
+    window.getFileIcon = getFileIcon;
+    window.getTopicPath = getTopicPath;
 }
 
 init();

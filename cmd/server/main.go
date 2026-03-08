@@ -44,7 +44,9 @@ func main() {
 		log.Println("Warning: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REDIRECT_URL not set. Google login will be disabled.")
 	} else {
 		b := make([]byte, 16)
-		rand.Read(b)
+		if _, err := rand.Read(b); err != nil {
+			log.Fatalf("Failed to generate OAuth state: %v", err)
+		}
 		oauthState = base64.URLEncoding.EncodeToString(b)
 		oauthConfig = &oauth2.Config{
 			RedirectURL:  redirectURL,
@@ -107,6 +109,14 @@ func main() {
 		log.Printf("ElevenLabs integration enabled with voice: %s, model: %s, speed: %.1f", el.VoiceName, el.ModelID, el.Speed)
 	}
 
+	// CORS
+	corsAllowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if corsAllowedOrigins == "" {
+		log.Println("Warning: CORS_ALLOWED_ORIGINS not set. Using wildcard (*) for development. Set this environment variable in production.")
+	} else {
+		log.Printf("CORS allowed origins configured: %s", corsAllowedOrigins)
+	}
+
 	cacheSizeStr := os.Getenv("AUDIO_CACHE_MAX_SIZE_MB")
 	if cacheSizeStr == "" {
 		el.AudioCacheMaxSizeMB = 2048 // Default 2GB
@@ -123,7 +133,7 @@ func main() {
 
 	db.InitializeDefaultTopics()
 
-	a := app.New(db, sc, oauthConfig, oauthState, adminGoogleID, el)
+	a := app.New(db, sc, oauthConfig, oauthState, adminGoogleID, el, corsAllowedOrigins)
 	a.RegisterRoutes()
 
 	port := os.Getenv("PORT")

@@ -191,9 +191,32 @@ ul {
 .btn-word:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+.topic-tree-item:focus-visible {
     outline: 3px solid var(--mr-focus);
     outline-offset: 2px;
+}
+
+/* Stronger focus styles for better visibility across browsers */
+.topic-tree-item:focus,
+.topic-tree-item:focus-within {
+    z-index: 10;
+    box-shadow: 0 0 0 3px var(--mr-focus);
+    border-color: var(--mr-orange-dark) !important;
+}
+
+/* High contrast focus ring for keyboard navigation */
+.topic-tree-item:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px #2563eb, 0 0 0 6px rgba(37, 99, 235, 0.3) !important;
+    border-color: #2563eb !important;
+}
+
+/* Focus states for buttons within topic items */
+.topic-tree-item button:focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .header-btn {
@@ -544,11 +567,98 @@ progress.progress-bar::-moz-progress-bar {
     color: #991b1b;
 }
 
-.topics-list > div:not(.topic-gap-drop-zone), .versions-list > div {
+/* Form validation */
+.text-error {
+    color: #dc2626;
+    font-size: 0.875rem;
+}
+
+.form-input-error,
+.form-textarea-error,
+.form-select-error {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+}
+
+.form-input-success,
+.form-textarea-success,
+.form-select-success {
+    border-color: #16a34a !important;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1) !important;
+}
+
+/* Recently used topics badges */
+.recent-topic-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    background: linear-gradient(145deg, #fff9f0 0%, #ffeacc 100%);
+    border: 1px solid rgba(175, 83, 36, 0.2);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--mr-text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recent-topic-badge:hover {
+    background: linear-gradient(145deg, #fff2e1 0%, #ffe1bb 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(105, 45, 18, 0.1);
+}
+
+.recent-topic-badge.active {
+    background: linear-gradient(145deg, #ef8639 0%, #d86424 100%);
+    color: white;
+    border-color: #a33f11;
+}
+
+/* Topic hierarchy preview */
+.topic-hierarchy-preview {
+    background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-3);
+}
+
+.topic-preview-path {
+    font-size: 0.875rem;
+    color: #1e293b;
+    font-family: var(--font-family-mono);
+    line-height: 1.5;
+}
+
+.topic-preview-path::before {
+    content: "📁 ";
+}
+
+/* Loading spinner inline with text */
+button .loading-spinner {
+    display: inline-block;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 0.8s linear infinite;
+}
+
+.topics-list > div:not(.topic-gap-drop-zone):not(.virtual-scroll-spacer), .versions-list > div {
     border-color: rgba(163, 63, 17, 0.15);
     background: rgba(255, 249, 239, 0.85);
     border: 1px solid rgba(163, 63, 17, 0.15);
     margin-bottom: var(--spacing-2);
+}
+
+/* Virtual scroll spacer - explicitly exclude from card styling */
+.virtual-scroll-spacer {
+    background: transparent !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 .topic-list-item {
@@ -557,23 +667,227 @@ progress.progress-bar::-moz-progress-bar {
 
 .topic-tree-item {
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    position: relative;
 }
 
 .topic-tree-item.topic-dragging {
-    opacity: 0.6;
+    opacity: 0.4;
+    transform: scale(0.98);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    cursor: grabbing;
 }
 
+.topic-tree-item {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.15s ease,
+                background-color 0.15s ease,
+                opacity 0.15s ease;
+    cursor: grab;
+}
+
+.topic-tree-item:active {
+    cursor: grabbing;
+}
+
+/* Ghost drag preview element */
+.topic-drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 10000;
+    opacity: 0.7;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid #2563eb;
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+    transform: rotate(2deg);
+    transition: transform 0.1s ease;
+}
+
+/* Virtual scrolling styles */
+#topics-list.virtual-scroll-enabled {
+    height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    scroll-behavior: smooth;
+}
+
+#topics-list.virtual-scroll-enabled .topic-list-item {
+    position: absolute;
+    width: 100%;
+    box-sizing: border-box;
+    transition: opacity 0.1s ease;
+}
+
+#topics-list.virtual-scroll-enabled .topic-gap-drop-zone {
+    position: absolute;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Performance optimization: Reduce layout thrashing for topic list items */
+.topic-list-item {
+    position: relative;
+    will-change: transform;
+    contain: layout style paint;
+}
+
+/* Drop zone indicator styling */
 .topic-gap-drop-zone {
     height: 0.5rem;
     border-radius: 9999px;
     margin-top: 0.15rem;
     margin-bottom: 0.15rem;
+    border: 2px solid transparent;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    will-change: transform;
+    contain: layout style paint;
 }
 
-.topic-drop-active {
-    border: 1px dashed #2563eb !important;
-    background-color: #eff6ff !important;
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+.topic-gap-drop-zone.topic-drop-active {
+    height: 1.5rem;
+    border: 2px dashed #2563eb;
+    background: linear-gradient(90deg, #eff6ff 0%, #dbeafe 50%, #eff6ff 100%);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    animation: drop-zone-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes drop-zone-pulse {
+    0%, 100% {
+        background: linear-gradient(90deg, #eff6ff 0%, #dbeafe 50%, #eff6ff 100%);
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    }
+    50% {
+        background: linear-gradient(90deg, #dbeafe 0%, #bfdbfe 50%, #dbeafe 100%);
+        box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.2);
+    }
+}
+
+/* Parent drop highlight */
+.topic-tree-item.parent-drop-highlight {
+    border-color: #2563eb !important;
+    background: linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15), 0 4px 12px rgba(37, 99, 235, 0.2) !important;
+    transform: scale(1.02);
+}
+
+/* Sibling drop highlight */
+.topic-tree-item.sibling-drop-highlight {
+    border-color: #2563eb !important;
+    background: #eff6ff !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Drop animation */
+@keyframes drop-complete {
+    0% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.3);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: none;
+    }
+}
+
+.topic-drop-complete {
+    animation: drop-complete 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Tree Lines */
+.tree-lines-container {
+    position: absolute;
+    left: -20px;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* In virtual scroll mode, keep tree lines within item bounds to avoid overflow-x: hidden clipping */
+#topics-list.virtual-scroll-enabled .tree-lines-container {
+    left: 0;
+    padding-left: 20px;
+    box-sizing: border-box;
+}
+
+.tree-line-vertical {
+    position: absolute;
+    width: 1px;
+    background-color: #d1d5db;
+}
+
+.tree-connector-last {
+    position: absolute;
+    top: 0;
+    height: 50%;
+    border-left: 1px solid #d1d5db;
+    border-top: 1px solid #d1d5db;
+    border-top-left-radius: 4px;
+}
+
+.tree-connector-mid {
+    position: absolute;
+    height: 100%;
+    border-left: 1px solid #d1d5db;
+}
+
+/* Topic Collapse Button */
+.topic-collapse-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+    color: #6b7280;
+    flex-shrink: 0;
+}
+
+.topic-collapse-btn:hover {
+    background-color: rgba(107, 114, 128, 0.1);
+    color: #374151;
+}
+
+.topic-collapse-btn:active {
+    transform: scale(0.95);
+}
+
+/* Chevron directions - handled via SVG visibility, but we can add animation if needed */
+.topic-collapse-btn svg {
+    transition: transform 0.15s ease;
+}
+
+/* Topic Icons */
+.topic-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.topic-icon-folder,
+.topic-icon-file {
+    display: block;
+}
+
+.topic-icon-folder svg {
+    width: 16px;
+    height: 16px;
+}
+
+.topic-icon-file svg {
+    width: 16px;
+    height: 16px;
 }
 
 .topic-item-name {
@@ -975,4 +1289,26 @@ button:disabled.is-audio-off {
     background: #fefce8 !important;
     border-color: #facc15 !important;
     color: #a16207 !important;
+}
+
+/* Search highlight */
+.search-highlight {
+    background-color: #fef08a;
+    color: #854d0e;
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 600;
+}
+
+/* Screen reader only - content visible only to screen readers */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
 }

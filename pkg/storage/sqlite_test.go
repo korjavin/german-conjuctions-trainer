@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -102,5 +103,63 @@ func TestMigrationIdempotency(t *testing.T) {
 	err = store.runMigrations()
 	if err != nil {
 		t.Errorf("Re-running migrations failed: %v", err)
+	}
+}
+
+func TestMigrationFailsOnDuplicateTopicNames(t *testing.T) {
+	dbPath := "test_migration_duplicate_db.sqlite"
+	defer os.Remove(dbPath)
+
+	// Create legacy database manually without new columns
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("Failed to open legacy DB: %v", err)
+	}
+
+	legacySchema := `
+	CREATE TABLE topics (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		prompt TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);
+	`
+	if _, err := db.Exec(legacySchema); err != nil {
+		t.Fatalf("Failed to create legacy schema: %v", err)
+	}
+
+	// Insert duplicate topic names at the same parent level (root level)
+	duplicateTopics := []struct {
+		id        string
+		name      string
+		prompt    string
+		createdAt string
+		updatedAt string
+	}{
+		{"id1", "Conjunctions", "prompt1", "2024-01-01 00:00:00", "2024-01-01 00:00:00"},
+		{"id2", "Conjunctions", "prompt2", "2024-01-02 00:00:00", "2024-01-02 00:00:00"},
+	}
+	for _, topic := range duplicateTopics {
+		_, err := db.Exec(
+			"INSERT INTO topics(id, name, prompt, created_at, updated_at) VALUES(?, ?, ?, ?, ?)",
+			topic.id, topic.name, topic.prompt, topic.createdAt, topic.updatedAt,
+		)
+		if err != nil {
+			t.Fatalf("Failed to insert duplicate topic: %v", err)
+		}
+	}
+	db.Close()
+
+	// Attempt to initialize storage with duplicate topics - should fail
+	_, err = NewSQLiteStorage(dbPath)
+	if err == nil {
+		t.Fatal("Expected migration to fail on duplicate topic names, but it succeeded")
+	}
+
+	// Verify error message mentions duplicates
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "duplicate") && !strings.Contains(errMsg, "unique") {
+		t.Errorf("Expected error message to mention duplicates, got: %v", errMsg)
 	}
 }

@@ -82,12 +82,14 @@ type GenerationDebugInfo struct {
 
 // --- Globals ---
 
-var (
-	lastPromptUsed      string
-	lastPromptUsedMutex sync.RWMutex
+type lastGenerationData struct {
+	prompt string
+	debug  GenerationDebugInfo
+}
 
-	lastGenerationDebug      GenerationDebugInfo
-	lastGenerationDebugMutex sync.RWMutex
+var (
+	lastGeneration      lastGenerationData
+	lastGenerationMutex sync.RWMutex
 )
 
 const defaultOpenAITimeoutSeconds = 180
@@ -213,16 +215,11 @@ func cloneGenerationDebugInfo(info GenerationDebugInfo) GenerationDebugInfo {
 	return copyInfo
 }
 
-func setLastPromptUsed(prompt string) {
-	lastPromptUsedMutex.Lock()
-	defer lastPromptUsedMutex.Unlock()
-	lastPromptUsed = prompt
-}
-
-func setLastGenerationDebugInfo(info GenerationDebugInfo) {
-	lastGenerationDebugMutex.Lock()
-	defer lastGenerationDebugMutex.Unlock()
-	lastGenerationDebug = cloneGenerationDebugInfo(info)
+func setLastGenerationData(prompt string, info GenerationDebugInfo) {
+	lastGenerationMutex.Lock()
+	defer lastGenerationMutex.Unlock()
+	lastGeneration.prompt = prompt
+	lastGeneration.debug = cloneGenerationDebugInfo(info)
 }
 
 // IsTimeoutError identifies timeout-like errors from upstream provider calls.
@@ -390,9 +387,6 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 		RefinementEnabled: isPromptRefinementEnabled(),
 		GeneratedAt:       generationStarted,
 	}
-	defer func() {
-		setLastGenerationDebugInfo(debugInfo)
-	}()
 
 	basePrompt := topic.Prompt
 	if debugInfo.RefinementEnabled {
@@ -409,7 +403,6 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 	finalPrompt := BuildGenerationPrompt(basePrompt, profile)
 	finalPrompt = ensurePromptContainsJSON(finalPrompt)
 	debugInfo.Prompt = finalPrompt
-	setLastPromptUsed(finalPrompt)
 
 	timeout := getOpenAITimeout()
 	client := &http.Client{Timeout: timeout}
@@ -430,6 +423,7 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 	debugInfo.GenerationLatencyMS += elapsed.Milliseconds()
 	if err != nil {
 		debugInfo.LastError = err.Error()
+		setLastGenerationData(debugInfo.Prompt, debugInfo)
 		return nil, err
 	}
 
@@ -440,7 +434,6 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 		correctivePrompt := BuildCorrectivePrompt(finalPrompt, profile, qualityErr.Error())
 		correctivePrompt = ensurePromptContainsJSON(correctivePrompt)
 		debugInfo.Prompt = correctivePrompt
-		setLastPromptUsed(correctivePrompt)
 
 		exercises, elapsed, providerRetries, err = requestExercisesFromProvider(
 			client,
@@ -455,12 +448,14 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 		debugInfo.GenerationLatencyMS += elapsed.Milliseconds()
 		if err != nil {
 			debugInfo.LastError = fmt.Sprintf("quality retry request failed: %v", err)
+			setLastGenerationData(debugInfo.Prompt, debugInfo)
 			return nil, err
 		}
 
 		if secondQualityErr := ValidateExerciseSet(exercises, profile); secondQualityErr != nil {
 			debugInfo.QualityGateFailures = append(debugInfo.QualityGateFailures, secondQualityErr.Error())
 			debugInfo.LastError = secondQualityErr.Error()
+			setLastGenerationData(debugInfo.Prompt, debugInfo)
 			return nil, secondQualityErr
 		}
 	}
@@ -468,6 +463,9 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 	debugInfo.GeneratedCount = len(exercises)
 	log.Printf("[GENERATION] batch=%s completed topic=%s exercises=%d latency_ms=%d provider_retries=%d quality_retries=%d",
 		batchID, topic.ID, len(exercises), debugInfo.GenerationLatencyMS, debugInfo.ProviderRetryCount, debugInfo.QualityGateRetryCount)
+
+	// Set the final generation data after all retries have been counted
+	setLastGenerationData(debugInfo.Prompt, debugInfo)
 
 	return exercises, nil
 }
@@ -521,13 +519,13 @@ func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool) ([]*sto
 
 // GetLastRefinedPrompt is kept for backward compatibility with the existing UI.
 func GetLastRefinedPrompt() string {
-	lastPromptUsedMutex.RLock()
-	defer lastPromptUsedMutex.RUnlock()
-	return lastPromptUsed
+	lastGenerationMutex.RLock()
+	defer lastGenerationMutex.RUnlock()
+	return lastGeneration.prompt
 }
 
 func GetLastGenerationDebugInfo() GenerationDebugInfo {
-	lastGenerationDebugMutex.RLock()
-	defer lastGenerationDebugMutex.RUnlock()
-	return cloneGenerationDebugInfo(lastGenerationDebug)
+	lastGenerationMutex.RLock()
+	defer lastGenerationMutex.RUnlock()
+	return cloneGenerationDebugInfo(lastGeneration.debug)
 }

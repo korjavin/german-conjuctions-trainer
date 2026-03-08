@@ -54,13 +54,13 @@ func getEligibleExercisesForSRS(allExercises []*storage.Exercise, userViews map[
 
 	for i := 0; i < len(candidates)-1; i++ {
 		for j := i + 1; j < len(candidates); j++ {
-			scoreI := int(candidates[i].OverdueAmount)
-			scoreJ := int(candidates[j].OverdueAmount)
+			overdueI := candidates[i].OverdueAmount
+			overdueJ := candidates[j].OverdueAmount
 
 			swap := false
-			if scoreI < scoreJ {
+			if overdueI < overdueJ {
 				swap = true
-			} else if scoreI == scoreJ {
+			} else if overdueI == overdueJ {
 				if !candidates[i].IsFavorite && candidates[j].IsFavorite {
 					swap = true
 				}

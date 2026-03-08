@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,14 +14,16 @@ import (
 
 // App holds all application dependencies.
 type App struct {
-	DB            storage.Storage
-	SC            *securecookie.SecureCookie
-	OAuthConfig   *oauth2.Config
-	OAuthState    string
-	AdminGoogleID string
-	ElevenLabs    ElevenLabsConfig
-	clients       map[string]*rateclient
-	mu            sync.Mutex
+	DB                 storage.Storage
+	SC                 *securecookie.SecureCookie
+	OAuthConfig        *oauth2.Config
+	OAuthState         string
+	AdminGoogleID      string
+	ElevenLabs         ElevenLabsConfig
+	CORSAllowedOrigins string
+	clients            map[string]*rateclient
+	mu                 sync.Mutex
+	shutdown           chan struct{} // Channel to signal goroutine shutdown
 }
 
 // ElevenLabsConfig holds ElevenLabs TTS configuration.
@@ -32,29 +35,63 @@ type ElevenLabsConfig struct {
 	AudioCacheMaxSizeMB int64
 }
 
+// getCORSOrigin returns the appropriate CORS origin for the request.
+// If CORSAllowedOrigins is empty or "*", it returns "*" (allow all).
+// Otherwise, it checks if the request's Origin is in the comma-separated list
+// and returns that origin. If no match, it returns an empty string (no CORS).
+func (a *App) getCORSOrigin(r *http.Request) string {
+	if a.CORSAllowedOrigins == "" || a.CORSAllowedOrigins == "*" {
+		return "*"
+	}
+
+	// Parse comma-separated origins and check if request Origin matches any
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return "*" // If no Origin header, allow all (same-site requests)
+	}
+
+	allowedOrigins := strings.Split(a.CORSAllowedOrigins, ",")
+	for _, allowed := range allowedOrigins {
+		if strings.TrimSpace(allowed) == origin {
+			return origin
+		}
+	}
+
+	// Origin not in allowlist - return empty string to deny
+	return ""
+}
+
 // New creates a new App and starts background maintenance tasks.
-func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.Config, oauthState string, adminGoogleID string, el ElevenLabsConfig) *App {
+func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.Config, oauthState string, adminGoogleID string, el ElevenLabsConfig, corsAllowedOrigins string) *App {
 	a := &App{
-		DB:            db,
-		SC:            sc,
-		OAuthConfig:   oauthConfig,
-		OAuthState:    oauthState,
-		AdminGoogleID: adminGoogleID,
-		ElevenLabs:    el,
-		clients:       make(map[string]*rateclient),
+		DB:                 db,
+		SC:                 sc,
+		OAuthConfig:        oauthConfig,
+		OAuthState:         oauthState,
+		AdminGoogleID:      adminGoogleID,
+		ElevenLabs:         el,
+		CORSAllowedOrigins: corsAllowedOrigins,
+		clients:            make(map[string]*rateclient),
+		shutdown:           make(chan struct{}),
 	}
 
 	// Cleanup stale rate-limit client entries every 10 minutes.
 	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
 		for {
-			time.Sleep(10 * time.Minute)
-			a.mu.Lock()
-			for ip, c := range a.clients {
-				if time.Since(c.lastSeen) > 30*time.Minute {
-					delete(a.clients, ip)
+			select {
+			case <-ticker.C:
+				a.mu.Lock()
+				for ip, c := range a.clients {
+					if time.Since(c.lastSeen) > 30*time.Minute {
+						delete(a.clients, ip)
+					}
 				}
+				a.mu.Unlock()
+			case <-a.shutdown:
+				return // Exit goroutine on shutdown signal
 			}
-			a.mu.Unlock()
 		}
 	}()
 
@@ -69,6 +106,11 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 	}
 
 	return a
+}
+
+// Shutdown gracefully stops background goroutines.
+func (a *App) Shutdown() {
+	close(a.shutdown)
 }
 
 // RegisterRoutes registers all HTTP routes on the default mux.

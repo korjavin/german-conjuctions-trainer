@@ -7,6 +7,15 @@ const WORD_AUDIO_CACHE_STORAGE_KEY = 'wordAudioCacheV1';
 const MAX_WORD_AUDIO_CACHE_ENTRIES = 2000;
 const WORD_AUDIO_PRELOAD_CONCURRENCY = 3;
 
+let localStorageErrorShown = false; // Prevent multiple notifications for localStorage errors
+
+function _showLocalStorageError(context) {
+    if (!localStorageErrorShown) {
+        localStorageErrorShown = true;
+        alert(`Warning: Unable to save your preferences to local storage. Your changes may not persist after closing the browser.\n\nContext: ${context}`);
+    }
+}
+
 export function isPunctuation(token) {
     return /^[^\p{L}\p{N}]+$/u.test(token);
 }
@@ -140,11 +149,15 @@ async function ensureWordAudioCached(word) {
         return cachedFilePath;
     }
 
-    if (state.wordAudioInflight.has(normalizedWord)) {
-        return state.wordAudioInflight.get(normalizedWord);
+    // Check if already in flight and return existing promise if so
+    let promise = state.wordAudioInflight.get(normalizedWord);
+    if (promise) {
+        return promise;
     }
 
-    const preloadPromise = (async () => {
+    // Create and store the promise immediately to minimize race condition
+    // Multiple concurrent calls will get the same promise
+    promise = (async () => {
         const generatedFilePath = await fetchTTSFilePath(normalizedWord);
         if (!generatedFilePath) {
             return '';
@@ -154,9 +167,9 @@ async function ensureWordAudioCached(word) {
         return generatedFilePath;
     })();
 
-    state.wordAudioInflight.set(normalizedWord, preloadPromise);
+    state.wordAudioInflight.set(normalizedWord, promise);
     try {
-        return await preloadPromise;
+        return await promise;
     } finally {
         state.wordAudioInflight.delete(normalizedWord);
     }
@@ -229,7 +242,12 @@ export function updateAudioToggleUI() {
 
 export function setAudioEnabled(isEnabled) {
     state.isAudioEnabled = Boolean(isEnabled);
-    localStorage.setItem(AUDIO_ENABLED_STORAGE_KEY, String(state.isAudioEnabled));
+    try {
+        localStorage.setItem(AUDIO_ENABLED_STORAGE_KEY, String(state.isAudioEnabled));
+    } catch (error) {
+        console.error('Failed to save audio enabled state:', error);
+        _showLocalStorageError('audio preferences');
+    }
 
     if (!state.isAudioEnabled && state.activeAudio) {
         state.activeAudio.pause();

@@ -170,3 +170,44 @@ func TestMoveTopic_PreventsHierarchyCycles(t *testing.T) {
 		t.Fatalf("expected cycle-related error, got: %v", err)
 	}
 }
+
+func TestUpdateTopic_WithWhitespacePrompt(t *testing.T) {
+	store := newTestSQLiteStorageForMove(t)
+
+	// Create a topic with whitespace-only prompt (simulating legacy data)
+	whitespacePrompt := "   " // 3 spaces
+	_, err := store.db.Exec(`
+		INSERT INTO topics(id, name, prompt, parent_id, sort_order, created_at, updated_at)
+		VALUES('ws-topic-id', 'WhitespaceTopic', ?, NULL, 0, datetime('now'), datetime('now'))
+	`, whitespacePrompt)
+	if err != nil {
+		t.Fatalf("Failed to insert topic with whitespace prompt: %v", err)
+	}
+
+	// Verify the prompt is whitespace-only
+	var originalPrompt string
+	err = store.db.QueryRow("SELECT prompt FROM topics WHERE id = 'ws-topic-id'").Scan(&originalPrompt)
+	if err != nil {
+		t.Fatalf("Failed to query topic: %v", err)
+	}
+	if originalPrompt != whitespacePrompt {
+		t.Fatalf("Expected prompt '%s', got '%s'", whitespacePrompt, originalPrompt)
+	}
+
+	// Try to update just the name, preserving the whitespace-only prompt
+	// This should work in the fixed code
+	updatedTopic, err := store.UpdateTopic("ws-topic-id", "NewName", originalPrompt, nil, 0)
+	if err != nil {
+		t.Fatalf("UpdateTopic failed: %v - this indicates the bug where name-only updates are rejected when prompt is whitespace-only", err)
+	}
+
+	// Verify the name was updated
+	if updatedTopic.Name != "NewName" {
+		t.Errorf("Expected name 'NewName', got '%s'", updatedTopic.Name)
+	}
+
+	// Verify the prompt was preserved (including whitespace)
+	if updatedTopic.Prompt != originalPrompt {
+		t.Errorf("Prompt was modified: expected '%s', got '%s'", originalPrompt, updatedTopic.Prompt)
+	}
+}
