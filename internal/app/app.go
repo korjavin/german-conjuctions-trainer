@@ -23,6 +23,7 @@ type App struct {
 	CORSAllowedOrigins string
 	clients            map[string]*rateclient
 	mu                 sync.Mutex
+	shutdown           chan struct{} // Channel to signal goroutine shutdown
 }
 
 // ElevenLabsConfig holds ElevenLabs TTS configuration.
@@ -70,23 +71,35 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 		ElevenLabs:         el,
 		CORSAllowedOrigins: corsAllowedOrigins,
 		clients:            make(map[string]*rateclient),
+		shutdown:           make(chan struct{}),
 	}
 
 	// Cleanup stale rate-limit client entries every 10 minutes.
 	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
 		for {
-			time.Sleep(10 * time.Minute)
-			a.mu.Lock()
-			for ip, c := range a.clients {
-				if time.Since(c.lastSeen) > 30*time.Minute {
-					delete(a.clients, ip)
+			select {
+			case <-ticker.C:
+				a.mu.Lock()
+				for ip, c := range a.clients {
+					if time.Since(c.lastSeen) > 30*time.Minute {
+						delete(a.clients, ip)
+					}
 				}
+				a.mu.Unlock()
+			case <-a.shutdown:
+				return // Exit goroutine on shutdown signal
 			}
-			a.mu.Unlock()
 		}
 	}()
 
 	return a
+}
+
+// Shutdown gracefully stops background goroutines.
+func (a *App) Shutdown() {
+	close(a.shutdown)
 }
 
 // RegisterRoutes registers all HTTP routes on the default mux.

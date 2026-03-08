@@ -213,11 +213,14 @@ document.addEventListener('click', (e) => {
 // Keyboard shortcut for topics search (Ctrl+F / Cmd+F)
 document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        // Only focus search if settings modal is open
-        if (dom.settingsModal.open && !dom.topicsSearchInput.contains(e.target)) {
-            e.preventDefault();
-            dom.topicsSearchInput.focus();
+        // Prevent default browser find dialog
+        e.preventDefault();
+        // Open settings modal if not already open
+        if (!dom.settingsModal.open) {
+            dom.settingsModal.showModal();
         }
+        // Focus search input
+        dom.topicsSearchInput.focus();
     }
 });
 

@@ -19,11 +19,19 @@ type TopicRequest struct {
 	SortOrder int     `json:"sort_order"`
 }
 
+// ErrTopicNameAlreadyExists is returned when a topic name already exists at the same parent level
+var ErrTopicNameAlreadyExists = fmt.Errorf("a topic with this name already exists at this level")
+
+const (
+	maxTreeDepth    = 100  // Maximum allowed depth of topic tree hierarchy
+	maxSortOrder    = 999999 // Maximum allowed value for sort_order field
+)
+
 // validateTopicName checks for duplicate topic names at the same parent level
 func (a *App) validateTopicName(name string, parentID *string, excludeTopicID *string) error {
 	topics, err := a.DB.GetAllTopics()
 	if err != nil {
-		return fmt.Errorf("failed to validate topic name")
+		return err // Return the actual DB error so caller can distinguish from validation errors
 	}
 
 	normalizedParentID := normalizeStringPtr(parentID)
@@ -40,7 +48,7 @@ func (a *App) validateTopicName(name string, parentID *string, excludeTopicID *s
 
 		// Check if topic has same name at same parent level
 		if topicName == normalizedName && topicParentID == normalizedParentID {
-			return fmt.Errorf("a topic with this name already exists at this level")
+			return ErrTopicNameAlreadyExists
 		}
 	}
 
@@ -72,7 +80,6 @@ func (a *App) validateTopicTree(topicID *string, parentID *string) error {
 	}
 
 	// Check for cycles and maximum depth
-	const maxTreeDepth = 100
 	currentParent := parent.ParentID
 	depth := 0
 	for currentParent != nil {
@@ -140,6 +147,7 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 			}
 
 			req.Name = strings.TrimSpace(req.Name)
+			req.Prompt = strings.TrimSpace(req.Prompt)
 			if req.Name == "" || req.Prompt == "" {
 				http.Error(w, "Name and prompt are required", http.StatusBadRequest)
 				return
@@ -165,7 +173,7 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "sort_order must be a non-negative integer", http.StatusBadRequest)
 				return
 			}
-			if req.SortOrder > 999999 {
+			if req.SortOrder > maxSortOrder {
 				http.Error(w, "sort_order must be less than 1000000", http.StatusBadRequest)
 				return
 			}
@@ -177,7 +185,14 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 
 			// Validate no duplicate name at same parent level
 			if err := a.validateTopicName(req.Name, req.ParentID, nil); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
+				// Check if this is a validation error or a database error
+				if errors.Is(err, ErrTopicNameAlreadyExists) {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+				} else {
+					// Database error - return 500
+					log.Printf("Failed to validate topic name: %v", err)
+					http.Error(w, "Failed to validate topic name. Please try again.", http.StatusInternalServerError)
+				}
 				return
 			}
 
@@ -371,6 +386,11 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 			}
 
 			name = strings.TrimSpace(name)
+			// Only trim prompt when it's provided, not when using existing value
+			// This preserves whitespace-only legacy prompts and allows name-only updates
+			if promptProvided {
+				prompt = strings.TrimSpace(prompt)
+			}
 			if name == "" {
 				http.Error(w, "Name is required", http.StatusBadRequest)
 				return
@@ -405,7 +425,14 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 
 			// Validate no duplicate name at same parent level (exclude the current topic being edited)
 			if err := a.validateTopicName(name, parentID, &topicID); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
+				// Check if this is a validation error or a database error
+				if errors.Is(err, ErrTopicNameAlreadyExists) {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+				} else {
+					// Database error - return 500
+					log.Printf("Failed to validate topic name: %v", err)
+					http.Error(w, "Failed to validate topic name. Please try again.", http.StatusInternalServerError)
+				}
 				return
 			}
 

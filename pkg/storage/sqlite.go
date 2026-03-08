@@ -196,12 +196,13 @@ func (s *SQLiteStorage) addTopicsUniqueConstraint() error {
 	}
 
 	// Ensure FK state is restored even on error paths
+	// Note: PRAGMA statements don't support parameterized queries, so we use string literals
 	defer func() {
-		restoreValue := 0
+		var restoreValue string = "OFF"
 		if originalFKSetting == 1 {
-			restoreValue = 1
+			restoreValue = "ON"
 		}
-		_, restoreErr := conn.ExecContext(context.Background(), `PRAGMA foreign_keys = ?`, restoreValue)
+		_, restoreErr := conn.ExecContext(context.Background(), `PRAGMA foreign_keys = `+restoreValue)
 		if restoreErr != nil {
 			log.Printf("Warning: failed to restore foreign_keys pragma after migration error: %v", restoreErr)
 		}
@@ -216,6 +217,7 @@ func (s *SQLiteStorage) addTopicsUniqueConstraint() error {
 
 	// Create new table with unique constraint using a generated column to handle NULL parent_id
 	// The generated column 'parent_key' replaces NULL with a sentinel value to enforce uniqueness at root level
+	// Sentinel value is a UUID-like string that won't conflict with actual topic IDs
 	_, err = tx.Exec(`
 		CREATE TABLE topics_new (
 			id TEXT PRIMARY KEY,
@@ -227,7 +229,7 @@ func (s *SQLiteStorage) addTopicsUniqueConstraint() error {
 			updated_at DATETIME NOT NULL,
 			parent_key TEXT GENERATED ALWAYS AS (
 				CASE
-					WHEN parent_id IS NULL THEN '__ROOT__'
+					WHEN parent_id IS NULL THEN '00000000-0000-0000-0000-000000000000'
 					ELSE parent_id
 				END
 			) STORED,
@@ -247,7 +249,7 @@ func (s *SQLiteStorage) addTopicsUniqueConstraint() error {
 			SELECT COUNT(*) as cnt
 			FROM topics
 			GROUP BY
-				CASE WHEN parent_id IS NULL THEN '__ROOT__' ELSE parent_id END,
+				CASE WHEN parent_id IS NULL THEN '00000000-0000-0000-0000-000000000000' ELSE parent_id END,
 				LOWER(name)
 			HAVING cnt > 1
 		)
@@ -1014,7 +1016,6 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 	if err := row.Scan(&totalViews); err != nil {
 		return nil, err
 	}
-	log.Printf("[STATS_CALC] User %s has %d total exercise views", userID, totalViews)
 
 	// This logic mirrors the SRS logic from the main handler.
 	// It calculates the number of days since the last view and compares it to the repetition counter squared.
@@ -1028,14 +1029,12 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 	if err := row.Scan(&readyToRepeatCount); err != nil {
 		return nil, err
 	}
-	log.Printf("[STATS_CALC] User %s has %d exercises ready to repeat (formula passed)", userID, readyToRepeatCount)
 
 	stats := &UserExerciseStats{
 		ReadyToRepeatCount: readyToRepeatCount,
 		TrainedCount:       totalViews - readyToRepeatCount,
 	}
 
-	log.Printf("[STATS_CALC] Final stats for user %s: ready=%d, trained=%d", userID, stats.ReadyToRepeatCount, stats.TrainedCount)
 	return stats, nil
 }
 
