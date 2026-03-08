@@ -50,16 +50,16 @@ Currently, `topic.Prompt` requires admins to manually write full technical promp
 **Files:**
 - Modify: `index.html`
 
-- [ ] Replace the placeholder on `#new-topic-prompt` textarea (currently `"Enter the prompt for generating exercises..."`) with a structured example:
+- [x] Replace the placeholder on `#new-topic-prompt` textarea (currently `"Enter the prompt for generating exercises..."`) with a structured example:
   ```
   Topic: [grammar concept, e.g. "um...zu" and "damit" conjunctions]
   Level: B1
   Vocabulary: [themes, e.g. daily life, travel, work, common German verbs]
   Situations: [contexts, e.g. explaining reasons, expressing goals, giving instructions]
   ```
-- [ ] Add a `<p>` hint element below each prompt textarea (both `#new-topic-prompt` and `#prompt-textarea`) with text: "Describe what to practice: grammar topic, vocabulary themes, and situations. Technical details (JSON format, etc.) are handled automatically."
-- [ ] No JS changes needed — this is purely HTML
-- [ ] Verify rendering by running the server and viewing the admin panel
+- [x] Add a `<p>` hint element below each prompt textarea (both `#new-topic-prompt` and `#prompt-textarea`) with text: "Describe what to practice: grammar topic, vocabulary themes, and situations. Technical details (JSON format, etc.) are handled automatically."
+- [x] No JS changes needed — this is purely HTML
+- [x] Verify rendering by running the server and viewing the admin panel
 
 ### Task 4: Verify acceptance criteria
 
