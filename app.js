@@ -1781,10 +1781,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 historyTopicName.textContent = 'All Topics';
             }
 
-            const [historyResponse, statsResponse] = await Promise.all([
-                fetch(url),
-                fetch('/api/user/exercisestats')
-            ]);
+            const historyResponse = await fetch(url);
 
             if (!historyResponse.ok) {
                 if (historyResponse.status === 401) {
@@ -1799,9 +1796,6 @@ document.addEventListener('DOMContentLoaded', () => {
             state.historyData = data.history || [];
             state.historyPage = 1;
 
-            // Get stats
-            const stats = await statsResponse.json();
-
             // Reset filters when opening fresh history
             state.historyFilterReady = false;
             state.historyFilterFavorites = false;
@@ -1815,6 +1809,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Calculate summary statistics
                 const readyCount = state.historyData.filter(item => item.ready_to_repeat).length;
+                const trainedCount = state.historyData.filter(item => !item.ready_to_repeat).length;
                 const totalAttempts = state.historyData.reduce((sum, item) => sum + item.total_attempts, 0);
                 const totalSuccessful = state.historyData.reduce((sum, item) => sum + item.successful_attempts, 0);
                 const successRate = totalAttempts > 0 ? Math.round((totalSuccessful / totalAttempts) * 100) : 0;
@@ -1822,7 +1817,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update summary display
                 historyTotalCount.textContent = state.historyData.length;
                 historyReadyCount.textContent = readyCount;
-                historyTrainedCount.textContent = stats.trained;
+                historyTrainedCount.textContent = trainedCount;
                 historySuccessRate.textContent = successRate + '%';
                 historyTotalAttempts.textContent = totalAttempts;
 
