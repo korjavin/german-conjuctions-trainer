@@ -45,6 +45,7 @@ export async function fetchExercises() {
             state.sessionTime = 0;
             state.isSessionComplete = false;
             state.exercisesWithMistakes = new Set();
+            state.exerciseMistakes = {};
             state.exercisesWithHints = new Set();
             state.exercisePerformance = new Map();
             state.completedExerciseIds = new Set();
