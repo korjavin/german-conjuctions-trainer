@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -144,33 +145,70 @@ func (s *SQLiteStorage) runMigrations() error {
 	return nil
 }
 
-// isColumnExistsError checks if the error is due to column already existing
+// isColumnExistsError checks if the error is due to column or index already existing
 func isColumnExistsError(err error) bool {
-	return err != nil && (err.Error() == "duplicate column name: total_attempts" ||
-		err.Error() == "duplicate column name: successful_attempts" ||
-		err.Error() == "duplicate column name: failed_attempts" ||
-		err.Error() == "duplicate column name: hints_used" ||
-		err.Error() == "duplicate column name: mistakes_made" ||
-		err.Error() == "duplicate column name: is_favorite" ||
-		err.Error() == "duplicate column name: is_hidden" ||
-		err.Error() == "duplicate column name: parent_id" ||
-		err.Error() == "duplicate column name: sort_order" ||
-		err.Error() == "index idx_topics_parent already exists")
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "duplicate column name") ||
+		strings.Contains(errStr, "already exists")
 }
 
 // addTopicsUniqueConstraint adds a unique constraint on (parent_id, name) to prevent duplicate names at same level
 // Since SQLite doesn't support adding constraints to existing tables, we recreate the table with the constraint
 func (s *SQLiteStorage) addTopicsUniqueConstraint() error {
+	// Get a dedicated connection to ensure PRAGMA settings affect the same connection used by the transaction
+	// This is necessary because PRAGMA settings are connection-specific, and using s.db might give different
+	// connections from the pool, causing the migration to fail with cascade deletes or leaving FK state corrupted.
+	conn, err := s.db.Conn(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get dedicated connection: %w", err)
+	}
+	defer conn.Close()
+
 	// Check if we already ran this migration by checking for the generated column in the table schema
 	var sqlFromSchema string
-	err := s.db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='topics'").Scan(&sqlFromSchema)
+	err = conn.QueryRowContext(context.Background(), "SELECT sql FROM sqlite_master WHERE type='table' AND name='topics'").Scan(&sqlFromSchema)
 	if err == nil && strings.Contains(sqlFromSchema, "parent_key") {
 		// Migration already ran, skip
 		return nil
 	}
 
+	// Get the current foreign_keys setting so we can restore it after migration
+	// This respects the user's configuration (e.g., DSN with _foreign_keys=0)
+	var originalFKSetting int
+	err = conn.QueryRowContext(context.Background(), "PRAGMA foreign_keys").Scan(&originalFKSetting)
+	if err != nil {
+		// If we can't read the setting, assume it's ON (safe default)
+		log.Printf("Warning: could not read foreign_keys pragma, assuming ON: %v", err)
+		originalFKSetting = 1
+	}
+
+	// Disable foreign keys BEFORE starting the transaction to prevent cascade deletes when DROP TABLE is executed
+	// This is critical: even if app doesn't enable FKs, the DSN can include _foreign_keys=1
+	// which would enable them without code changes, causing data loss.
+	// PRAGMA foreign_keys must be set OUTSIDE the transaction because setting it inside a transaction
+	// is ignored by SQLite (the setting remains at its previous value).
+	_, err = conn.ExecContext(context.Background(), `PRAGMA foreign_keys = OFF`)
+	if err != nil {
+		return fmt.Errorf("failed to disable foreign keys: %w", err)
+	}
+
+	// Ensure FK state is restored even on error paths
+	defer func() {
+		restoreValue := 0
+		if originalFKSetting == 1 {
+			restoreValue = 1
+		}
+		_, restoreErr := conn.ExecContext(context.Background(), `PRAGMA foreign_keys = ?`, restoreValue)
+		if restoreErr != nil {
+			log.Printf("Warning: failed to restore foreign_keys pragma after migration error: %v", restoreErr)
+		}
+	}()
+
 	// Start transaction for atomic table recreation
-	tx, err := s.db.Begin()
+	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
@@ -232,6 +270,7 @@ func (s *SQLiteStorage) addTopicsUniqueConstraint() error {
 	}
 
 	// Drop old table
+	// Foreign keys were disabled before starting the transaction, so this won't cascade-delete
 	_, err = tx.Exec(`DROP TABLE topics`)
 	if err != nil {
 		return fmt.Errorf("failed to drop topics table: %w", err)
@@ -253,6 +292,8 @@ func (s *SQLiteStorage) addTopicsUniqueConstraint() error {
 		return fmt.Errorf("failed to commit migration transaction: %w", err)
 	}
 
+	// Foreign keys will be restored by the defer function when conn.Close() is called
+	// The defer runs before the connection is returned to the pool, ensuring FK state is correct
 	return nil
 }
 

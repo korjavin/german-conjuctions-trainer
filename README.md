@@ -98,6 +98,62 @@ The application automatically runs database migrations on startup to update the 
 
 Migrations are designed to be idempotent - running them multiple times has no effect.
 
+## Running Tests
+
+The project includes comprehensive test suites for both backend and frontend functionality.
+
+### Backend Tests (Go)
+
+```bash
+# Run all tests
+go test ./...
+
+# Run tests for specific package
+go test ./internal/app/...
+go test ./pkg/storage/...
+
+# Run tests with verbose output
+go test -v ./...
+
+# Run tests with coverage
+go test -cover ./...
+```
+
+### Frontend Tests (JavaScript)
+
+JavaScript tests are designed for browser-based verification:
+
+1. **Browser Console Tests**:
+   - Open the application in your browser
+   - Open Developer Tools (F12)
+   - Go to Console tab
+   - Paste the contents of any test file from `js/topics-*-test.js`
+   - Tests will run automatically and report results
+
+2. **Performance Test Runner**:
+   - Open `js/topics-performance-test-runner.html` in your browser
+   - Click "Run All Tests" button
+   - Results appear in console and on the page
+
+3. **Test Guides**: Each feature has a corresponding test guide:
+   - `js/topics-accessibility-test-guide.md` - Accessibility feature verification
+   - `js/topics-collapse-test-guide.md` - Expand/collapse functionality
+   - `js/topics-dragdrop-test-guide.md` - Drag-and-drop behavior
+   - `js/topics-form-test-guide.md` - Form validation and UX
+   - `js/topics-icon-test-guide.md` - Topic icons rendering
+   - `js/topics-search-test-guide.md` - Search functionality
+   - `js/topics-sort-test-guide.md` - Sorting behavior
+
+### Test Coverage
+
+The comprehensive test suite covers:
+- Backend API validation and error handling
+- Database operations and migrations
+- Frontend UI interactions
+- Accessibility compliance (WCAG, ARIA)
+- Performance characteristics (virtual scrolling, debouncing)
+- User workflows (CRUD operations, drag-and-drop)
+
 ## Airtable Setup (Deprecated)
 
 **Note:** Airtable storage is deprecated and will be removed in future versions. Use SQLite (default) instead.
