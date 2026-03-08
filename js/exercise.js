@@ -166,14 +166,15 @@ export function handleWordClick(word, button) {
         state.mistakes++;
         state.exercisesWithMistakes.add(state.currentExerciseIndex);
 
-        // Track specific wrong words for explanations
-        if (!state.exerciseMistakes[state.currentExerciseIndex]) {
-            state.exerciseMistakes[state.currentExerciseIndex] = new Set();
-        }
-        state.exerciseMistakes[state.currentExerciseIndex].add(word);
-
-        // Track per-exercise mistake
+        // Track per-exercise mistake using actual ID instead of index
         const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+
+        // Track specific wrong words for explanations
+        if (!state.exerciseMistakes[exerciseId]) {
+            state.exerciseMistakes[exerciseId] = new Set();
+        }
+        state.exerciseMistakes[exerciseId].add(word);
+
         if (exerciseId && state.exercisePerformance.has(exerciseId)) {
             const perf = state.exercisePerformance.get(exerciseId);
             perf.mistakes++;
@@ -210,8 +211,9 @@ async function handleSentenceCompletion(exercise, correctWordArray, lastWord = '
         dom.hintBtn.classList.add('hidden');
         dom.skipExerciseBtn.classList.add('hidden');
 
-        // Show explain button if mistakes were made on this exercise
-        if (state.exerciseMistakes[state.currentExerciseIndex] && state.exerciseMistakes[state.currentExerciseIndex].size > 0) {
+        // Show explain button if mistakes were made on this exercise using actual ID
+        const exerciseId = state.exerciseIds[state.currentExerciseIndex];
+        if (state.exerciseMistakes[exerciseId] && state.exerciseMistakes[exerciseId].size > 0) {
             dom.explainBtn.classList.remove('hidden');
 
             // If we already have an explanation text, show it
@@ -293,12 +295,16 @@ export async function handleExplainClick() {
     if (state.isExplaining) return;
 
     const exercise = state.exercises[state.currentExerciseIndex];
+    const exerciseId = state.exerciseIds[state.currentExerciseIndex];
     const correctSentence = exercise.correct_german_sentence;
     const topic = exercise.conjunction_topic || "Grammar Rule";
 
+    // Capture the exact exercise ID to avoid race conditions when navigating away
+    const requestingExerciseId = exerciseId;
+
     let mistakesArray = [];
-    if (state.exerciseMistakes[state.currentExerciseIndex]) {
-        mistakesArray = Array.from(state.exerciseMistakes[state.currentExerciseIndex]);
+    if (state.exerciseMistakes[requestingExerciseId]) {
+        mistakesArray = Array.from(state.exerciseMistakes[requestingExerciseId]);
     }
 
     state.isExplaining = true;
@@ -317,8 +323,12 @@ export async function handleExplainClick() {
         const data = await fetchExplainAPI(topic, correctSentence, mistakesArray);
         state.explanationText = data.explanation;
 
-        dom.explanationText.textContent = state.explanationText;
-        dom.explanationContainer.classList.remove('hidden');
+        // Only update UI if the user hasn't navigated to the next exercise
+        const currentExerciseId = state.exerciseIds[state.currentExerciseIndex];
+        if (currentExerciseId === requestingExerciseId) {
+            dom.explanationText.textContent = state.explanationText;
+            dom.explanationContainer.classList.remove('hidden');
+        }
     } catch (error) {
         console.error('Error fetching explanation:', error);
         alert('Failed to load explanation. Please try again.');

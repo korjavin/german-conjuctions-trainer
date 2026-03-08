@@ -127,7 +127,7 @@ export async function fetchExercisesFromAPI(topicId) {
 }
 
 export async function fetchExplainAPI(topic, correctSentence, mistakes) {
-    const response = await apiFetch('/api/explain', {
+    const response = await fetch('/api/explain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -136,6 +136,10 @@ export async function fetchExplainAPI(topic, correctSentence, mistakes) {
             mistakes: mistakes
         })
     });
+
+    if (!response.ok) {
+        throw new Error('Failed to load explanation');
+    }
     return response.json();
 }
 
