@@ -26,6 +26,22 @@ const SEARCH_DEBOUNCE_MS = 300; // Debounce delay for search input in millisecon
 // Module-level state for topic dropdown collapse (not persisted, separate from settings modal tree)
 const dropdownCollapsedTopicIds = new Set();
 
+// Timestamp of last collapse button click to prevent dropdown from closing unexpectedly
+// This prevents the dropdown from closing due to blur race condition during rapid clicks
+let lastCollapseClickTimestamp = 0;
+
+// Reset dropdown collapse state (for testing)
+export function resetDropdownCollapseState() {
+    dropdownCollapsedTopicIds.clear();
+    lastCollapseClickTimestamp = 0;
+}
+
+// Check if renderTopicDropdown is currently being called from a collapse button click
+// Returns true if a collapse render is in progress (within 250ms of last click)
+export function isDropdownRenderFromCollapseClick() {
+    return Date.now() - lastCollapseClickTimestamp < 250;
+}
+
 // Debounce utility function
 export function debounce(func, wait) {
     let timeout;
@@ -779,7 +795,13 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
  */
 function findMatchingTopics(searchQuery, nodesById) {
     const matchingIds = new Set();
-    const lowerQuery = searchQuery.toLowerCase();
+
+    // Validate nodesById parameter
+    if (!nodesById || !(nodesById instanceof Map)) {
+        return { matchingIds, expandedIds: new Set() };
+    }
+
+    const lowerQuery = searchQuery.trim().toLowerCase();
 
     nodesById.forEach((node) => {
         if (node.name.toLowerCase().includes(lowerQuery)) {
@@ -1085,7 +1107,7 @@ export function renderTopicsList() {
     dom.topicsList.setAttribute('aria-multiselectable', 'false');
 
     if (state.topics.length === 0) {
-        dom.topicsList.innerHTML = `<div class="p-4 text-gray-500 text-center" role="status">No topics available. Add one to get started.</div>`;
+        dom.topicsList.innerHTML = `<div style="padding: 1rem; color: #6b7280; text-align: center;" role="status">No topics available. Add one to get started.</div>`;
         return;
     }
 
@@ -1147,7 +1169,7 @@ export function renderTopicsList() {
     }
 
     if (flattenedNodes.length === 0 && state.topicsSearchQuery) {
-        dom.topicsList.innerHTML = `<div class="p-4 text-gray-500 text-center">No topics found matching "${escapeHtml(state.topicsSearchQuery)}".</div>`;
+        dom.topicsList.innerHTML = `<div style="padding: 1rem; color: #6b7280; text-align: center;">No topics found matching "${escapeHtml(state.topicsSearchQuery)}".</div>`;
         return;
     }
 
@@ -1773,6 +1795,12 @@ export async function showLastRefinedPrompt() {
 export function renderTopicDropdown(searchQuery = '') {
     dom.topicDropdown.innerHTML = '';
 
+    // Check if topics are loaded
+    if (!state.topics || state.topics.length === 0) {
+        dom.topicDropdown.innerHTML = '<div style="padding: 0.5rem; color: #6b7280;">No topics available.</div>';
+        return;
+    }
+
     // Build the topic tree
     const { roots, nodesById } = buildTopicTree(state.topics);
 
@@ -1826,7 +1854,7 @@ export function renderTopicDropdown(searchQuery = '') {
 
     // Handle case where no topics match
     if (flattened.length === 0) {
-        dom.topicDropdown.innerHTML = `<div class="p-2 text-gray-500">No topics found.</div>`;
+        dom.topicDropdown.innerHTML = `<div style="padding: 0.5rem; color: #6b7280;">No topics found.</div>`;
         return;
     }
 
@@ -1846,7 +1874,12 @@ export function renderTopicDropdown(searchQuery = '') {
             const collapseBtn = document.createElement('button');
             collapseBtn.className = 'topic-dropdown-collapse-btn';
             const isCollapsed = dropdownCollapsedTopicIds.has(node.id);
-            collapseBtn.textContent = isCollapsed ? '▶' : '▼';
+            const isExpandedBySearch = expandedIds.has(node.id);
+            // Use effective expansion state: expanded if not collapsed OR search-expanded
+            const isEffectivelyExpanded = !isCollapsed || isExpandedBySearch;
+            collapseBtn.textContent = isEffectivelyExpanded ? '▼' : '▶';
+            collapseBtn.setAttribute('aria-label', isEffectivelyExpanded ? 'Collapse topic' : 'Expand topic');
+            collapseBtn.setAttribute('aria-expanded', String(isEffectivelyExpanded));
             collapseBtn.addEventListener('click', (e) => {
                 e.stopPropagation(); // Prevent topic selection
                 if (dropdownCollapsedTopicIds.has(node.id)) {
@@ -1854,8 +1887,14 @@ export function renderTopicDropdown(searchQuery = '') {
                 } else {
                     dropdownCollapsedTopicIds.add(node.id);
                 }
+                // Set timestamp to prevent blur/focusout from closing the dropdown
+                lastCollapseClickTimestamp = Date.now();
                 // Re-render the dropdown with current search value
                 renderTopicDropdown(dom.topicSearch.value);
+                // Clear the timestamp after a delay longer than blur (200ms) and focusout (50ms) timeouts
+                setTimeout(() => {
+                    lastCollapseClickTimestamp = 0;
+                }, 250);
             });
             item.appendChild(collapseBtn);
         }
