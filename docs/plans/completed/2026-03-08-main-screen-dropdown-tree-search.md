@@ -93,5 +93,5 @@ Replace the flat list in the main screen topic dropdown with an interactive tree
 
 ### Task 6: Update documentation
 
-- [ ] update CLAUDE.md if internal patterns changed
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update CLAUDE.md if internal patterns changed
+- [x] move this plan to `docs/plans/completed/`
