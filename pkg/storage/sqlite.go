@@ -427,7 +427,11 @@ func (s *SQLiteStorage) UpdateTopic(topicID, name, prompt string, parentID *stri
 		return nil, err
 	}
 
-	return topic, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit topic update: %w", err)
+	}
+
+	return topic, nil
 }
 
 // ErrTopicHasChildren is returned when attempting to delete a topic that has child topics.
