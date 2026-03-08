@@ -357,6 +357,21 @@ export async function loadTopics() {
     }
 }
 
+export function countDescendantTopics(topicId, allTopics = state.topics, visited = new Set()) {
+    if (!topicId || visited.has(topicId)) return 0;
+    visited.add(topicId);
+
+    let count = 0;
+    const children = allTopics.filter(t => t.parent_id === topicId);
+    count += children.length;
+
+    for (const child of children) {
+        count += countDescendantTopics(child.id, allTopics, visited);
+    }
+
+    return count;
+}
+
 export function getTopicPath(topicId, allTopics = state.topics, visited = new Set()) {
     if (!topicId || visited.has(topicId)) return '';
     visited.add(topicId);
@@ -663,7 +678,8 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
     const isCollapsed = hasChildren && isTopicCollapsed(topic.id);
     const chevronDirection = isCollapsed ? 'right' : 'down';
     const chevronClass = isCollapsed ? 'chevron-right' : 'chevron-down';
-    const childBadge = hasChildren ? `<span class="text-xs text-gray-500 ml-2">(${topic.children.length})</span>` : '';
+    const descendantCount = countDescendantTopics(topic.id, state.topics);
+    const childBadge = descendantCount > 0 ? `<span class="text-xs text-gray-500 ml-2">(${descendantCount} sub-topics)</span>` : '';
 
     // Accessibility: Add ARIA attributes (mirrors renderAllTopics)
     topicDiv.setAttribute('role', 'treeitem');
@@ -673,7 +689,7 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
     }
     topicDiv.setAttribute('aria-level', depth + 1);
     topicDiv.setAttribute('aria-selected', 'false');
-    topicDiv.setAttribute('aria-label', `${topic.name}${hasChildren ? `, ${isCollapsed ? 'collapsed' : 'expanded'} with ${topic.children.length} children` : ''}`);
+    topicDiv.setAttribute('aria-label', `${topic.name}${descendantCount > 0 ? `, ${isCollapsed ? 'collapsed' : 'expanded'} with ${descendantCount} sub-topics` : ''}`);
     topicDiv.setAttribute('aria-describedby', `topic-date-${topic.id}`);
 
     const displayName = state.topicsSearchQuery
@@ -1924,6 +1940,14 @@ export function renderTopicDropdown(searchQuery = '') {
             textSpan.textContent = node.name;
         }
         item.appendChild(textSpan);
+
+        const descendantCount = countDescendantTopics(node.id, state.topics);
+        if (descendantCount > 0) {
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = 'text-xs text-gray-500 ml-2';
+            badgeSpan.textContent = `(${descendantCount} sub-topics)`;
+            item.appendChild(badgeSpan);
+        }
 
         // Click handler: select the topic
         item.addEventListener('click', () => {

@@ -94,6 +94,7 @@ type Storage interface {
 	CreateTopic(name, prompt string, parentID *string, sortOrder int) (*Topic, error)
 	GetAllTopics() ([]*Topic, error)
 	GetTopic(topicID string) (*Topic, error)
+	GetDescendantTopicIDs(topicID string) ([]string, error)
 	UpdateTopic(topicID, name, prompt string, parentID *string, sortOrder int) (*Topic, error)
 	MoveTopic(topicID, parentID string, position *int) (*Topic, error)
 	DeleteTopic(topicID string) error
@@ -106,6 +107,7 @@ type Storage interface {
 	// Exercises
 	CreateExercise(topicID, promptHash, exerciseJSON, audioFilePath string) (*Exercise, error)
 	GetExercisesForTopic(topicID, promptHash string) ([]*Exercise, error)
+	GetExercisesForTopics(topicIDs []string, promptHash string) ([]*Exercise, error)
 	UpdateLegacyExercisesWithAudio(text, audioPath string)
 
 	// User Data

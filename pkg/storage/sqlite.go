@@ -365,6 +365,53 @@ func (s *SQLiteStorage) GetAllTopics() ([]*Topic, error) {
 	return topics, nil
 }
 
+func (s *SQLiteStorage) GetDescendantTopicIDs(topicID string) ([]string, error) {
+	var descendantIDs []string
+	visited := make(map[string]bool)
+
+	var fetchChildren func(id string) error
+	fetchChildren = func(id string) error {
+		if visited[id] {
+			return nil // Prevent cycle
+		}
+		visited[id] = true
+
+		rows, err := s.db.Query("SELECT id FROM topics WHERE parent_id = ?", id)
+		if err != nil {
+			return err
+		}
+
+		var children []string
+		for rows.Next() {
+			var childID string
+			if err := rows.Scan(&childID); err != nil {
+				rows.Close()
+				return err
+			}
+			children = append(children, childID)
+		}
+		rows.Close()
+
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		for _, childID := range children {
+			descendantIDs = append(descendantIDs, childID)
+			if err := fetchChildren(childID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if err := fetchChildren(topicID); err != nil {
+		return nil, err
+	}
+
+	return descendantIDs, nil
+}
+
 func (s *SQLiteStorage) GetTopic(topicID string) (*Topic, error) {
 	return s.getTopic(s.db, topicID)
 }
@@ -814,6 +861,42 @@ func (s *SQLiteStorage) CreateExercise(topicID, promptHash, exerciseJSON, audioF
 func (s *SQLiteStorage) GetExercisesForTopic(topicID, promptHash string) ([]*Exercise, error) {
 	query := "SELECT id, topic_id, prompt_hash, exercise_json, audio_file_path, created_at FROM exercises WHERE topic_id = ?"
 	args := []interface{}{topicID}
+
+	if promptHash != "" {
+		query += " AND prompt_hash = ?"
+		args = append(args, promptHash)
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var exercises []*Exercise
+	for rows.Next() {
+		var ex Exercise
+		if err := rows.Scan(&ex.ID, &ex.TopicID, &ex.PromptHash, &ex.ExerciseJSON, &ex.AudioFilePath, &ex.CreatedAt); err != nil {
+			return nil, err
+		}
+		exercises = append(exercises, &ex)
+	}
+	return exercises, nil
+}
+
+func (s *SQLiteStorage) GetExercisesForTopics(topicIDs []string, promptHash string) ([]*Exercise, error) {
+	if len(topicIDs) == 0 {
+		return []*Exercise{}, nil
+	}
+
+	query := "SELECT id, topic_id, prompt_hash, exercise_json, audio_file_path, created_at FROM exercises WHERE topic_id IN ("
+	placeholders := make([]string, len(topicIDs))
+	args := make([]interface{}, len(topicIDs))
+	for i, id := range topicIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query += strings.Join(placeholders, ",") + ")"
 
 	if promptHash != "" {
 		query += " AND prompt_hash = ?"
