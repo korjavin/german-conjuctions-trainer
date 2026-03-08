@@ -71,5 +71,5 @@ Currently, `topic.Prompt` requires admins to manually write full technical promp
 
 ### Task 5: Update documentation
 
-- [ ] Update README.md if it mentions prompt format
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Update README.md if it mentions prompt format
+- [x] Move this plan to `docs/plans/completed/`
