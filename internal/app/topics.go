@@ -23,8 +23,8 @@ type TopicRequest struct {
 var ErrTopicNameAlreadyExists = fmt.Errorf("a topic with this name already exists at this level")
 
 const (
-	maxTreeDepth    = 100  // Maximum allowed depth of topic tree hierarchy
-	maxSortOrder    = 999999 // Maximum allowed value for sort_order field
+	maxTreeDepth = 100    // Maximum allowed depth of topic tree hierarchy
+	maxSortOrder = 999999 // Maximum allowed value for sort_order field
 )
 
 // validateTopicName checks for duplicate topic names at the same parent level
