@@ -72,7 +72,6 @@ export const dom = {
 
     loginBtn: document.getElementById('login-btn'),
     logoutBtn: document.getElementById('logout-btn'),
-    statsBtn: document.getElementById('stats-btn'),
     historyBtn: document.getElementById('history-btn'),
     replayAudioBtn: document.getElementById('replay-audio-btn'),
     nextExerciseBtn: document.getElementById('next-exercise-btn'),
@@ -85,17 +84,13 @@ export const dom = {
     skipCancelBtn: document.getElementById('skip-cancel-btn'),
     exerciseControls: document.getElementById('exercise-controls'),
 
-    statsModal: document.getElementById('stats-modal'),
-    statsCloseBtn: document.getElementById('stats-close-btn'),
-    statsReadyToRepeatEl: document.getElementById('stats-ready-to-repeat'),
-    statsTrainedEl: document.getElementById('stats-trained'),
-
     historyModal: document.getElementById('history-modal'),
     historyCloseBtn: document.getElementById('history-close-btn'),
     historyTopicName: document.getElementById('history-topic-name'),
     historySummary: document.getElementById('history-summary'),
     historyTotalCount: document.getElementById('history-total-count'),
     historyReadyCount: document.getElementById('history-ready-count'),
+    historyTrainedCount: document.getElementById('history-trained-count'),
     historySuccessRate: document.getElementById('history-success-rate'),
     historyTotalAttempts: document.getElementById('history-total-attempts'),
     historyLoading: document.getElementById('history-loading'),

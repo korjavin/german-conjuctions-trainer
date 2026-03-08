@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
 import { fetchExercisesFromAPI, saveUserStatsAPI, saveExerciseCompletionsAPI } from './api.js';
-import { showUserExerciseStats } from './auth.js';
+import { showExerciseHistory } from './history.js';
 
 let _renderExercise = () => {};
 
@@ -162,7 +162,7 @@ export function showStatisticsPage() {
     if (state.isLoggedIn) {
         const viewProgressBtn = document.getElementById('view-progress-btn');
         if (viewProgressBtn) {
-            viewProgressBtn.addEventListener('click', showUserExerciseStats);
+            viewProgressBtn.addEventListener('click', showExerciseHistory);
         }
     }
 

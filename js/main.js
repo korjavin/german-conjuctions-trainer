@@ -51,7 +51,6 @@ import {
 } from './topics.js';
 import {
     checkAuthStatus,
-    showUserExerciseStats,
 } from './auth.js';
 import {
     showExerciseHistory,
@@ -275,12 +274,6 @@ dom.loginBtn.addEventListener('click', () => {
 
 dom.logoutBtn.addEventListener('click', () => {
     window.location.href = '/auth/logout';
-});
-
-dom.statsBtn.addEventListener('click', showUserExerciseStats);
-
-dom.statsCloseBtn.addEventListener('click', () => {
-    dom.statsModal.close();
 });
 
 // History

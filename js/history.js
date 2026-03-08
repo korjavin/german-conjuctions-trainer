@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { loadExerciseHistoryAPI } from './api.js';
+import { loadExerciseHistoryAPI, loadExerciseStatsAPI } from './api.js';
 
 export async function showExerciseHistory() {
     if (!state.isLoggedIn) {
@@ -24,7 +24,10 @@ export async function showExerciseHistory() {
             dom.historyTopicName.textContent = 'All Topics';
         }
 
-        const data = await loadExerciseHistoryAPI(state.currentTopicId);
+        const [data, stats] = await Promise.all([
+            loadExerciseHistoryAPI(state.currentTopicId),
+            loadExerciseStatsAPI()
+        ]);
         state.historyData = data.history || [];
         state.historyPage = 1;
 
@@ -48,6 +51,7 @@ export async function showExerciseHistory() {
             // Update summary display
             dom.historyTotalCount.textContent = state.historyData.length;
             dom.historyReadyCount.textContent = readyCount;
+            dom.historyTrainedCount.textContent = stats.trained;
             dom.historySuccessRate.textContent = successRate + '%';
             dom.historyTotalAttempts.textContent = totalAttempts;
 

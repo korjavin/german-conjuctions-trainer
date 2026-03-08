@@ -1607,18 +1607,15 @@ textarea:focus-visible {
 
 #settings-modal,
 #last-refined-prompt-modal,
-#stats-modal,
 #history-modal {
   background: rgba(58, 26, 10, 0.45);
 }
 
-#stats-modal .space-y-4 > div,
 #history-summary > div {
   background: linear-gradient(145deg, #fff2de 0%, #ffe5c8 100%) !important;
   border: 1px solid rgba(163, 63, 17, 0.16);
 }
 
-#stats-modal .space-y-4 span,
 #history-summary span,
 #history-summary div {
   color: var(--mr-text) !important;
@@ -1752,7 +1749,6 @@ textarea:focus-visible {
 
   #settings-modal .card,
     #history-modal .card,
-    #stats-modal .card,
     #last-refined-prompt-modal .card {
     padding: 1rem;
     margin: 0.75rem;

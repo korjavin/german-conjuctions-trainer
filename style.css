@@ -1037,6 +1037,10 @@ button .loading-spinner {
     background: linear-gradient(145deg, #fff2de 0%, #ffe5c8 100%);
 }
 
+.summary-box-yellow {
+    background: linear-gradient(145deg, #fff2de 0%, #ffe5c8 100%);
+}
+
 .summary-value {
     font-size: 1.5rem;
     font-weight: 700;
