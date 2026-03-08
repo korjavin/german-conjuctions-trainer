@@ -160,12 +160,14 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Validate prompt length (matches frontend MIN_PROMPT_LENGTH of 10 and MAX_PROMPT_LENGTH of 10000)
-			if len(req.Prompt) < 10 {
-				http.Error(w, "Prompt must be at least 10 characters", http.StatusBadRequest)
+			// Use TrimSpace to match frontend trim() behavior
+			promptLength := len(strings.TrimSpace(req.Prompt))
+			if promptLength < 10 {
+				http.Error(w, fmt.Sprintf("Prompt must be at least 10 characters. Currently %d characters.", promptLength), http.StatusBadRequest)
 				return
 			}
 			if len(req.Prompt) > 10000 {
-				http.Error(w, "Prompt must be less than 10000 characters", http.StatusBadRequest)
+				http.Error(w, fmt.Sprintf("Prompt must be less than 10000 characters. Currently %d characters.", len(req.Prompt)), http.StatusBadRequest)
 				return
 			}
 
@@ -410,10 +412,14 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Validate prompt length (matches frontend MIN_PROMPT_LENGTH of 10 and MAX_PROMPT_LENGTH of 10000)
+			// Use TrimSpace to match frontend trim() behavior
 			// Only validate minimum length when a new value is being provided
-			if promptProvided && len(prompt) < 10 {
-				http.Error(w, "Prompt must be at least 10 characters", http.StatusBadRequest)
-				return
+			if promptProvided {
+				promptLength := len(strings.TrimSpace(prompt))
+				if promptLength < 10 {
+					http.Error(w, fmt.Sprintf("Prompt must be at least 10 characters. Currently %d characters.", promptLength), http.StatusBadRequest)
+					return
+				}
 			}
 			if len(prompt) > 10000 {
 				http.Error(w, "Prompt must be less than 10000 characters", http.StatusBadRequest)
