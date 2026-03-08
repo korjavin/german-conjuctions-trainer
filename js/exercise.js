@@ -331,6 +331,9 @@ export async function handleExplainClick() {
             state.explanationText = data.explanation;
             dom.explanationText.textContent = state.explanationText;
             dom.explanationContainer.classList.remove('hidden');
+            
+            // Limit abuse: remove the button once explanation is successfully loaded
+            dom.explainBtn.classList.add('hidden');
         }
     } catch (error) {
         console.error('Error fetching explanation:', error);
