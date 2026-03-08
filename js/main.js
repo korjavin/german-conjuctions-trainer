@@ -297,6 +297,13 @@ dom.historyFilterFavorites.addEventListener('click', () => {
     renderHistoryPage();
 });
 
+dom.historyFilterTrained.addEventListener('click', () => {
+    state.historyFilterTrained = !state.historyFilterTrained;
+    state.historyPage = 1; // Reset to first page
+    updateHistoryFilterUI();
+    renderHistoryPage();
+});
+
 dom.historyPrevBtn.addEventListener('click', () => {
     if (state.historyPage > 1) {
         state.historyPage--;
@@ -310,6 +317,7 @@ dom.historyNextBtn.addEventListener('click', () => {
         let matches = true;
         if (state.historyFilterReady) matches = matches && item.ready_to_repeat;
         if (state.historyFilterFavorites) matches = matches && item.is_favorite;
+        if (state.historyFilterTrained) matches = matches && !item.ready_to_repeat;
         return matches;
     }).length;
     const totalPages = Math.ceil(filteredCount / state.historyItemsPerPage);

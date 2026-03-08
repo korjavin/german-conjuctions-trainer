@@ -102,4 +102,5 @@ export const dom = {
     historyPageInfo: document.getElementById('history-page-info'),
     historyFilterReady: document.getElementById('history-filter-ready'),
     historyFilterFavorites: document.getElementById('history-filter-favorites'),
+    historyFilterTrained: document.getElementById('history-filter-trained'),
 };
