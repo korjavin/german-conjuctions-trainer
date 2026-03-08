@@ -12,6 +12,12 @@ func BuildGenerationPrompt(basePrompt string, profile VariationProfile) string {
 		trimmedBase = "Generate German language exercises for B1 learners."
 	}
 
+	// Check if the prompt already starts with a system role preamble
+	hasPreamble := strings.HasPrefix(strings.ToLower(trimmedBase), "you are")
+	if !hasPreamble {
+		trimmedBase = "You are an expert German language tutor. Create German language exercises based on the following topic description:\n\n" + trimmedBase
+	}
+
 	var b strings.Builder
 	b.WriteString(trimmedBase)
 	b.WriteString("\n\nSystem-generated variation profile (follow all constraints and do not mention this profile in the output):\n")
