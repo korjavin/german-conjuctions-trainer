@@ -51,17 +51,33 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 	topicIDs := append([]string{req.TopicID}, descendants...)
 	log.Printf("[EXERCISES] Fetching exercises from %d topics: %v, userID='%s'", len(topicIDs), topicIDs, userID)
 
-	// If it's just one topic, filter by promptHash for exact matching of the current prompt version.
-	// If it's a sub-tree selection, we don't filter by promptHash to get all exercises from all topics.
-	filterPromptHash := ""
-	if len(topicIDs) == 1 {
-		filterPromptHash = storage.GetPromptHash(topic.Prompt)
+	// Since we are fetching exercises across the subtree, we need to ensure each topic's exercises
+	// correspond to that topic's *current* prompt. We map topic IDs to their current prompt hashes.
+	// Since GetExercisesForTopics only accepts a single prompt hash filter, we will fetch all exercises
+	// for the topics, and then manually filter out stale exercises based on each topic's current prompt hash.
+	topicHashFilters := make(map[string]string)
+	topicHashFilters[req.TopicID] = storage.GetPromptHash(topic.Prompt)
+
+	for _, descID := range descendants {
+		descTopic, err := a.DB.GetTopic(descID)
+		if err == nil {
+			topicHashFilters[descID] = storage.GetPromptHash(descTopic.Prompt)
+		}
 	}
 
-	allExercises, err := a.DB.GetExercisesForTopics(topicIDs, filterPromptHash)
+	// Fetch all exercises for these topics without filtering by hash in SQL
+	rawExercises, err := a.DB.GetExercisesForTopics(topicIDs, "")
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "EXERCISE_LOOKUP_FAILED", "Failed to get exercises", err.Error(), false)
 		return
+	}
+
+	// Apply hash filtering in memory to ensure we only use exercises matching current prompts
+	var allExercises []*storage.Exercise
+	for _, ex := range rawExercises {
+		if expectedHash, ok := topicHashFilters[ex.TopicID]; ok && ex.PromptHash == expectedHash {
+			allExercises = append(allExercises, ex)
+		}
 	}
 	log.Printf("[EXERCISES] Found %d exercises in cache for topics %v", len(allExercises), topicIDs)
 
