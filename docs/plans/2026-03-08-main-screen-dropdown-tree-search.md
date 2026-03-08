@@ -29,22 +29,22 @@ Replace the flat list in the main screen topic dropdown with an interactive tree
 **Files:**
 - Modify: `js/topics.js`
 
-- [ ] Add module-level `const dropdownCollapsedTopicIds = new Set()` near other module-level state
-- [ ] Change `renderTopicDropdown(topicsToRender)` signature to `renderTopicDropdown(searchQuery = '')`
-- [ ] Inside the function, call `buildTopicTree(state.topics)` to get `{ roots, nodesById }`
-- [ ] When `searchQuery` is non-empty: call `findMatchingTopics(searchQuery, nodesById)` to get `{ matchingIds, expandedIds }`
-- [ ] Write an inline flatten that respects `dropdownCollapsedTopicIds` and `expandedIds` (search-expanded):
+- [x] Add module-level `const dropdownCollapsedTopicIds = new Set()` near other module-level state
+- [x] Change `renderTopicDropdown(topicsToRender)` signature to `renderTopicDropdown(searchQuery = '')`
+- [x] Inside the function, call `buildTopicTree(state.topics)` to get `{ roots, nodesById }`
+- [x] When `searchQuery` is non-empty: call `findMatchingTopics(searchQuery, nodesById)` to get `{ matchingIds, expandedIds }`
+- [x] Write an inline flatten that respects `dropdownCollapsedTopicIds` and `expandedIds` (search-expanded):
   - include a node if not-collapsed OR if in `expandedIds`
   - when searching: filter to only nodes in `matchingIds | expandedIds`
-- [ ] Render each flattened node as a div with class `topic-dropdown-tree-item`:
+- [x] Render each flattened node as a div with class `topic-dropdown-tree-item`:
   - inline left-padding based on depth (`depth * 16px`)
   - if node has children: a small collapse toggle button (`.topic-dropdown-collapse-btn`)
   - icon: `getFolderIcon()` for parents, `getFileIcon()` for leaves
   - topic name text; when searching, apply `highlightText(escapeHtml(topic.name), searchQuery)`
   - on click: call `selectTopic(topic.id, getTopicPath(topic.id, state.topics))`
-- [ ] Collapse toggle button click: toggle `dropdownCollapsedTopicIds`, call `renderTopicDropdown(dom.topicSearch.value)`, stop propagation
-- [ ] Show "No topics found." message when result is empty
-- [ ] run project test suite: `go test ./...` must pass before task 2
+- [x] Collapse toggle button click: toggle `dropdownCollapsedTopicIds`, call `renderTopicDropdown(dom.topicSearch.value)`, stop propagation
+- [x] Show "No topics found." message when result is empty
+- [x] run project test suite: `go test ./...` must pass before task 2
 
 ### Task 2: Update main.js event handlers
 
