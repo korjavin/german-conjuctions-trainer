@@ -41,6 +41,7 @@ export async function showExerciseHistory() {
         } else {
             // Calculate summary statistics
             const readyCount = state.historyData.filter(item => item.ready_to_repeat).length;
+            const trainedCount = state.historyData.filter(item => !item.ready_to_repeat).length;
             const totalAttempts = state.historyData.reduce((sum, item) => sum + item.total_attempts, 0);
             const totalSuccessful = state.historyData.reduce((sum, item) => sum + item.successful_attempts, 0);
             const successRate = totalAttempts > 0 ? Math.round((totalSuccessful / totalAttempts) * 100) : 0;
@@ -48,6 +49,7 @@ export async function showExerciseHistory() {
             // Update summary display
             dom.historyTotalCount.textContent = state.historyData.length;
             dom.historyReadyCount.textContent = readyCount;
+            dom.historyTrainedCount.textContent = trainedCount;
             dom.historySuccessRate.textContent = successRate + '%';
             dom.historyTotalAttempts.textContent = totalAttempts;
 

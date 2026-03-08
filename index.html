@@ -39,10 +39,6 @@
                     <span class="desktop-only">Login with Google</span>
                     <span class="mobile-only">Login</span>
                 </button>
-                <button id="stats-btn" class="btn-primary header-btn hidden">
-                    <span class="desktop-only">Stats</span>
-                    <span class="mobile-only">📊</span>
-                </button>
                 <button id="history-btn" class="btn-primary header-btn hidden">
                     <span class="desktop-only">History</span>
                     <span class="mobile-only">📜</span>
@@ -315,26 +311,6 @@ Situations: [contexts, e.g. explaining reasons, expressing goals, giving instruc
         </div>
     </dialog>
 
-    <!-- User Stats Modal -->
-    <dialog id="stats-modal" class="modal-backdrop">
-        <div class="card modal-content modal-md">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="modal-title">Your Progress</h2>
-                <button id="stats-close-btn" class="close-btn">&times;</button>
-            </div>
-            <div class="space-y-4">
-                <div class="stat-row stat-row-blue">
-                    <span class="stat-label">Ready to Repeat</span>
-                    <span id="stats-ready-to-repeat" class="stat-value">0</span>
-                </div>
-                <div class="stat-row stat-row-green">
-                    <span class="stat-label">Trained (Strengthening)</span>
-                    <span id="stats-trained" class="stat-value">0</span>
-                </div>
-            </div>
-        </div>
-    </dialog>
-
     <!-- Skip Exercise Modal -->
     <dialog id="skip-dialog" class="modal-backdrop">
         <div class="card modal-content modal-md text-center">
@@ -366,7 +342,11 @@ Situations: [contexts, e.g. explaining reasons, expressing goals, giving instruc
                 </div>
                 <div id="history-filter-ready" class="summary-box summary-box-green filter-clickable">
                     <div class="summary-value" id="history-ready-count">0</div>
-                    <div class="summary-label">Ready to Practice (Filter)</div>
+                    <div class="summary-label">Ready to Practice</div>
+                </div>
+                <div class="summary-box summary-box-yellow">
+                    <div class="summary-value" id="history-trained-count">0</div>
+                    <div class="summary-label">Trained (Strengthening)</div>
                 </div>
                 <div class="summary-box summary-box-purple">
                     <div class="summary-value" id="history-success-rate">0%</div>

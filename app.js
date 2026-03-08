@@ -58,7 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
-    const statsBtn = document.getElementById('stats-btn');
     const historyBtn = document.getElementById('history-btn');
     const replayAudioBtn = document.getElementById('replay-audio-btn');
     const nextExerciseBtn = document.getElementById('next-exercise-btn');
@@ -71,12 +70,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const skipCancelBtn = document.getElementById('skip-cancel-btn');
     const exerciseControls = document.getElementById('exercise-controls');
 
-    // Stats Modal Elements
-    const statsModal = document.getElementById('stats-modal');
-    const statsCloseBtn = document.getElementById('stats-close-btn');
-    const statsReadyToRepeatEl = document.getElementById('stats-ready-to-repeat');
-    const statsTrainedEl = document.getElementById('stats-trained');
-
     // History Modal Elements
     const historyModal = document.getElementById('history-modal');
     const historyCloseBtn = document.getElementById('history-close-btn');
@@ -84,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const historySummary = document.getElementById('history-summary');
     const historyTotalCount = document.getElementById('history-total-count');
     const historyReadyCount = document.getElementById('history-ready-count');
+    const historyTrainedCount = document.getElementById('history-trained-count');
     const historySuccessRate = document.getElementById('history-success-rate');
     const historyTotalAttempts = document.getElementById('history-total-attempts');
     const historyLoading = document.getElementById('history-loading');
@@ -794,7 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isLoggedIn) {
             const viewProgressBtn = document.getElementById('view-progress-btn');
             if (viewProgressBtn) {
-                viewProgressBtn.addEventListener('click', showUserExerciseStats);
+                viewProgressBtn.addEventListener('click', showExerciseHistory);
             }
         }
 
@@ -1640,12 +1634,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = '/auth/google/login';
     });
 
-    statsBtn.addEventListener('click', showUserExerciseStats);
-
-    statsCloseBtn.addEventListener('click', () => {
-        statsModal.classList.add('hidden');
-    });
-
     historyBtn.addEventListener('click', showExerciseHistory);
 
     historyCloseBtn.addEventListener('click', () => {
@@ -1753,13 +1741,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isLoggedIn) {
             loginBtn.classList.add('hidden');
             logoutBtn.classList.remove('hidden');
-            statsBtn.classList.remove('hidden');
             historyBtn.classList.remove('hidden');
             skipRemoveBtn.classList.remove('hidden');
         } else {
             loginBtn.classList.remove('hidden');
             logoutBtn.classList.add('hidden');
-            statsBtn.classList.add('hidden');
             historyBtn.classList.add('hidden');
             skipRemoveBtn.classList.add('hidden');
         }
@@ -1768,33 +1754,6 @@ document.addEventListener('DOMContentLoaded', () => {
             settingsBtn.classList.remove('hidden');
         } else {
             settingsBtn.classList.add('hidden');
-        }
-    }
-
-    async function showUserExerciseStats() {
-        if (!state.isLoggedIn) {
-            alert("Please log in to see your stats.");
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/user/exercisestats');
-            if (!response.ok) {
-                if (response.status === 401) {
-                    alert("Your session has expired. Please log in again.");
-                    return;
-                }
-                throw new Error('Failed to fetch exercise stats');
-            }
-
-            const stats = await response.json();
-            statsReadyToRepeatEl.textContent = stats.ready_to_repeat;
-            statsTrainedEl.textContent = stats.trained;
-            statsModal.classList.remove('hidden');
-
-        } catch (error) {
-            console.error('Error fetching exercise stats:', error);
-            alert('Could not load your progress stats. Please try again later.');
         }
     }
 
@@ -1822,9 +1781,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 historyTopicName.textContent = 'All Topics';
             }
 
-            const response = await fetch(url);
-            if (!response.ok) {
-                if (response.status === 401) {
+            const historyResponse = await fetch(url);
+
+            if (!historyResponse.ok) {
+                if (historyResponse.status === 401) {
                     alert("Your session has expired. Please log in again.");
                     historyModal.classList.add('hidden');
                     return;
@@ -1832,7 +1792,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Failed to fetch exercise history');
             }
 
-            const data = await response.json();
+            const data = await historyResponse.json();
             state.historyData = data.history || [];
             state.historyPage = 1;
 
@@ -1849,6 +1809,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Calculate summary statistics
                 const readyCount = state.historyData.filter(item => item.ready_to_repeat).length;
+                const trainedCount = state.historyData.filter(item => !item.ready_to_repeat).length;
                 const totalAttempts = state.historyData.reduce((sum, item) => sum + item.total_attempts, 0);
                 const totalSuccessful = state.historyData.reduce((sum, item) => sum + item.successful_attempts, 0);
                 const successRate = totalAttempts > 0 ? Math.round((totalSuccessful / totalAttempts) * 100) : 0;
@@ -1856,6 +1817,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update summary display
                 historyTotalCount.textContent = state.historyData.length;
                 historyReadyCount.textContent = readyCount;
+                historyTrainedCount.textContent = trainedCount;
                 historySuccessRate.textContent = successRate + '%';
                 historyTotalAttempts.textContent = totalAttempts;
 

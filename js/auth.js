@@ -43,13 +43,11 @@ export function updateAuthUI() {
     if (state.isLoggedIn) {
         dom.loginBtn.classList.add('hidden');
         dom.logoutBtn.classList.remove('hidden');
-        dom.statsBtn.classList.remove('hidden');
         dom.historyBtn.classList.remove('hidden');
         dom.skipRemoveBtn.classList.remove('hidden');
     } else {
         dom.loginBtn.classList.remove('hidden');
         dom.logoutBtn.classList.add('hidden');
-        dom.statsBtn.classList.add('hidden');
         dom.historyBtn.classList.add('hidden');
         dom.skipRemoveBtn.classList.add('hidden');
     }
@@ -58,26 +56,5 @@ export function updateAuthUI() {
         dom.settingsBtn.classList.remove('hidden');
     } else {
         dom.settingsBtn.classList.add('hidden');
-    }
-}
-
-export async function showUserExerciseStats() {
-    if (!state.isLoggedIn) {
-        alert("Please log in to see your stats.");
-        return;
-    }
-
-    try {
-        const stats = await loadExerciseStatsAPI();
-        dom.statsReadyToRepeatEl.textContent = stats.ready_to_repeat;
-        dom.statsTrainedEl.textContent = stats.trained;
-        dom.statsModal.showModal();
-    } catch (error) {
-        console.error('Error fetching exercise stats:', error);
-        if (error.status === 401) {
-            alert("Your session has expired. Please log in again.");
-            return;
-        }
-        alert('Could not load your progress stats. Please try again later.');
     }
 }
