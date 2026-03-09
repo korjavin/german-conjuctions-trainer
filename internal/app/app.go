@@ -128,6 +128,7 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/api/exercises/favorite", a.withAuth(a.handleExerciseFavorite))
 	http.HandleFunc("/api/exercises/hide", a.withAuth(a.handleExerciseHide))
 	http.HandleFunc("/api/exercises/history", a.withAuth(a.handleExerciseHistory))
+	http.HandleFunc("/api/explain", a.withOptionalAuth(a.handleExplain))
 	http.HandleFunc("/api/topics", a.withOptionalAuth(a.handleTopics))
 	http.HandleFunc("/api/topics/", a.withOptionalAuth(a.handleTopicByID))
 	http.HandleFunc("/api/versions/", a.withOptionalAuth(a.handleVersions))

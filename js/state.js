@@ -168,6 +168,9 @@ export const state = {
     mistakes: 0,
     hintsUsed: 0,
     exercisesWithMistakes: new Set(),
+    exerciseMistakes: {}, // maps exercise index to Set of unique wrong words clicked
+    explanationText: '', // stores current explanation from AI
+    isExplaining: false, // tracks if explanation request is in progress
     exercisesWithHints: new Set(),
     exercisePerformance: new Map(),
     completedExerciseIds: new Set(), // Track finished exercises so only completed items affect SRS

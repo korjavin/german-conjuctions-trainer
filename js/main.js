@@ -10,6 +10,7 @@ import {
     handleSkipExercise,
     handleHideExercise,
     handleToggleFavorite,
+    handleExplainClick,
 } from './exercise.js';
 import {
     initSession,
@@ -149,6 +150,7 @@ dom.audioToggleBtn.addEventListener('click', handleAudioToggle);
 dom.hintBtn.addEventListener('click', handleHintClick);
 dom.replayAudioBtn.addEventListener('click', handleReplayAudio);
 dom.toggleFavoriteBtn.addEventListener('click', handleToggleFavorite);
+dom.explainBtn.addEventListener('click', handleExplainClick);
 
 // Skip Dialog handling
 dom.skipExerciseBtn.addEventListener('click', () => dom.skipDialog.showModal());
@@ -342,6 +344,7 @@ function init() {
     state.sessionTime = 0;
     state.isSessionComplete = false;
     state.exercisesWithMistakes = new Set();
+    state.exerciseMistakes = {};
     state.exercisesWithHints = new Set();
     state.exercisePerformance = new Map(); // Empty for sample exercises
     state.completedExerciseIds = new Set();

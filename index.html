@@ -124,12 +124,20 @@
                             </svg>
                             <span id="favorite-btn-text">Add to Favorites</span>
                         </button>
+                        <button id="explain-btn" class="btn-secondary explain-btn hidden flex items-center gap-2">
+                            <span>💡 Explain Mistakes</span>
+                            <span class="loading-spinner hidden" style="width: 16px; height: 16px; border-width: 2px;"></span>
+                        </button>
                         <button id="replay-audio-btn" class="btn-primary replay-audio-btn">🔊 Replay Audio</button>
                         <button id="next-exercise-btn" class="btn-primary next-exercise-btn">Next Exercise →</button>
                     </div>
 
                     <div id="feedback-area" class="feedback-area mt-6 text-center">
                         <p id="correct-sentence-display" class="correct-answer-feedback"></p>
+                    </div>
+
+                    <div id="explanation-container" class="explanation-container mt-4 hidden">
+                        <p id="explanation-text" class="explanation-text"></p>
                     </div>
                 </div>
             </div>

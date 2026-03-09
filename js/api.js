@@ -126,6 +126,23 @@ export async function fetchExercisesFromAPI(topicId) {
     return response.json();
 }
 
+export async function fetchExplainAPI(topic, correctSentence, mistakes) {
+    const response = await fetch('/api/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            topic: topic,
+            correct_sentence: correctSentence,
+            mistakes: mistakes
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to load explanation');
+    }
+    return response.json();
+}
+
 export async function toggleFavoriteAPI(exerciseId) {
     const response = await fetch('/api/exercises/favorite', {
         method: 'POST',
