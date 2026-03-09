@@ -18,6 +18,7 @@ export const dom = {
     answerPrompt: document.getElementById('answer-prompt'),
     constructedSentenceEl: document.getElementById('constructed-sentence'),
     scrambledWordsContainer: document.getElementById('scrambled-words-container'),
+    scrambledWordsHeader: document.getElementById('scrambled-words-header'),
     feedbackArea: document.getElementById('feedback-area'),
     correctSentenceDisplay: document.getElementById('correct-sentence-display'),
     exerciseCounter: document.getElementById('exercise-counter'),

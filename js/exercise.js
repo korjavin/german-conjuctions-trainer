@@ -38,6 +38,8 @@ export function renderExercise() {
     dom.exerciseControls.classList.add('hidden');
     dom.hintBtn.classList.remove('hidden');
     dom.skipExerciseBtn.classList.remove('hidden');
+    dom.scrambledWordsContainer.classList.remove('hidden');
+    if (dom.scrambledWordsHeader) dom.scrambledWordsHeader.classList.remove('hidden');
 
     if (state.exercises.length === 0) {
         dom.exerciseContent.classList.add('hidden');
@@ -210,6 +212,8 @@ async function handleSentenceCompletion(exercise, correctWordArray, lastWord = '
         dom.exerciseControls.classList.remove('hidden');
         dom.hintBtn.classList.add('hidden');
         dom.skipExerciseBtn.classList.add('hidden');
+        dom.scrambledWordsContainer.classList.add('hidden');
+        if (dom.scrambledWordsHeader) dom.scrambledWordsHeader.classList.add('hidden');
 
         // Show explain button if mistakes were made on this exercise using actual ID
         if (state.exerciseMistakes[exerciseId] && state.exerciseMistakes[exerciseId].size > 0) {

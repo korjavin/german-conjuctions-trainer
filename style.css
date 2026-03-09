@@ -1699,7 +1699,7 @@ button:disabled.is-audio-off {
     }
 
     .exercise-controls button {
-        flex: 1 1 100%;
+        flex: 1 1 calc(50% - 0.4rem);
     }
 
     .modal-content {
