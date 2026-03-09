@@ -94,6 +94,7 @@ type Storage interface {
 	CreateTopic(name, prompt string, parentID *string, sortOrder int) (*Topic, error)
 	GetAllTopics() ([]*Topic, error)
 	GetTopic(topicID string) (*Topic, error)
+	// GetDescendantTopicIDs returns all descendant topic IDs recursively for a given topic ID.
 	GetDescendantTopicIDs(topicID string) ([]string, error)
 	UpdateTopic(topicID, name, prompt string, parentID *string, sortOrder int) (*Topic, error)
 	MoveTopic(topicID, parentID string, position *int) (*Topic, error)
