@@ -1150,8 +1150,20 @@ func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*Exerc
 
 	// Add topic filter if specified
 	if topicID != "" {
-		query += " AND e.topic_id = ?"
-		args = append(args, topicID)
+		descendantIDs, err := s.GetDescendantTopicIDs(topicID)
+		if err != nil {
+			return nil, err
+		}
+
+		topicIDs := append([]string{topicID}, descendantIDs...)
+
+		query += " AND e.topic_id IN ("
+		placeholders := make([]string, len(topicIDs))
+		for i, id := range topicIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		query += strings.Join(placeholders, ",") + ")"
 	}
 
 	query += " ORDER BY uev.last_viewed DESC"
