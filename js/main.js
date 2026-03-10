@@ -57,6 +57,7 @@ import {
     showExerciseHistory,
     renderHistoryPage,
     updateHistoryFilterUI,
+    updateHistorySortUI,
 } from './history.js';
 
 const sampleExercises = {
@@ -289,6 +290,28 @@ dom.historyFilterReady.addEventListener('click', () => {
     state.historyFilterReady = !state.historyFilterReady;
     state.historyPage = 1; // Reset to first page
     updateHistoryFilterUI();
+    renderHistoryPage();
+});
+
+// History Sort Controls
+dom.historySortTiming.addEventListener('click', () => {
+    state.historySortDimension = state.historySortDimension === 'sooner' ? 'later' : 'sooner';
+    state.historyPage = 1;
+    updateHistorySortUI();
+    renderHistoryPage();
+});
+
+dom.historySortErrors.addEventListener('click', () => {
+    state.historySortDimension = state.historySortDimension === 'most_errors' ? 'fewest_errors' : 'most_errors';
+    state.historyPage = 1;
+    updateHistorySortUI();
+    renderHistoryPage();
+});
+
+dom.historySortDate.addEventListener('click', () => {
+    state.historySortDimension = state.historySortDimension === 'newest' ? 'oldest' : 'newest';
+    state.historyPage = 1;
+    updateHistorySortUI();
     renderHistoryPage();
 });
 

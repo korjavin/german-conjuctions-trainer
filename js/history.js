@@ -28,33 +28,33 @@ export async function showExerciseHistory() {
         state.historyData = data.history || [];
         state.historyPage = 1;
 
-        // Reset filters when opening fresh history
+        // Reset filters and sort when opening fresh history
         state.historyFilterReady = false;
         state.historyFilterFavorites = false;
         state.historyFilterTrained = false;
+        state.historySortDimension = 'sooner';
         updateHistoryFilterUI();
+        updateHistorySortUI();
 
         dom.historyLoading.classList.add('hidden');
 
         if (state.historyData.length === 0) {
             dom.historyEmpty.classList.remove('hidden');
             dom.historySummary.classList.add('hidden');
+            dom.historyControlsContainer.classList.add('hidden');
         } else {
             // Calculate summary statistics
-            const readyCount = state.historyData.filter(item => item.ready_to_repeat).length;
-            const trainedCount = state.historyData.filter(item => !item.ready_to_repeat).length;
             const totalAttempts = state.historyData.reduce((sum, item) => sum + item.total_attempts, 0);
             const totalSuccessful = state.historyData.reduce((sum, item) => sum + item.successful_attempts, 0);
             const successRate = totalAttempts > 0 ? Math.round((totalSuccessful / totalAttempts) * 100) : 0;
 
             // Update summary display
             dom.historyTotalCount.textContent = state.historyData.length;
-            dom.historyReadyCount.textContent = readyCount;
-            dom.historyTrainedCount.textContent = trainedCount;
             dom.historySuccessRate.textContent = successRate + '%';
             dom.historyTotalAttempts.textContent = totalAttempts;
 
             dom.historySummary.classList.remove('hidden');
+            dom.historyControlsContainer.classList.remove('hidden');
             dom.historyContent.classList.remove('hidden');
             renderHistoryPage();
         }
@@ -73,7 +73,7 @@ export async function showExerciseHistory() {
 }
 
 function getFilteredHistoryData() {
-    return state.historyData.filter(item => {
+    let filtered = state.historyData.filter(item => {
         let matches = true;
         if (state.historyFilterReady) {
             matches = matches && item.ready_to_repeat;
@@ -86,6 +86,40 @@ function getFilteredHistoryData() {
         }
         return matches;
     });
+
+    // Sort the filtered data
+    filtered.sort((a, b) => {
+        switch (state.historySortDimension) {
+            case 'sooner':
+                return a.next_review_days - b.next_review_days;
+            case 'later':
+                return b.next_review_days - a.next_review_days;
+            case 'most_errors': {
+                const aErrRate = a.total_attempts > 0 ? 1 - (a.successful_attempts / a.total_attempts) : 0;
+                const bErrRate = b.total_attempts > 0 ? 1 - (b.successful_attempts / b.total_attempts) : 0;
+                return bErrRate - aErrRate;
+            }
+            case 'fewest_errors': {
+                const aErrRate = a.total_attempts > 0 ? 1 - (a.successful_attempts / a.total_attempts) : 0;
+                const bErrRate = b.total_attempts > 0 ? 1 - (b.successful_attempts / b.total_attempts) : 0;
+                return aErrRate - bErrRate;
+            }
+            case 'newest': {
+                const aDate = new Date(a.created_at || a.last_viewed).getTime();
+                const bDate = new Date(b.created_at || b.last_viewed).getTime();
+                return bDate - aDate;
+            }
+            case 'oldest': {
+                const aDate = new Date(a.created_at || a.last_viewed).getTime();
+                const bDate = new Date(b.created_at || b.last_viewed).getTime();
+                return aDate - bDate;
+            }
+            default:
+                return a.next_review_days - b.next_review_days;
+        }
+    });
+
+    return filtered;
 }
 
 export function renderHistoryPage() {
@@ -196,25 +230,65 @@ function escapeHtml(text) {
 export function updateHistoryFilterUI() {
     // Update Ready to Practice filter UI
     if (state.historyFilterReady) {
-        dom.historyFilterReady.classList.add('filter-active-green');
+        dom.historyFilterReady.classList.add('active-green');
     } else {
-        dom.historyFilterReady.classList.remove('filter-active-green');
+        dom.historyFilterReady.classList.remove('active-green');
     }
 
     // Update Favorites filter UI
     const favoritesSvg = dom.historyFilterFavorites.querySelector('svg');
     if (state.historyFilterFavorites) {
-        dom.historyFilterFavorites.classList.add('filter-active-yellow');
+        dom.historyFilterFavorites.classList.add('active-yellow');
         favoritesSvg.setAttribute('fill', 'currentColor');
     } else {
-        dom.historyFilterFavorites.classList.remove('filter-active-yellow');
+        dom.historyFilterFavorites.classList.remove('active-yellow');
         favoritesSvg.setAttribute('fill', 'none');
     }
 
     // Update Trained filter UI
     if (state.historyFilterTrained) {
-        dom.historyFilterTrained.classList.add('filter-active-yellow');
+        dom.historyFilterTrained.classList.add('active-yellow');
     } else {
-        dom.historyFilterTrained.classList.remove('filter-active-yellow');
+        dom.historyFilterTrained.classList.remove('active-yellow');
+    }
+}
+
+export function updateHistorySortUI() {
+    // Reset all sort buttons
+    dom.historySortTiming.classList.remove('active');
+    dom.historySortErrors.classList.remove('active');
+    dom.historySortDate.classList.remove('active');
+
+    // Reset directions to default
+    dom.historySortTiming.querySelector('.sort-dir').textContent = '↑';
+    dom.historySortErrors.querySelector('.sort-dir').textContent = '↓';
+    dom.historySortDate.querySelector('.sort-dir').textContent = '↓';
+
+    // Highlight active sort and update direction
+    switch (state.historySortDimension) {
+        case 'sooner':
+            dom.historySortTiming.classList.add('active');
+            dom.historySortTiming.querySelector('.sort-dir').textContent = '↑';
+            break;
+        case 'later':
+            dom.historySortTiming.classList.add('active');
+            dom.historySortTiming.querySelector('.sort-dir').textContent = '↓';
+            break;
+        case 'most_errors':
+            dom.historySortErrors.classList.add('active');
+            dom.historySortErrors.querySelector('.sort-dir').textContent = '↓';
+            break;
+        case 'fewest_errors':
+            dom.historySortErrors.classList.add('active');
+            dom.historySortErrors.querySelector('.sort-dir').textContent = '↑';
+            break;
+        case 'newest':
+            dom.historySortDate.classList.add('active');
+            dom.historySortDate.querySelector('.sort-dir').textContent = '↓';
+            break;
+        case 'oldest':
+            dom.historySortDate.classList.add('active');
+            dom.historySortDate.querySelector('.sort-dir').textContent = '↑';
+            break;
     }
 }
