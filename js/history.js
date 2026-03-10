@@ -14,6 +14,7 @@ export async function showExerciseHistory() {
     dom.historyEmpty.classList.add('hidden');
     dom.historyContent.classList.add('hidden');
     dom.historyPagination.classList.add('hidden');
+    dom.historyControlsContainer.classList.add('hidden');
 
     try {
         // Set topic name display
@@ -63,6 +64,7 @@ export async function showExerciseHistory() {
         console.error('Error fetching exercise history:', error);
         dom.historyLoading.classList.add('hidden');
         dom.historySummary.classList.add('hidden');
+        dom.historyControlsContainer.classList.add('hidden');
         if (error.status === 401) {
             alert("Your session has expired. Please log in again.");
             dom.historyModal.close();
@@ -72,8 +74,8 @@ export async function showExerciseHistory() {
     }
 }
 
-function getFilteredHistoryData() {
-    let filtered = state.historyData.filter(item => {
+export function getFilteredHistoryData() {
+    let filtered = [...state.historyData].filter(item => {
         let matches = true;
         if (state.historyFilterReady) {
             matches = matches && item.ready_to_repeat;
