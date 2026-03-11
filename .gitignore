@@ -36,3 +36,4 @@ pnpm-lock.yaml
 
 # ralphex progress logs
 .ralphex/progress/
+coverage/

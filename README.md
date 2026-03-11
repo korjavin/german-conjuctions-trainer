@@ -287,3 +287,18 @@ The backend includes rate limiting to prevent abuse. By default, it allows one r
 MIT License - see LICENSE file for details.
 
 ---
+### Automated Frontend Unit Tests (Vitest)
+
+The application includes a fast, automated unit test suite for the vanilla JS frontend using Vitest and happy-dom.
+
+To run the automated tests:
+```bash
+# Run all tests once
+pnpm test
+
+# Run tests in watch mode
+pnpm test --watch
+
+# Run tests and generate coverage report
+pnpm run test:coverage
+```
