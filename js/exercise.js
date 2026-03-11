@@ -9,7 +9,7 @@ export function initExercise({ onSessionComplete }) {
     _onSessionComplete = onSessionComplete;
 }
 
-function getHotkey(index) {
+export function getHotkey(index) {
     if (index < 9) {
         return (index + 1).toString(); // 1-9
     } else {
@@ -17,7 +17,7 @@ function getHotkey(index) {
     }
 }
 
-function addPunctuationIfNeeded(exercise, userSentence) {
+export function addPunctuationIfNeeded(exercise, userSentence) {
     const correctWordArray = exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [];
 
     while (userSentence.length < correctWordArray.length) {

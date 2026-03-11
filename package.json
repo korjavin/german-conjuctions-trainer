@@ -1,0 +1,31 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "An interactive German language learning application that helps B1-level students master German grammar through engaging word-scramble exercises.",
+  "main": "app.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/korjavin/german-conjuctions-trainer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/korjavin/german-conjuctions-trainer/issues"
+  },
+  "homepage": "https://github.com/korjavin/german-conjuctions-trainer#readme",
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.18",
+    "happy-dom": "^20.8.3",
+    "vitest": "^4.0.18"
+  }
+}
