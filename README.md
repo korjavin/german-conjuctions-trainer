@@ -297,7 +297,7 @@ To run the automated tests:
 pnpm test
 
 # Run tests in watch mode
-pnpm test --watch
+pnpm run test:watch
 
 # Run tests and generate coverage report
 pnpm run test:coverage
