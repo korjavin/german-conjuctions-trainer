@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History Tests</title>
+</head>
+<body>
+    <h1>History Tests</h1>
+    <p>Check the console for test output.</p>
+
+    <!-- We need DOM elements that history.js and state.js depend on to load without throwing errors -->
+    <div style="display:none;">
+        <div id="settings-btn"></div>
+        <div id="settings-modal"></div>
+        <div id="settings-close-btn"></div>
+        <div id="topic-search"></div>
+        <div id="topic-dropdown"></div>
+        <div id="generate-btn"></div>
+        <div id="audio-toggle-btn"></div>
+        <div id="audio-toggle-icon"></div>
+        <div id="hint-btn"></div>
+        <div id="loading-spinner"></div>
+        <div id="timer"></div>
+        <div id="exercise-content"></div>
+        <div id="english-hint"></div>
+        <div id="answer-area"></div>
+        <div id="answer-prompt"></div>
+        <div id="constructed-sentence"></div>
+        <div id="scrambled-words-container"></div>
+        <div id="scrambled-words-header"></div>
+        <div id="feedback-area"></div>
+        <div id="correct-sentence-display"></div>
+        <div id="exercise-counter"></div>
+        <div id="progress-bar"></div>
+        <div id="progress-percentage"></div>
+        <div id="empty-state-container"></div>
+        <div id="topics-list"></div>
+        <div id="topics-search-input"></div>
+        <div id="topics-search-clear"></div>
+        <div id="topic-sort"></div>
+        <div id="add-topic-btn"></div>
+        <div id="add-topic-form"></div>
+        <div id="new-topic-name"></div>
+        <div id="new-topic-prompt"></div>
+        <div id="save-topic-btn"></div>
+        <div id="cancel-add-btn"></div>
+        <div id="new-topic-name-error"></div>
+        <div id="new-topic-prompt-error"></div>
+        <div id="edit-topic-prompt-error"></div>
+        <div id="add-topic-hierarchy-preview"></div>
+        <div id="add-topic-preview-path"></div>
+        <div id="edit-topic-hierarchy-preview"></div>
+        <div id="edit-topic-current-path"></div>
+        <div id="recently-used-topics"></div>
+        <div id="recent-topics-container"></div>
+        <div id="edit-recently-used-topics"></div>
+        <div id="edit-recent-topics-container"></div>
+        <div id="prompt-editor"></div>
+        <div id="current-topic-name"></div>
+        <div id="prompt-textarea"></div>
+        <div id="save-prompt-btn"></div>
+        <div id="cancel-edit-btn"></div>
+        <div id="view-versions-btn"></div>
+        <div id="version-history"></div>
+        <div id="version-topic-name"></div>
+        <div id="versions-list"></div>
+        <div id="close-versions-btn"></div>
+        <div id="view-last-refined-prompt-btn"></div>
+        <div id="last-refined-prompt-modal"></div>
+        <div id="last-refined-prompt-content"></div>
+        <div id="last-refined-prompt-close-btn"></div>
+        <div id="login-btn"></div>
+        <div id="logout-btn"></div>
+        <div id="history-btn"></div>
+        <div id="replay-audio-btn"></div>
+        <div id="next-exercise-btn"></div>
+        <div id="toggle-favorite-btn"></div>
+        <div id="favorite-btn-text"></div>
+        <div id="explain-btn"></div>
+        <div id="explanation-container"></div>
+        <div id="explanation-text"></div>
+        <div id="skip-exercise-btn"></div>
+        <div id="skip-dialog"></div>
+        <div id="skip-session-btn"></div>
+        <div id="skip-remove-btn"></div>
+        <div id="skip-cancel-btn"></div>
+        <div id="exercise-controls"></div>
+        <div id="completion-status-indicator"></div>
+        <div id="history-modal"></div>
+        <div id="history-close-btn"></div>
+        <div id="history-topic-name"></div>
+        <div id="history-summary"></div>
+        <div id="history-total-count"></div>
+        <div id="history-success-rate"></div>
+        <div id="history-total-attempts"></div>
+        <div id="history-loading"></div>
+        <div id="history-empty"></div>
+        <div id="history-controls-container"></div>
+        <div id="history-content"></div>
+        <div id="history-pagination"></div>
+        <div id="history-prev-btn"></div>
+        <div id="history-next-btn"></div>
+        <div id="history-page-info"></div>
+        <div id="history-filter-ready"></div>
+        <div id="history-filter-favorites"></div>
+        <div id="history-filter-trained"></div>
+        <div id="history-sort-timing"></div>
+        <div id="history-sort-errors"></div>
+        <div id="history-sort-date"></div>
+    </div>
+
+    <!-- Required template for testing, though we are mostly testing logic not DOM rendering here -->
+    <template id="history-item-template">
+        <div class="history-item"></div>
+    </template>
+
+    <script type="module">
+        import { runHistoryTests } from './js/history-test.js';
+
+        // Wait briefly for module imports to resolve then run tests
+        setTimeout(() => {
+            runHistoryTests();
+
+            // Output summary to DOM for playwright to read easily
+            const results = document.createElement('div');
+            results.id = 'test-results';
+            const hr = window.historyTestResults || { passed: 0, failed: 1, total: 1 };
+            results.textContent = `Tests Complete. Passed: ${hr.passed}, Failed: ${hr.failed}`;
+            if (hr.failed > 0) {
+                results.style.color = 'red';
+                results.classList.add('tests-failed');
+            } else {
+                results.style.color = 'green';
+                results.classList.add('tests-passed');
+            }
+            document.body.appendChild(results);
+        }, 500);
+    </script>
+</body>
+</html>

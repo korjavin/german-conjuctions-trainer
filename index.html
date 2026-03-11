@@ -336,34 +336,19 @@ Situations: [contexts, e.g. explaining reasons, expressing goals, giving instruc
     <!-- Exercise History Modal -->
     <dialog id="history-modal" class="modal-backdrop">
         <div class="card modal-content modal-xl">
-            <div class="flex justify-between items-center mb-6">
+            <div class="flex justify-between items-start mb-6">
                 <div>
                     <h2 class="modal-title">Practice History</h2>
                     <p id="history-topic-name" class="modal-subtitle">All Topics</p>
                 </div>
-                <button id="history-close-btn" class="close-btn">&times;</button>
-            </div>
 
-            <div id="history-summary" class="history-summary hidden">
-                <div class="summary-box summary-box-blue">
-                    <div class="summary-value" id="history-total-count">0</div>
-                    <div class="summary-label">Total Practiced</div>
-                </div>
-                <div id="history-filter-ready" class="summary-box summary-box-green filter-clickable">
-                    <div class="summary-value" id="history-ready-count">0</div>
-                    <div class="summary-label">Ready to Practice</div>
-                </div>
-                <div id="history-filter-trained" class="summary-box summary-box-yellow filter-clickable">
-                    <div class="summary-value" id="history-trained-count">0</div>
-                    <div class="summary-label">Trained (Strengthening)</div>
-                </div>
-                <div class="summary-box summary-box-purple">
-                    <div class="summary-value" id="history-success-rate">0%</div>
-                    <div class="summary-label">Success Rate</div>
-                </div>
-                <div class="summary-box summary-box-orange">
-                    <div class="summary-value" id="history-total-attempts">0</div>
-                    <div class="summary-label">Total Attempts</div>
+                <div class="flex flex-col items-end gap-2">
+                    <button id="history-close-btn" class="close-btn">&times;</button>
+                    <div id="history-summary" class="history-compact-stats hidden text-sm text-gray-500">
+                        <span title="Total unique exercises practiced">Total Practiced: <strong id="history-total-count">0</strong></span> &bull;
+                        <span title="Total practice attempts">Attempts: <strong id="history-total-attempts">0</strong></span> &bull;
+                        <span title="Overall success rate">Success Rate: <strong id="history-success-rate">0%</strong></span>
+                    </div>
                 </div>
             </div>
 
@@ -376,13 +361,38 @@ Situations: [contexts, e.g. explaining reasons, expressing goals, giving instruc
                 <p class="text-gray-600">No practice history yet. Complete some exercises to see your progress!</p>
             </div>
 
-            <div id="history-filters" class="flex justify-end mb-4">
-                <button id="history-filter-favorites" class="btn-filter flex items-center gap-2">
-                    <svg class="favorite-icon w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
-                    </svg>
-                    <span>Favorites Only</span>
-                </button>
+            <div id="history-controls-container" class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 hidden">
+                <div id="history-filters" class="flex flex-wrap gap-2">
+                    <button id="history-filter-ready" class="filter-btn flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                        Ready to Practice
+                    </button>
+                    <button id="history-filter-trained" class="filter-btn flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+                        Training
+                    </button>
+                    <button id="history-filter-favorites" class="filter-btn flex items-center gap-1">
+                        <svg class="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                        </svg>
+                        Favorites
+                    </button>
+                </div>
+
+                <div id="history-sort-controls" class="flex items-center gap-2">
+                    <span class="text-sm text-gray-500">Sort by:</span>
+                    <div class="flex flex-wrap gap-1">
+                        <button id="history-sort-timing" class="sort-btn active" data-sort="sooner">
+                            Timing <span class="sort-dir">↑</span>
+                        </button>
+                        <button id="history-sort-errors" class="sort-btn" data-sort="most_errors">
+                            Errors <span class="sort-dir">↓</span>
+                        </button>
+                        <button id="history-sort-date" class="sort-btn" data-sort="newest">
+                            Date <span class="sort-dir">↓</span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div id="history-content" class="history-content space-y-3">
