@@ -98,6 +98,9 @@ vi.mock('../dom.js', () => {
       historyFilterFavorites: createMockElement('button'),
       historyFilterTrained: createMockElement('button'),
       historyControlsContainer: createMockElement('div'),
+      historySortTiming: createMockElement('button'),
+      historySortErrors: createMockElement('button'),
+      historySortDate: createMockElement('button'),
 
       // Additional elements can be added here as needed by tests
       constructedSentenceEl: createMockElement('div'),
