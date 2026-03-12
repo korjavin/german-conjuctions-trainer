@@ -20,6 +20,9 @@ func setupComprehensiveTestApp(t *testing.T) *App {
 	if err != nil {
 		t.Fatalf("Failed to create storage: %v", err)
 	}
+	t.Cleanup(func() {
+		store.Close()
+	})
 	app := &App{DB: store}
 	return app
 }

@@ -306,6 +306,13 @@ type querier interface {
 
 // Implement the Storage interface methods below...
 
+func (s *SQLiteStorage) Close() error {
+	if s.db != nil {
+		return s.db.Close()
+	}
+	return nil
+}
+
 func (s *SQLiteStorage) CreateTopic(name, prompt string, parentID *string, sortOrder int) (*Topic, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
