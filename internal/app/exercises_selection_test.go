@@ -169,11 +169,11 @@ func TestExerciseSelection_UnrelatedTopicsExcluded(t *testing.T) {
 
 	// Add 10 valid t1 exercises
 	for i := 0; i < 10; i++ {
-		mock.exercises = append(mock.exercises, &storage.Exercise{ID: "t1"+string(rune(i)), TopicID: "t1", PromptHash: hash1, ExerciseJSON: `{"test":"test"}`})
+		mock.exercises = append(mock.exercises, &storage.Exercise{ID: "t1_" + string(rune(i+'A')), TopicID: "t1", PromptHash: hash1, ExerciseJSON: `{"test":"test"}`})
 	}
 	// Add 10 valid t2 exercises
 	for i := 0; i < 10; i++ {
-		mock.exercises = append(mock.exercises, &storage.Exercise{ID: "t2"+string(rune(i)), TopicID: "t2", PromptHash: hash2, ExerciseJSON: `{"test":"test"}`})
+		mock.exercises = append(mock.exercises, &storage.Exercise{ID: "t2_" + string(rune(i+'A')), TopicID: "t2", PromptHash: hash2, ExerciseJSON: `{"test":"test"}`})
 	}
 
 	reqBody, _ := json.Marshal(llm.GenerateRequest{TopicID: "t1"})
