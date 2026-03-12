@@ -54,6 +54,10 @@ export async function showExerciseHistory() {
             dom.historySuccessRate.textContent = successRate + '%';
             dom.historyTotalAttempts.textContent = totalAttempts;
 
+            // Update favorites count
+            const favoritesCount = state.historyData.filter(item => item.is_favorite).length;
+            dom.historyFilterFavoritesCount.textContent = favoritesCount;
+
             dom.historySummary.classList.remove('hidden');
             dom.historyControlsContainer.classList.remove('hidden');
             dom.historyContent.classList.remove('hidden');
