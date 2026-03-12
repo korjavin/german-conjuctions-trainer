@@ -56,6 +56,10 @@ func (m *mockStorage) GetUserExerciseViews(userID string) (map[string]*storage.U
 	return m.userViews, nil
 }
 
+func (m *mockStorage) Close() error {
+	return nil
+}
+
 // Ensure the mock triggers auto generation properly
 // Note: Generating exercises invokes LLM. We will avoid the LLM call by overriding AI config or making it fail predictably,
 // or since GetExercisesForTopics will return an empty slice, handleExercises will try to generate.

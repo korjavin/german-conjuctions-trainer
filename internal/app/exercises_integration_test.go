@@ -23,9 +23,7 @@ func setupIntegrationApp(t *testing.T) (*App, func()) {
 	app := &App{DB: store}
 
 	cleanup := func() {
-		// store.db is not directly accessible here as it's private to package storage.
-		// So we won't close it explicitly if we don't have a close method on App/Storage.
-		// However, it's just a test DB using TempDir, which gets cleaned up by `t`.
+		store.Close()
 	}
 	return app, cleanup
 }

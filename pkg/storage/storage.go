@@ -127,6 +127,9 @@ type Storage interface {
 
 	// Initialization
 	InitializeDefaultTopics()
+
+	// Close closes the database connection.
+	Close() error
 }
 
 // DB is the global database connection
