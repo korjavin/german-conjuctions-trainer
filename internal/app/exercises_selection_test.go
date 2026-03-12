@@ -194,10 +194,10 @@ func TestExerciseSelection_UnrelatedTopicsExcluded(t *testing.T) {
 	// Assert none are from t2
 	for _, ex := range exercises {
 		idStr, ok := ex["id"].(string)
-		if !ok || len(idStr) < 3 {
+		if !ok || len(idStr) == 0 {
 			t.Fatalf("unexpected exercise format: %v", ex)
 		}
-		if idStr[:3] == "t2_" {
+		if len(idStr) >= 3 && idStr[:3] == "t2_" {
 			t.Errorf("found t2 exercise in results, unrelated topics were not excluded properly: %s", idStr)
 		}
 	}
