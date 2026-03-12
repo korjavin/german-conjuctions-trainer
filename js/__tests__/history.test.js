@@ -63,6 +63,7 @@ describe('history.js', () => {
         dom.historyFilterFavorites.innerHTML = '<svg></svg>';
         dom.historyFilterFavorites.classList.add = vi.fn();
         dom.historyFilterFavorites.classList.remove = vi.fn();
+        dom.historyFilterFavoritesCount = { textContent: '' };
 
         dom.historySortTiming.classList.add = vi.fn();
         dom.historySortTiming.classList.remove = vi.fn();
@@ -110,6 +111,7 @@ describe('history.js', () => {
 
             // Stats checks
             expect(dom.historyTotalCount.textContent).toBe('2'); // length
+            expect(dom.historyFilterFavoritesCount.textContent).toBe(0); // 0 favorites
 
             // Optional properties which might have been removed in the updated branch
             if (dom.historyReadyCount.textContent) {

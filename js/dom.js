@@ -106,6 +106,7 @@ export const dom = {
     historyPageInfo: document.getElementById('history-page-info'),
     historyFilterReady: document.getElementById('history-filter-ready'),
     historyFilterFavorites: document.getElementById('history-filter-favorites'),
+    historyFilterFavoritesCount: document.getElementById('history-filter-favorites-count'),
     historyFilterTrained: document.getElementById('history-filter-trained'),
     historySortTiming: document.getElementById('history-sort-timing'),
     historySortErrors: document.getElementById('history-sort-errors'),

@@ -1039,15 +1039,54 @@ button .loading-spinner {
 }
 
 .filter-btn.active-green {
-    background: #dcfce7 !important;
-    border-color: #22c55e !important;
-    color: #166534 !important;
+    background: #bbf7d0 !important;
+    border-color: #16a34a !important;
+    border-left: 4px solid #16a34a !important;
+    color: #14532d !important;
+}
+
+.filter-btn.active-green::before {
+    content: "✓";
+    font-weight: bold;
+    margin-right: 0.25rem;
 }
 
 .filter-btn.active-yellow {
-    background: #fef9c3 !important;
-    border-color: #eab308 !important;
-    color: #854d0e !important;
+    background: #fef08a !important;
+    border-color: #ca8a04 !important;
+    border-left: 4px solid #ca8a04 !important;
+    color: #713f12 !important;
+}
+
+.filter-btn.active-yellow::before {
+    content: "✓";
+    font-weight: bold;
+    margin-right: 0.25rem;
+}
+
+.filter-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.35rem;
+    margin-left: 0.25rem;
+    border-radius: 9999px;
+    background-color: rgba(163, 63, 17, 0.1);
+    color: var(--mr-text-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.filter-btn.active-green .filter-count-badge {
+    background-color: rgba(22, 163, 74, 0.2);
+    color: #14532d;
+}
+
+.filter-btn.active-yellow .filter-count-badge {
+    background-color: rgba(202, 138, 4, 0.2);
+    color: #713f12;
 }
 
 .sort-btn {
