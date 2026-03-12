@@ -190,11 +190,25 @@ func TestExerciseSelection_UnrelatedTopicsExcluded(t *testing.T) {
 	if len(exercises) != 10 {
 		t.Errorf("expected 10 exercises, got %d", len(exercises))
 	}
-	// All exercises should belong to t1 (since t2 isn't descendant)
-	// We can't check TopicID in response easily, but the test ensures we don't accidentally get 20 (it's capped at 10 anyway, but from the right set)
+
+	// Assert none are from t2
+	for _, ex := range exercises {
+		idStr, ok := ex["id"].(string)
+		if !ok || len(idStr) < 3 {
+			t.Fatalf("unexpected exercise format: %v", ex)
+		}
+		if idStr[:3] == "t2_" {
+			t.Errorf("found t2 exercise in results, unrelated topics were not excluded properly: %s", idStr)
+		}
+	}
 }
 
 func TestExerciseSelection_AutoGenTriggered(t *testing.T) {
+	// P1 Fix: make the test deterministic by explicitly setting the env variable for the failure path
+	t.Setenv("OPENAI_API_KEY", "dummy-key-for-test")
+	// By setting this, it hits the network but we can inject a dummy URL so it fails predictably and quickly.
+	t.Setenv("OPENAI_URL", "http://127.0.0.1:0/invalid")
+
 	app, mock := setupTestAppWithMock(t)
 
 	topic := &storage.Topic{ID: "t1", Prompt: "my prompt"}
@@ -210,7 +224,8 @@ func TestExerciseSelection_AutoGenTriggered(t *testing.T) {
 	rr := httptest.NewRecorder()
 	app.handleExercises(rr, req)
 
-	// Will fail with EXERCISE_GENERATION_FAILED because we haven't mocked LLM
+	// Since we pointed OPENAI_URL to a dummy invalid local address, it should fail with a connection error
+	// triggering the EXERCISE_GENERATION_FAILED reliably without flaky external network calls.
 	if rr.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d. body: %s", rr.Code, rr.Body.String())
 	}
@@ -218,12 +233,6 @@ func TestExerciseSelection_AutoGenTriggered(t *testing.T) {
 	var errResp map[string]interface{}
 	json.Unmarshal(rr.Body.Bytes(), &errResp)
 
-	// Wait, the error is OPENAI_API_KEY is not configured which triggers a different error code, let's see:
-	// wait, llm.GenerateAndCacheExercises returns it. In handleExercises, if it's missing config, it might just return EXERCISE_GENERATION_FAILED or MISSING_CONFIG.
-	// In the log: [EXERCISES] ERROR generating exercises for topic t1 user user1: OPENAI_API_KEY is not configured
-	// The response is written with `EXERCISE_GENERATION_FAILED` unless it's a timeout.
-	// Wait, the log shows expected EXERCISE_GENERATION_FAILED, got <nil>. That means `errResp["code"]` is nil or not there.
-	// Oh, `errResp["error"]` is probably it, wait, the response format for `writeJSONError` is `{"error": {"code": "...", "message": "...", ...}}`.
 	if errMap, ok := errResp["error"].(map[string]interface{}); ok {
 		if errMap["code"] != "EXERCISE_GENERATION_FAILED" {
 			t.Errorf("expected EXERCISE_GENERATION_FAILED, got %v", errMap["code"])
