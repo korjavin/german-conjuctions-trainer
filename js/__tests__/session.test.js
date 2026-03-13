@@ -59,12 +59,14 @@ describe('session.js', () => {
                         id: 'ex1',
                         audio_file_path: '/audio1.mp3',
                         is_favorite: true,
+                        topic_id: 'child-topic-123',
                         exercise_json: { correct_german_sentence: 'S1' }
                     },
                     {
                         id: 'ex2',
                         audio_file_path: '/audio2.mp3',
                         is_favorite: false,
+                        topic_id: 'parent-topic-456',
                         exercise_json: { correct_german_sentence: 'S2' }
                     }
                 ]
@@ -79,7 +81,8 @@ describe('session.js', () => {
                 id: 'ex1',
                 correct_german_sentence: 'S1',
                 audio_file_path: '/audio1.mp3',
-                is_favorite: true
+                is_favorite: true,
+                topic_id: 'child-topic-123'
             });
             expect(state.exerciseIds).toEqual(['ex1', 'ex2']);
             expect(state.exercisePerformance.get('ex1')).toEqual({ hints: 0, mistakes: 0 });

@@ -19,6 +19,7 @@ export const dom = {
     constructedSentenceEl: document.getElementById('constructed-sentence'),
     scrambledWordsContainer: document.getElementById('scrambled-words-container'),
     scrambledWordsHeader: document.getElementById('scrambled-words-header'),
+    exerciseTopicLabel: document.getElementById('exercise-topic-label'),
     feedbackArea: document.getElementById('feedback-area'),
     correctSentenceDisplay: document.getElementById('correct-sentence-display'),
     exerciseCounter: document.getElementById('exercise-counter'),
