@@ -32,7 +32,6 @@ logs/
 /audio_cache
 /german.db*
 node_modules
-pnpm-lock.yaml
 
 # ralphex progress logs
 .ralphex/progress/
