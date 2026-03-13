@@ -82,6 +82,19 @@ export function renderExercise() {
     dom.explainBtn.classList.add('hidden');
     state.explanationText = '';
 
+    // Handle exercise topic label
+    if (exercise.topic_id && exercise.topic_id !== state.currentTopicId) {
+        const topic = state.topics.find(t => t.id === exercise.topic_id);
+        if (topic && dom.exerciseTopicLabel) {
+            dom.exerciseTopicLabel.textContent = topic.name;
+            dom.exerciseTopicLabel.classList.remove('hidden');
+        } else if (dom.exerciseTopicLabel) {
+            dom.exerciseTopicLabel.classList.add('hidden');
+        }
+    } else if (dom.exerciseTopicLabel) {
+        dom.exerciseTopicLabel.classList.add('hidden');
+    }
+
     // Display initial punctuation if any
     if (state.userSentence.length > 0) {
         dom.answerPrompt.classList.add('hidden');

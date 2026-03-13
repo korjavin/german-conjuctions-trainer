@@ -528,6 +528,20 @@ document.addEventListener('DOMContentLoaded', () => {
         constructedSentenceEl.innerHTML = '';
         correctSentenceDisplay.textContent = '';
 
+        // Handle exercise topic label
+        const exerciseTopicLabel = document.getElementById('exercise-topic-label');
+        if (exercise.topic_id && exercise.topic_id !== state.currentTopicId) {
+            const topic = state.topics.find(t => t.id === exercise.topic_id);
+            if (topic && exerciseTopicLabel) {
+                exerciseTopicLabel.textContent = topic.name;
+                exerciseTopicLabel.classList.remove('hidden');
+            } else if (exerciseTopicLabel) {
+                exerciseTopicLabel.classList.add('hidden');
+            }
+        } else if (exerciseTopicLabel) {
+            exerciseTopicLabel.classList.add('hidden');
+        }
+
         // Display initial punctuation if any
         if (state.userSentence.length > 0) {
             answerPrompt.classList.add('hidden');
@@ -1270,7 +1284,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     ...ex.exercise_json,
                     id: ex.id,
                     audio_file_path: ex.audio_file_path,
-                    is_favorite: ex.is_favorite || false
+                    is_favorite: ex.is_favorite || false,
+                    topic_id: ex.topic_id
                 }));
                 state.exerciseIds = data.exercises.map(ex => ex.id);
                 state.currentExerciseIndex = 0;
