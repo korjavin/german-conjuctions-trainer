@@ -5,7 +5,8 @@ import {
     handleKeyPress,
     updateFavoriteButtonState,
     getHotkey,
-    addPunctuationIfNeeded
+    addPunctuationIfNeeded,
+    renderExercise
 } from '../exercise.js';
 import { state } from '../state.js';
 import { dom } from '../dom.js';
@@ -232,6 +233,73 @@ describe('exercise.js', () => {
             const tokens = sentence.match(regex) || [];
 
             expect(tokens).toEqual(['Nein', ',', 'das', 'ist', 'nicht', 'wahr', '!']);
+        });
+    });
+
+    describe('renderExercise', () => {
+        beforeEach(() => {
+            dom.exerciseContent = document.createElement('div');
+            dom.emptyStateContainer = document.createElement('div');
+            dom.exerciseCounter = document.createElement('div');
+            dom.englishHintEl = document.createElement('div');
+            dom.scrambledWordsContainer = document.createElement('div');
+            dom.constructedSentenceEl = document.createElement('div');
+            dom.correctSentenceDisplay = document.createElement('div');
+            dom.explanationContainer = document.createElement('div');
+            dom.explainBtn = document.createElement('button');
+            dom.answerPrompt = document.createElement('div');
+            dom.exerciseTopicLabel = document.createElement('span');
+
+            // setup mocks for these
+            dom.exerciseTopicLabel.classList.add = vi.fn();
+            dom.exerciseTopicLabel.classList.remove = vi.fn();
+        });
+
+        it('hides topic label when exercise topic matches current topic', () => {
+            state.exercises = [{
+                correct_german_sentence: 'S1',
+                english_hint: 'H1',
+                topic_id: 'topic-A'
+            }];
+            state.currentExerciseIndex = 0;
+            state.currentTopicId = 'topic-A';
+            state.topics = [{ id: 'topic-A', name: 'Parent Topic' }];
+
+            renderExercise();
+
+            expect(dom.exerciseTopicLabel.classList.add).toHaveBeenCalledWith('hidden');
+        });
+
+        it('shows topic label with name when exercise topic differs from current topic', () => {
+            state.exercises = [{
+                correct_german_sentence: 'S1',
+                english_hint: 'H1',
+                topic_id: 'topic-B'
+            }];
+            state.currentExerciseIndex = 0;
+            state.currentTopicId = 'topic-A';
+            state.topics = [
+                { id: 'topic-A', name: 'Parent Topic' },
+                { id: 'topic-B', name: 'Child Topic' }
+            ];
+
+            renderExercise();
+
+            expect(dom.exerciseTopicLabel.textContent).toBe('Child Topic');
+            expect(dom.exerciseTopicLabel.classList.remove).toHaveBeenCalledWith('hidden');
+        });
+
+        it('hides topic label if topic_id is undefined', () => {
+            state.exercises = [{
+                correct_german_sentence: 'S1',
+                english_hint: 'H1'
+            }];
+            state.currentExerciseIndex = 0;
+            state.currentTopicId = 'topic-A';
+
+            renderExercise();
+
+            expect(dom.exerciseTopicLabel.classList.add).toHaveBeenCalledWith('hidden');
         });
     });
 });
