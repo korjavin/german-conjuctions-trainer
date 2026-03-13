@@ -267,7 +267,8 @@ describe('exercise.js', () => {
 
             renderExercise();
 
-            expect(dom.exerciseTopicLabel.classList.add).toHaveBeenCalledWith('hidden');
+            expect(dom.exerciseTopicLabel.textContent).toBe('');
+            expect(dom.exerciseTopicLabel.classList.add).toHaveBeenCalledWith('invisible');
         });
 
         it('shows topic label with name when exercise topic differs from current topic', () => {
@@ -286,7 +287,7 @@ describe('exercise.js', () => {
             renderExercise();
 
             expect(dom.exerciseTopicLabel.textContent).toBe('Child Topic');
-            expect(dom.exerciseTopicLabel.classList.remove).toHaveBeenCalledWith('hidden');
+            expect(dom.exerciseTopicLabel.classList.remove).toHaveBeenCalledWith('invisible');
         });
 
         it('hides topic label if topic_id is undefined', () => {
@@ -299,7 +300,8 @@ describe('exercise.js', () => {
 
             renderExercise();
 
-            expect(dom.exerciseTopicLabel.classList.add).toHaveBeenCalledWith('hidden');
+            expect(dom.exerciseTopicLabel.textContent).toBe('');
+            expect(dom.exerciseTopicLabel.classList.add).toHaveBeenCalledWith('invisible');
         });
     });
 });

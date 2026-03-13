@@ -87,12 +87,14 @@ export function renderExercise() {
         const topic = state.topics.find(t => t.id === exercise.topic_id);
         if (topic && dom.exerciseTopicLabel) {
             dom.exerciseTopicLabel.textContent = topic.name;
-            dom.exerciseTopicLabel.classList.remove('hidden');
+            dom.exerciseTopicLabel.classList.remove('invisible');
         } else if (dom.exerciseTopicLabel) {
-            dom.exerciseTopicLabel.classList.add('hidden');
+            dom.exerciseTopicLabel.textContent = '';
+            dom.exerciseTopicLabel.classList.add('invisible');
         }
     } else if (dom.exerciseTopicLabel) {
-        dom.exerciseTopicLabel.classList.add('hidden');
+        dom.exerciseTopicLabel.textContent = '';
+        dom.exerciseTopicLabel.classList.add('invisible');
     }
 
     // Display initial punctuation if any

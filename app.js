@@ -534,12 +534,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const topic = state.topics.find(t => t.id === exercise.topic_id);
             if (topic && exerciseTopicLabel) {
                 exerciseTopicLabel.textContent = topic.name;
-                exerciseTopicLabel.classList.remove('hidden');
+                exerciseTopicLabel.classList.remove('invisible');
             } else if (exerciseTopicLabel) {
-                exerciseTopicLabel.classList.add('hidden');
+                exerciseTopicLabel.textContent = '';
+                exerciseTopicLabel.classList.add('invisible');
             }
         } else if (exerciseTopicLabel) {
-            exerciseTopicLabel.classList.add('hidden');
+            exerciseTopicLabel.textContent = '';
+            exerciseTopicLabel.classList.add('invisible');
         }
 
         // Display initial punctuation if any
