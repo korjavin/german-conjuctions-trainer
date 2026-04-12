@@ -21,6 +21,8 @@ type App struct {
 	AdminGoogleID      string
 	ElevenLabs         ElevenLabsConfig
 	CORSAllowedOrigins string
+	DBPath             string
+	AudioCacheDir      string
 	clients            map[string]*rateclient
 	mu                 sync.Mutex
 	shutdown           chan struct{} // Channel to signal goroutine shutdown
@@ -62,7 +64,7 @@ func (a *App) getCORSOrigin(r *http.Request) string {
 }
 
 // New creates a new App and starts background maintenance tasks.
-func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.Config, oauthState string, adminGoogleID string, el ElevenLabsConfig, corsAllowedOrigins string) *App {
+func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.Config, oauthState string, adminGoogleID string, el ElevenLabsConfig, corsAllowedOrigins string, dbPath string, audioCacheDir string) *App {
 	a := &App{
 		DB:                 db,
 		SC:                 sc,
@@ -71,6 +73,8 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 		AdminGoogleID:      adminGoogleID,
 		ElevenLabs:         el,
 		CORSAllowedOrigins: corsAllowedOrigins,
+		DBPath:             dbPath,
+		AudioCacheDir:      audioCacheDir,
 		clients:            make(map[string]*rateclient),
 		shutdown:           make(chan struct{}),
 	}
@@ -147,6 +151,8 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/api/user/stats", a.withAuth(a.handleUserStats))
 	http.HandleFunc("/api/user/settings", a.withAuth(a.handleUserSettings))
 	http.HandleFunc("/api/user/exercisestats", a.withAuth(a.handleUserExerciseStats))
+
+	http.HandleFunc("/api/db/stats", a.withAuth(a.adminOnly(a.handleDatabaseStats)))
 
 	http.HandleFunc("/api/tts", a.handleTTS)
 	http.Handle("/audio_cache/", http.StripPrefix("/audio_cache/", http.FileServer(http.Dir("./audio_cache"))))

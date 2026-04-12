@@ -65,10 +65,10 @@ Two enhancements to the settings modal:
 - [x] Run tests — must pass before next task
 
 ### Task 3: Add admin-only `/api/db/stats` endpoint
-- [ ] Add `handleDatabaseStats` handler in `internal/app/user.go` (or new `stats.go`) — GET only, calls `a.DB.GetDatabaseStats("./audio_cache", dbFilePath)`, returns JSON
-- [ ] Register route in `internal/app/app.go`: `http.HandleFunc("/api/db/stats", a.withAuth(a.adminOnly(a.handleDatabaseStats)))`
-- [ ] Write handler test — mock storage, verify admin-only access, verify JSON response shape
-- [ ] Run tests — must pass before next task
+- [x] Add `handleDatabaseStats` handler in `internal/app/user.go` (or new `stats.go`) — GET only, calls `a.DB.GetDatabaseStats("./audio_cache", dbFilePath)`, returns JSON
+- [x] Register route in `internal/app/app.go`: `http.HandleFunc("/api/db/stats", a.withAuth(a.adminOnly(a.handleDatabaseStats)))`
+- [x] Write handler test — mock storage, verify admin-only access, verify JSON response shape
+- [x] Run tests — must pass before next task
 
 ### Task 4: Add Database section to settings modal frontend
 - [ ] Add `fetchDatabaseStatsAPI()` function in `js/api.js` — `GET /api/db/stats`

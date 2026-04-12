@@ -133,7 +133,7 @@ func main() {
 
 	db.InitializeDefaultTopics()
 
-	a := app.New(db, sc, oauthConfig, oauthState, adminGoogleID, el, corsAllowedOrigins)
+	a := app.New(db, sc, oauthConfig, oauthState, adminGoogleID, el, corsAllowedOrigins, dbPath, "./audio_cache")
 	a.RegisterRoutes()
 
 	port := os.Getenv("PORT")
