@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
 import { isPunctuation, playWordAudio, playSentenceAudio, preloadExerciseWordAudio } from './audio.js';
-import { toggleFavoriteAPI, hideExerciseAPI, fetchExplainAPI } from './api.js';
+import { toggleFavoriteAPI, toggleHideExerciseAPI, fetchExplainAPI } from './api.js';
 
 let _onSessionComplete = () => {};
 
@@ -483,7 +483,7 @@ export async function handleHideExercise() {
     const exerciseId = state.exerciseIds[state.currentExerciseIndex];
 
     try {
-        await hideExerciseAPI(exerciseId);
+        await toggleHideExerciseAPI(exerciseId);
     } catch (error) {
         console.error('Error hiding exercise:', error);
         alert('Failed to remove exercise. Please try again.');

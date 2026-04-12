@@ -86,6 +86,7 @@ type ExerciseHistoryItem struct {
 	NextReviewDays     float64   `json:"next_review_days"`
 	ReadyToRepeat      bool      `json:"ready_to_repeat"`
 	IsFavorite         bool      `json:"is_favorite"`
+	IsHidden           bool      `json:"is_hidden"`
 }
 
 // TopicKeyTerms holds automatically extracted key terms for a topic's prompt.
@@ -134,7 +135,7 @@ type Storage interface {
 	GetUserExerciseStats(userID string) (*UserExerciseStats, error)
 	GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error)
 	ToggleFavorite(userID, exerciseID string) (bool, error)
-	HideExercise(userID, exerciseID string) error
+	ToggleHideExercise(userID, exerciseID string) (bool, error)
 
 	// Initialization
 	InitializeDefaultTopics()

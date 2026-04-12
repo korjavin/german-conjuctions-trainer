@@ -153,13 +153,14 @@ export async function toggleFavoriteAPI(exerciseId) {
     return response.json();
 }
 
-export async function hideExerciseAPI(exerciseId) {
+export async function toggleHideExerciseAPI(exerciseId) {
     const response = await fetch('/api/exercises/hide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ exercise_id: exerciseId })
     });
-    if (!response.ok) throw new Error('Failed to hide exercise');
+    if (!response.ok) throw new Error('Failed to toggle hide exercise');
+    return response.json();
 }
 
 export async function saveUserStatsAPI(data) {

@@ -191,6 +191,7 @@ export const state = {
     historyFilterReady: false,
     historyFilterFavorites: false,
     historyFilterTrained: false,
+    historyFilterIgnored: false,
     historySortDimension: 'sooner', // sooner, later, most_errors, fewest_errors, newest, oldest
     // Virtual scrolling state
     virtualScrollEnabled: false,

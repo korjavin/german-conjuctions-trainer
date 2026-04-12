@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { loadExerciseHistoryAPI } from './api.js';
+import { loadExerciseHistoryAPI, toggleHideExerciseAPI } from './api.js';
 
 export async function showExerciseHistory() {
     if (!state.isLoggedIn) {
@@ -33,6 +33,7 @@ export async function showExerciseHistory() {
         state.historyFilterReady = false;
         state.historyFilterFavorites = false;
         state.historyFilterTrained = false;
+        state.historyFilterIgnored = false;
         state.historySortDimension = 'sooner';
         updateHistoryFilterUI();
         updateHistorySortUI();
@@ -45,23 +46,26 @@ export async function showExerciseHistory() {
             dom.historyControlsContainer.classList.add('hidden');
             dom.historyReviewChart.classList.add('hidden');
         } else {
-            // Calculate summary statistics
-            const totalAttempts = state.historyData.reduce((sum, item) => sum + item.total_attempts, 0);
-            const totalSuccessful = state.historyData.reduce((sum, item) => sum + item.successful_attempts, 0);
+            // Calculate summary statistics (exclude ignored exercises)
+            const activeData = state.historyData.filter(item => !item.is_hidden);
+            const totalAttempts = activeData.reduce((sum, item) => sum + item.total_attempts, 0);
+            const totalSuccessful = activeData.reduce((sum, item) => sum + item.successful_attempts, 0);
             const successRate = totalAttempts > 0 ? Math.round((totalSuccessful / totalAttempts) * 100) : 0;
 
             // Update summary display
-            dom.historyTotalCount.textContent = state.historyData.length;
+            dom.historyTotalCount.textContent = activeData.length;
             dom.historySuccessRate.textContent = successRate + '%';
             dom.historyTotalAttempts.textContent = totalAttempts;
 
             // Update filter counts
-            const readyCount = state.historyData.filter(item => item.ready_to_repeat).length;
+            const readyCount = state.historyData.filter(item => !item.is_hidden && item.ready_to_repeat).length;
             const favoritesCount = state.historyData.filter(item => item.is_favorite).length;
-            const trainedCount = state.historyData.filter(item => !item.ready_to_repeat).length;
+            const trainedCount = state.historyData.filter(item => !item.is_hidden && !item.ready_to_repeat).length;
+            const ignoredCount = state.historyData.filter(item => item.is_hidden).length;
             dom.historyFilterReadyCount.textContent = String(readyCount);
             dom.historyFilterFavoritesCount.textContent = String(favoritesCount);
             dom.historyFilterTrainedCount.textContent = String(trainedCount);
+            dom.historyFilterIgnoredCount.textContent = String(ignoredCount);
 
             dom.historySummary.classList.remove('hidden');
             dom.historyControlsContainer.classList.remove('hidden');
@@ -87,6 +91,13 @@ export async function showExerciseHistory() {
 
 export function getFilteredHistoryData() {
     let filtered = [...state.historyData].filter(item => {
+        // When "Ignored" filter is active, show only hidden items
+        if (state.historyFilterIgnored) {
+            if (!item.is_hidden) return false;
+        } else {
+            // By default, hide ignored exercises
+            if (item.is_hidden) return false;
+        }
         let matches = true;
         if (state.historyFilterReady) {
             matches = matches && item.ready_to_repeat;
@@ -144,6 +155,7 @@ export function renderReviewChart() {
     const buckets = new Array(DAYS_TO_SHOW + 1).fill(0);
 
     state.historyData.forEach(item => {
+        if (item.is_hidden) return; // Exclude ignored exercises from chart
         if (item.ready_to_repeat) {
             buckets[0]++;
             return;
@@ -256,9 +268,30 @@ function createHistoryItem(item) {
 
     container.querySelector('.history-item-hint').textContent = item.english_hint;
 
+    // Ignore toggle button
+    const ignoreBtn = container.querySelector('.history-item-ignore-btn');
+    if (item.is_hidden) {
+        container.classList.add('history-item-ignored');
+        ignoreBtn.classList.add('active');
+        ignoreBtn.title = 'Unignore this exercise';
+    }
+    ignoreBtn.addEventListener('click', async () => {
+        try {
+            const result = await toggleHideExerciseAPI(item.exercise_id);
+            item.is_hidden = result.is_hidden;
+            // Re-render to update counts and list
+            updateHistoryStats();
+            renderHistoryPage();
+        } catch (error) {
+            console.error('Error toggling ignore:', error);
+        }
+    });
+
     // Status Badge
     const statusContainer = container.querySelector('.history-item-status-container');
-    if (item.ready_to_repeat) {
+    if (item.is_hidden) {
+        statusContainer.innerHTML = '<span class="badge-ignored">Ignored</span>';
+    } else if (item.ready_to_repeat) {
         statusContainer.innerHTML = '<span class="badge-success">Ready to Practice</span>';
     } else {
         const daysUntilReady = Math.ceil(item.next_review_days - ((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60 * 24)));
@@ -282,6 +315,28 @@ function createHistoryItem(item) {
     else rateEl.style.color = '#dc2626'; // text-red-600
 
     return container;
+}
+
+export function updateHistoryStats() {
+    const activeData = state.historyData.filter(item => !item.is_hidden);
+    const totalAttempts = activeData.reduce((sum, item) => sum + item.total_attempts, 0);
+    const totalSuccessful = activeData.reduce((sum, item) => sum + item.successful_attempts, 0);
+    const successRate = totalAttempts > 0 ? Math.round((totalSuccessful / totalAttempts) * 100) : 0;
+
+    dom.historyTotalCount.textContent = activeData.length;
+    dom.historySuccessRate.textContent = successRate + '%';
+    dom.historyTotalAttempts.textContent = totalAttempts;
+
+    const readyCount = state.historyData.filter(item => !item.is_hidden && item.ready_to_repeat).length;
+    const favoritesCount = state.historyData.filter(item => item.is_favorite).length;
+    const trainedCount = state.historyData.filter(item => !item.is_hidden && !item.ready_to_repeat).length;
+    const ignoredCount = state.historyData.filter(item => item.is_hidden).length;
+    dom.historyFilterReadyCount.textContent = String(readyCount);
+    dom.historyFilterFavoritesCount.textContent = String(favoritesCount);
+    dom.historyFilterTrainedCount.textContent = String(trainedCount);
+    dom.historyFilterIgnoredCount.textContent = String(ignoredCount);
+
+    renderReviewChart();
 }
 
 function escapeHtml(text) {
@@ -313,6 +368,13 @@ export function updateHistoryFilterUI() {
         dom.historyFilterTrained.classList.add('active-yellow');
     } else {
         dom.historyFilterTrained.classList.remove('active-yellow');
+    }
+
+    // Update Ignored filter UI
+    if (state.historyFilterIgnored) {
+        dom.historyFilterIgnored.classList.add('active-gray');
+    } else {
+        dom.historyFilterIgnored.classList.remove('active-gray');
     }
 }
 

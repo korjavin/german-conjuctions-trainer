@@ -335,16 +335,19 @@ func (a *App) handleExerciseHide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.DB.HideExercise(userID, req.ExerciseID); err != nil {
-		log.Printf("ERROR: failed to hide exercise for user %s exercise %s: %v", userID, req.ExerciseID, err)
-		http.Error(w, fmt.Sprintf("Failed to hide exercise: %v", err), http.StatusInternalServerError)
+	newStatus, err := a.DB.ToggleHideExercise(userID, req.ExerciseID)
+	if err != nil {
+		log.Printf("ERROR: failed to toggle hide exercise for user %s exercise %s: %v", userID, req.ExerciseID, err)
+		http.Error(w, fmt.Sprintf("Failed to toggle hide exercise: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[HIDE] User %s hid exercise %s", userID, req.ExerciseID)
+	log.Printf("[HIDE] User %s toggled hide for exercise %s to %v", userID, req.ExerciseID, newStatus)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "hidden"})
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"is_hidden": newStatus,
+	})
 }
 
 func (a *App) handleExplain(w http.ResponseWriter, r *http.Request) {

@@ -395,6 +395,13 @@ Situations: [contexts, e.g. explaining reasons, expressing goals, giving instruc
                         Favorites
                         <span id="history-filter-favorites-count" class="filter-count-badge"></span>
                     </button>
+                    <button id="history-filter-ignored" class="filter-btn flex items-center gap-1">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                        </svg>
+                        Ignored
+                        <span id="history-filter-ignored-count" class="filter-count-badge"></span>
+                    </button>
                 </div>
 
                 <div id="history-sort-controls" class="flex items-center gap-2">
@@ -433,7 +440,14 @@ Situations: [contexts, e.g. explaining reasons, expressing goals, giving instruc
                     <h3 class="history-item-title flex items-center"></h3>
                     <p class="history-item-hint mt-1"></p>
                 </div>
-                <div class="history-item-status-container ml-4"></div>
+                <div class="flex items-start gap-2 ml-4">
+                    <div class="history-item-status-container"></div>
+                    <button class="history-item-ignore-btn" title="Toggle ignore">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="history-item-footer flex items-center justify-between mt-3 pt-3">
                 <div class="flex space-x-4 history-item-meta">

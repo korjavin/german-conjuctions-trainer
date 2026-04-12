@@ -111,6 +111,8 @@ export const dom = {
     historyFilterFavoritesCount: document.getElementById('history-filter-favorites-count'),
     historyFilterTrained: document.getElementById('history-filter-trained'),
     historyFilterTrainedCount: document.getElementById('history-filter-trained-count'),
+    historyFilterIgnored: document.getElementById('history-filter-ignored'),
+    historyFilterIgnoredCount: document.getElementById('history-filter-ignored-count'),
     historySortTiming: document.getElementById('history-sort-timing'),
     historySortErrors: document.getElementById('history-sort-errors'),
     historySortDate: document.getElementById('history-sort-date'),

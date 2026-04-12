@@ -1184,7 +1184,8 @@ func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*Exerc
 			uev.failed_attempts,
 			uev.hints_used,
 			uev.mistakes_made,
-			uev.is_favorite
+			uev.is_favorite,
+			uev.is_hidden
 		FROM user_exercise_views uev
 		JOIN exercises e ON uev.exercise_id = e.id
 		JOIN topics t ON e.topic_id = t.id
@@ -1238,6 +1239,7 @@ func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*Exerc
 			&item.HintsUsed,
 			&item.MistakesMade,
 			&item.IsFavorite,
+			&item.IsHidden,
 		); err != nil {
 			return nil, err
 		}
@@ -1324,11 +1326,47 @@ func (s *SQLiteStorage) ToggleFavorite(userID, exerciseID string) (bool, error) 
 	return newStatus, nil
 }
 
-func (s *SQLiteStorage) HideExercise(userID, exerciseID string) error {
-	_, err := s.db.Exec(`
-		INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter, is_hidden)
-		VALUES(?, ?, ?, ?, 0, 1)
-		ON CONFLICT(user_id, exercise_id) DO UPDATE SET is_hidden = 1
-	`, uuid.NewString(), userID, exerciseID, time.Now().UTC())
-	return err
+func (s *SQLiteStorage) ToggleHideExercise(userID, exerciseID string) (bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	var isHidden bool
+	var exists bool
+	row := tx.QueryRow("SELECT is_hidden FROM user_exercise_views WHERE user_id = ? AND exercise_id = ?", userID, exerciseID)
+	err = row.Scan(&isHidden)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			exists = false
+		} else {
+			return false, err
+		}
+	} else {
+		exists = true
+	}
+
+	newStatus := !isHidden
+
+	if exists {
+		_, err = tx.Exec("UPDATE user_exercise_views SET is_hidden = ? WHERE user_id = ? AND exercise_id = ?", newStatus, userID, exerciseID)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		_, err = tx.Exec(`
+			INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter, is_hidden)
+			VALUES(?, ?, ?, ?, 0, ?)
+		`, uuid.NewString(), userID, exerciseID, time.Now().UTC(), newStatus)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+
+	return newStatus, nil
 }

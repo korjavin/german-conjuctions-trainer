@@ -329,6 +329,18 @@ dom.historyFilterTrained.addEventListener('click', () => {
     renderHistoryPage();
 });
 
+dom.historyFilterIgnored.addEventListener('click', () => {
+    state.historyFilterIgnored = !state.historyFilterIgnored;
+    // When showing ignored, clear other filters
+    if (state.historyFilterIgnored) {
+        state.historyFilterReady = false;
+        state.historyFilterTrained = false;
+    }
+    state.historyPage = 1;
+    updateHistoryFilterUI();
+    renderHistoryPage();
+});
+
 dom.historyPrevBtn.addEventListener('click', () => {
     if (state.historyPage > 1) {
         state.historyPage--;
@@ -339,6 +351,11 @@ dom.historyPrevBtn.addEventListener('click', () => {
 dom.historyNextBtn.addEventListener('click', () => {
     // getFilteredHistoryData is internal to history.js; compute total pages here
     const filteredCount = state.historyData.filter(item => {
+        if (state.historyFilterIgnored) {
+            if (!item.is_hidden) return false;
+        } else {
+            if (item.is_hidden) return false;
+        }
         let matches = true;
         if (state.historyFilterReady) matches = matches && item.ready_to_repeat;
         if (state.historyFilterFavorites) matches = matches && item.is_favorite;
