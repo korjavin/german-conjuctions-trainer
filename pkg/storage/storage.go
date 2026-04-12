@@ -96,6 +96,23 @@ type TopicKeyTerms struct {
 	Terms      []string `json:"terms"`
 }
 
+// DatabaseStats holds aggregate statistics about the database.
+type DatabaseStats struct {
+	TotalExercises      int                `json:"total_exercises"`
+	TotalTopics         int                `json:"total_topics"`
+	AudioCacheSizeMB    float64            `json:"audio_cache_size_mb"`
+	AudioCacheFileCount int                `json:"audio_cache_file_count"`
+	DatabaseSizeMB      float64            `json:"database_size_mb"`
+	ExercisesPerTopic   []TopicExerciseCount `json:"exercises_per_topic"`
+}
+
+// TopicExerciseCount holds the exercise count for a single topic.
+type TopicExerciseCount struct {
+	TopicID   string `json:"topic_id"`
+	TopicName string `json:"topic_name"`
+	Count     int    `json:"count"`
+}
+
 // Storage defines the interface for database operations.
 type Storage interface {
 	// Topics
@@ -136,6 +153,9 @@ type Storage interface {
 	GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error)
 	ToggleFavorite(userID, exerciseID string) (bool, error)
 	ToggleHideExercise(userID, exerciseID string) (bool, error)
+
+	// Statistics
+	GetDatabaseStats(audioCacheDir, dbFilePath string) (*DatabaseStats, error)
 
 	// Initialization
 	InitializeDefaultTopics()

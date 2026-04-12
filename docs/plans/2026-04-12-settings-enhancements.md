@@ -43,7 +43,7 @@ Two enhancements to the settings modal:
 - [x] Run tests — must pass before next task
 
 ### Task 2: Add `GetDatabaseStats` to storage layer
-- [ ] Define `DatabaseStats` struct in `pkg/storage/storage.go`:
+- [x] Define `DatabaseStats` struct in `pkg/storage/storage.go`:
   ```go
   type DatabaseStats struct {
       TotalExercises       int              `json:"total_exercises"`
@@ -59,10 +59,10 @@ Two enhancements to the settings modal:
       Count     int    `json:"count"`
   }
   ```
-- [ ] Add `GetDatabaseStats(audioCacheDir, dbFilePath string) (*DatabaseStats, error)` to `Storage` interface
-- [ ] Implement in `pkg/storage/sqlite.go`: query `SELECT COUNT(*) FROM exercises`, `SELECT COUNT(*) FROM topics`, `SELECT t.id, t.name, COUNT(e.id) FROM topics t LEFT JOIN exercises e ON t.id = e.topic_id GROUP BY t.id` for per-topic counts; walk `audioCacheDir` for file count + total size; `os.Stat(dbFilePath)` for DB size
-- [ ] Write tests for `GetDatabaseStats` — verify counts match inserted test data
-- [ ] Run tests — must pass before next task
+- [x] Add `GetDatabaseStats(audioCacheDir, dbFilePath string) (*DatabaseStats, error)` to `Storage` interface
+- [x] Implement in `pkg/storage/sqlite.go`: query `SELECT COUNT(*) FROM exercises`, `SELECT COUNT(*) FROM topics`, `SELECT t.id, t.name, COUNT(e.id) FROM topics t LEFT JOIN exercises e ON t.id = e.topic_id GROUP BY t.id` for per-topic counts; walk `audioCacheDir` for file count + total size; `os.Stat(dbFilePath)` for DB size
+- [x] Write tests for `GetDatabaseStats` — verify counts match inserted test data
+- [x] Run tests — must pass before next task
 
 ### Task 3: Add admin-only `/api/db/stats` endpoint
 - [ ] Add `handleDatabaseStats` handler in `internal/app/user.go` (or new `stats.go`) — GET only, calls `a.DB.GetDatabaseStats("./audio_cache", dbFilePath)`, returns JSON
