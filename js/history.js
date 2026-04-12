@@ -58,9 +58,9 @@ export async function showExerciseHistory() {
             const readyCount = state.historyData.filter(item => item.ready_to_repeat).length;
             const favoritesCount = state.historyData.filter(item => item.is_favorite).length;
             const trainedCount = state.historyData.filter(item => !item.ready_to_repeat).length;
-            dom.historyFilterReadyCount.textContent = readyCount;
-            dom.historyFilterFavoritesCount.textContent = favoritesCount;
-            dom.historyFilterTrainedCount.textContent = trainedCount;
+            dom.historyFilterReadyCount.textContent = String(readyCount);
+            dom.historyFilterFavoritesCount.textContent = String(favoritesCount);
+            dom.historyFilterTrainedCount.textContent = String(trainedCount);
 
             dom.historySummary.classList.remove('hidden');
             dom.historyControlsContainer.classList.remove('hidden');
