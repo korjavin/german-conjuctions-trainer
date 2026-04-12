@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -1369,4 +1371,72 @@ func (s *SQLiteStorage) ToggleHideExercise(userID, exerciseID string) (bool, err
 	}
 
 	return newStatus, nil
+}
+
+// GetDatabaseStats returns aggregate statistics about the database, audio cache, and DB file.
+func (s *SQLiteStorage) GetDatabaseStats(audioCacheDir, dbFilePath string) (*DatabaseStats, error) {
+	stats := &DatabaseStats{
+		ExercisesPerTopic: []TopicExerciseCount{},
+	}
+
+	// Total exercises
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM exercises").Scan(&stats.TotalExercises); err != nil {
+		return nil, fmt.Errorf("counting exercises: %w", err)
+	}
+
+	// Total topics
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM topics").Scan(&stats.TotalTopics); err != nil {
+		return nil, fmt.Errorf("counting topics: %w", err)
+	}
+
+	// Per-topic exercise counts
+	rows, err := s.db.Query(`
+		SELECT t.id, t.name, COUNT(e.id)
+		FROM topics t
+		LEFT JOIN exercises e ON e.topic_id = t.id
+		GROUP BY t.id, t.name
+		ORDER BY t.name
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("querying per-topic counts: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var tc TopicExerciseCount
+		if err := rows.Scan(&tc.TopicID, &tc.TopicName, &tc.Count); err != nil {
+			return nil, fmt.Errorf("scanning topic count: %w", err)
+		}
+		stats.ExercisesPerTopic = append(stats.ExercisesPerTopic, tc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating topic counts: %w", err)
+	}
+
+	// Audio cache size and file count
+	if audioCacheDir != "" {
+		var totalSize int64
+		var fileCount int
+		_ = filepath.Walk(audioCacheDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil // skip inaccessible entries
+			}
+			if !info.IsDir() {
+				totalSize += info.Size()
+				fileCount++
+			}
+			return nil
+		})
+		stats.AudioCacheSizeMB = float64(totalSize) / (1024 * 1024)
+		stats.AudioCacheFileCount = fileCount
+	}
+
+	// Database file size
+	if dbFilePath != "" {
+		if fi, err := os.Stat(dbFilePath); err == nil {
+			stats.DatabaseSizeMB = float64(fi.Size()) / (1024 * 1024)
+		}
+	}
+
+	return stats, nil
 }

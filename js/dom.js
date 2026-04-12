@@ -31,6 +31,8 @@ export const dom = {
     topicsSearchInput: document.getElementById('topics-search-input'),
     topicsSearchClear: document.getElementById('topics-search-clear'),
     topicSort: document.getElementById('topic-sort'),
+    collapseAllBtn: document.getElementById('collapse-all-btn'),
+    expandAllBtn: document.getElementById('expand-all-btn'),
     addTopicBtn: document.getElementById('add-topic-btn'),
     addTopicForm: document.getElementById('add-topic-form'),
     newTopicName: document.getElementById('new-topic-name'),
@@ -118,4 +120,16 @@ export const dom = {
     historySortDate: document.getElementById('history-sort-date'),
     historyReviewChart: document.getElementById('history-review-chart'),
     historyReviewChartBars: document.getElementById('history-review-chart-bars'),
+
+    // Database stats
+    dbStatsSection: document.getElementById('db-stats-section'),
+    dbStatsContainer: document.getElementById('db-stats-container'),
+    dbStatsLoading: document.getElementById('db-stats-loading'),
+    dbStatsContent: document.getElementById('db-stats-content'),
+    dbStatsError: document.getElementById('db-stats-error'),
+    dbStatExercises: document.getElementById('db-stat-exercises'),
+    dbStatTopics: document.getElementById('db-stat-topics'),
+    dbStatDbSize: document.getElementById('db-stat-db-size'),
+    dbStatAudioCache: document.getElementById('db-stat-audio-cache'),
+    dbStatsPerTopic: document.getElementById('db-stats-per-topic'),
 };

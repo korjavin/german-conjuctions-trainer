@@ -250,3 +250,9 @@ export async function fetchLastRefinedPromptAPI() {
     if (!response.ok) throw new Error('Failed to fetch generation prompt details.');
     return response.json();
 }
+
+export async function fetchDatabaseStatsAPI() {
+    const response = await fetch('/api/db/stats');
+    if (!response.ok) throw new Error('Failed to fetch database stats');
+    return response.json();
+}

@@ -1,4 +1,4 @@
-import { state, toggleTopicCollapse, isTopicCollapsed, addRecentlyUsedTopic } from './state.js';
+import { state, toggleTopicCollapse, isTopicCollapsed, collapseAllTopics, expandAllTopics, addRecentlyUsedTopic } from './state.js';
 import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
 import {
@@ -47,12 +47,14 @@ import {
     getTopicPath,
     debounce,
     resetDropdownCollapseState,
+    escapeHtml,
     BLUR_TIMEOUT_MS,
     FOCUSOUT_TIMEOUT_MS,
 } from './topics.js';
 import {
     checkAuthStatus,
 } from './auth.js';
+import { fetchDatabaseStatsAPI } from './api.js';
 import {
     showExerciseHistory,
     renderHistoryPage,
@@ -87,6 +89,7 @@ initSession({ renderExercise });
 dom.settingsBtn.addEventListener('click', () => {
     loadTopics(); // Refresh topics when opening settings
     dom.settingsModal.showModal();
+    loadDatabaseStats();
 });
 
 dom.settingsCloseBtn.addEventListener('click', () => {
@@ -108,6 +111,16 @@ if (dom.topicSort) {
         renderTopicsList();
     });
 }
+
+dom.collapseAllBtn.addEventListener('click', () => {
+    collapseAllTopics();
+    renderTopicsList();
+});
+
+dom.expandAllBtn.addEventListener('click', () => {
+    expandAllTopics();
+    renderTopicsList();
+});
 
 dom.addTopicBtn.addEventListener('click', () => showAddTopicForm(null));
 dom.cancelAddBtn.addEventListener('click', hideAddTopicForm);
@@ -264,6 +277,7 @@ document.addEventListener('keydown', (e) => {
         // Open settings modal if not already open
         if (!dom.settingsModal.open) {
             dom.settingsModal.showModal();
+            loadDatabaseStats();
         }
         // Focus search input
         dom.topicsSearchInput.focus();
@@ -369,6 +383,49 @@ dom.historyNextBtn.addEventListener('click', () => {
     }
 });
 
+// --- Database Stats ---
+async function loadDatabaseStats() {
+    if (!state.isAdmin) {
+        dom.dbStatsSection.classList.add('hidden');
+        return;
+    }
+
+    dom.dbStatsSection.classList.remove('hidden');
+    dom.dbStatsLoading.classList.remove('hidden');
+    dom.dbStatsContent.classList.add('hidden');
+    dom.dbStatsError.classList.add('hidden');
+
+    try {
+        const stats = await fetchDatabaseStatsAPI();
+        renderDatabaseStats(stats);
+    } catch (error) {
+        dom.dbStatsLoading.classList.add('hidden');
+        dom.dbStatsError.classList.remove('hidden');
+        dom.dbStatsError.textContent = 'Failed to load database statistics.';
+        console.error('Error loading database stats:', error);
+    }
+}
+
+function renderDatabaseStats(stats) {
+    dom.dbStatsLoading.classList.add('hidden');
+    dom.dbStatsContent.classList.remove('hidden');
+
+    dom.dbStatExercises.textContent = stats.total_exercises.toLocaleString();
+    dom.dbStatTopics.textContent = stats.total_topics.toLocaleString();
+    dom.dbStatDbSize.textContent = `${stats.database_size_mb.toFixed(1)} MB`;
+    dom.dbStatAudioCache.textContent = `${stats.audio_cache_size_mb.toFixed(1)} MB (${stats.audio_cache_file_count.toLocaleString()} files)`;
+
+    // Per-topic exercise counts
+    const perTopic = stats.exercises_per_topic || [];
+    if (perTopic.length === 0) {
+        dom.dbStatsPerTopic.textContent = 'No topics found.';
+    } else {
+        dom.dbStatsPerTopic.innerHTML = perTopic
+            .map(t => `<div class="db-stats-topic-row"><span class="db-stats-topic-name">${escapeHtml(t.topic_name)}</span><span class="db-stats-topic-count">${t.count}</span></div>`)
+            .join('');
+    }
+}
+
 // --- Initialization ---
 function init() {
     updateAudioToggleUI();
@@ -401,6 +458,8 @@ function init() {
         window.renderTopicsList = renderTopicsList;
         window.toggleTopicCollapse = toggleTopicCollapse;
         window.isTopicCollapsed = isTopicCollapsed;
+        window.collapseAllTopics = collapseAllTopics;
+        window.expandAllTopics = expandAllTopics;
         window.validateTopicName = validateTopicName;
         window.validateTopicPrompt = validateTopicPrompt;
         window.showFieldError = showFieldError;
