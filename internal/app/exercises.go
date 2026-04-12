@@ -107,8 +107,25 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			// Build coverage section if key terms exist for this topic
+			coverageSection := ""
+			promptHash := storage.GetPromptHash(selectedTopic.Prompt)
+			keyTerms, ktErr := a.DB.GetTopicKeyTerms(selectedTopic.ID, promptHash)
+			if ktErr == nil && keyTerms != nil && len(keyTerms.Terms) > 0 {
+				// Filter exercises for this specific topic
+				var topicExercises []*storage.Exercise
+				for _, ex := range allExercises {
+					if ex.TopicID == selectedTopic.ID && ex.PromptHash == promptHash {
+						topicExercises = append(topicExercises, ex)
+					}
+				}
+				termCounts := llm.ComputeTermCoverage(topicExercises, keyTerms.Terms)
+				coverageSection = llm.BuildCoverageSection(keyTerms.Terms, termCounts)
+				log.Printf("[EXERCISES] Coverage stats for topic %s: %d terms, %d existing exercises", selectedTopic.ID, len(keyTerms.Terms), len(topicExercises))
+			}
+
 			log.Printf("[EXERCISES] Generating new exercises for randomly selected sub-tree topic %s", randomTopicID)
-			newlyGenerated, err := llm.GenerateAndCacheExercises(selectedTopic, true)
+			newlyGenerated, err := llm.GenerateAndCacheExercises(selectedTopic, true, coverageSection)
 			if err != nil {
 				status := http.StatusBadGateway
 				code := "EXERCISE_GENERATION_FAILED"

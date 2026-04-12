@@ -125,6 +125,13 @@ func (s *SQLiteStorage) runMigrations() error {
 		`ALTER TABLE topics ADD COLUMN parent_id TEXT NULL`,
 		`ALTER TABLE topics ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`,
 		`CREATE INDEX IF NOT EXISTS idx_topics_parent ON topics(parent_id, sort_order, created_at)`,
+		`CREATE TABLE IF NOT EXISTS topic_key_terms (
+			topic_id TEXT NOT NULL,
+			prompt_hash TEXT NOT NULL,
+			terms_json TEXT NOT NULL,
+			PRIMARY KEY(topic_id, prompt_hash),
+			FOREIGN KEY(topic_id) REFERENCES topics(id) ON DELETE CASCADE
+		)`,
 	}
 
 	for _, migration := range migrations {
@@ -510,6 +517,37 @@ func (s *SQLiteStorage) DeleteTopic(topicID string) error {
 
 	_, err = stmt.Exec(topicID)
 	return err
+}
+
+func (s *SQLiteStorage) SaveTopicKeyTerms(topicID, promptHash string, terms []string) error {
+	termsJSON, err := json.Marshal(terms)
+	if err != nil {
+		return fmt.Errorf("failed to marshal terms: %w", err)
+	}
+	_, err = s.db.Exec(
+		`INSERT OR REPLACE INTO topic_key_terms (topic_id, prompt_hash, terms_json) VALUES (?, ?, ?)`,
+		topicID, promptHash, string(termsJSON),
+	)
+	return err
+}
+
+func (s *SQLiteStorage) GetTopicKeyTerms(topicID, promptHash string) (*TopicKeyTerms, error) {
+	var termsJSON string
+	err := s.db.QueryRow(
+		`SELECT terms_json FROM topic_key_terms WHERE topic_id = ? AND prompt_hash = ?`,
+		topicID, promptHash,
+	).Scan(&termsJSON)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var terms []string
+	if err := json.Unmarshal([]byte(termsJSON), &terms); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal terms: %w", err)
+	}
+	return &TopicKeyTerms{TopicID: topicID, PromptHash: promptHash, Terms: terms}, nil
 }
 
 func (s *SQLiteStorage) MoveTopic(topicID, parentID string, position *int) (*Topic, error) {

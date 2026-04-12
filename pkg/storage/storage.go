@@ -88,6 +88,13 @@ type ExerciseHistoryItem struct {
 	IsFavorite         bool      `json:"is_favorite"`
 }
 
+// TopicKeyTerms holds automatically extracted key terms for a topic's prompt.
+type TopicKeyTerms struct {
+	TopicID    string   `json:"topic_id"`
+	PromptHash string   `json:"prompt_hash"`
+	Terms      []string `json:"terms"`
+}
+
 // Storage defines the interface for database operations.
 type Storage interface {
 	// Topics
@@ -99,6 +106,10 @@ type Storage interface {
 	UpdateTopic(topicID, name, prompt string, parentID *string, sortOrder int) (*Topic, error)
 	MoveTopic(topicID, parentID string, position *int) (*Topic, error)
 	DeleteTopic(topicID string) error
+
+	// Key Terms
+	SaveTopicKeyTerms(topicID, promptHash string, terms []string) error
+	GetTopicKeyTerms(topicID, promptHash string) (*TopicKeyTerms, error)
 
 	// Versions
 	GetVersions(topicID string) ([]*PromptVersion, error)

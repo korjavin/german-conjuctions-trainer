@@ -6,7 +6,7 @@ import (
 )
 
 // BuildGenerationPrompt composes a stable prompt with dynamic variation constraints.
-func BuildGenerationPrompt(basePrompt string, profile VariationProfile) string {
+func BuildGenerationPrompt(basePrompt string, profile VariationProfile, coverageSections ...string) string {
 	trimmedBase := strings.TrimSpace(basePrompt)
 	if trimmedBase == "" {
 		trimmedBase = "Generate German language exercises for B1 learners."
@@ -47,6 +47,11 @@ func BuildGenerationPrompt(basePrompt string, profile VariationProfile) string {
 	b.WriteString("- Avoid near-duplicate sentence skeletons.\n")
 	b.WriteString("- english_hint must be a natural English translation.\n")
 	b.WriteString("- correct_german_sentence must be complete and grammatical.\n")
+
+	if len(coverageSections) > 0 && coverageSections[0] != "" {
+		b.WriteString("\n")
+		b.WriteString(coverageSections[0])
+	}
 
 	b.WriteString("\nOutput contract:\n")
 	b.WriteString("- Return only valid json.\n")

@@ -7,10 +7,61 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 
+	"german-conjunctions-trainer/pkg/llm"
 	"german-conjunctions-trainer/pkg/storage"
 )
+
+func (a *App) backfillKeyTerms() {
+	topics, err := a.DB.GetAllTopics()
+	if err != nil {
+		log.Printf("[KEY_TERMS] Backfill: failed to get topics: %v", err)
+		return
+	}
+	for _, topic := range topics {
+		promptHash := storage.GetPromptHash(topic.Prompt)
+		existing, err := a.DB.GetTopicKeyTerms(topic.ID, promptHash)
+		if err != nil {
+			log.Printf("[KEY_TERMS] Backfill: failed to check terms for topic %s: %v", topic.ID, err)
+			continue
+		}
+		if existing != nil {
+			continue
+		}
+		log.Printf("[KEY_TERMS] Backfill: extracting terms for topic %s (%s)", topic.ID, topic.Name)
+		a.extractAndSaveKeyTerms(topic.ID, topic.Prompt)
+	}
+	log.Printf("[KEY_TERMS] Backfill complete")
+}
+
+func (a *App) extractAndSaveKeyTerms(topicID, prompt string) {
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		return
+	}
+	openaiURL := os.Getenv("OPENAI_URL")
+	if openaiURL == "" {
+		openaiURL = "https://api.openai.com/v1"
+	}
+	modelName := os.Getenv("MODEL_NAME")
+	if modelName == "" {
+		modelName = "gpt-3.5-turbo-1106"
+	}
+
+	terms, err := llm.ExtractKeyTerms(prompt, apiKey, openaiURL, modelName)
+	if err != nil {
+		log.Printf("[KEY_TERMS] Failed to extract terms for topic %s: %v", topicID, err)
+		return
+	}
+	promptHash := storage.GetPromptHash(prompt)
+	if err := a.DB.SaveTopicKeyTerms(topicID, promptHash, terms); err != nil {
+		log.Printf("[KEY_TERMS] Failed to save terms for topic %s: %v", topicID, err)
+		return
+	}
+	log.Printf("[KEY_TERMS] Extracted %d terms for topic %s", len(terms), topicID)
+}
 
 type TopicRequest struct {
 	Name      string  `json:"name"`
@@ -211,6 +262,8 @@ func (a *App) handleTopics(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Failed to create topic. Please try again.", http.StatusInternalServerError)
 				return
 			}
+
+			go a.extractAndSaveKeyTerms(topic.ID, topic.Prompt)
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
@@ -458,6 +511,10 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			if promptProvided && prompt != existingTopic.Prompt {
+				go a.extractAndSaveKeyTerms(topic.ID, topic.Prompt)
+			}
+
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(topic)
 		}).ServeHTTP(w, r)
@@ -554,6 +611,10 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request) {
 				log.Printf("Failed to restore version: %v", err)
 				http.Error(w, "Failed to restore version. Please try again.", http.StatusInternalServerError)
 				return
+			}
+
+			if versionToRestore.Prompt != currentTopic.Prompt {
+				go a.extractAndSaveKeyTerms(topic.ID, topic.Prompt)
 			}
 
 			w.Header().Set("Content-Type", "application/json")

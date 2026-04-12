@@ -405,7 +405,7 @@ func GenerateExplanation(apiKey, openaiURL, modelName, topic, correctSentence st
 }
 
 // GenerateExercises calls the LLM and returns generated exercises without saving them.
-func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string) ([]GeneratedExercise, error) {
+func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName, coverageSection string) ([]GeneratedExercise, error) {
 	batchID := uuid.NewString()
 	profile := BuildVariationProfile(topic)
 	generationStarted := time.Now().UTC()
@@ -431,7 +431,7 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 		}
 	}
 
-	finalPrompt := BuildGenerationPrompt(basePrompt, profile)
+	finalPrompt := BuildGenerationPrompt(basePrompt, profile, coverageSection)
 	finalPrompt = ensurePromptContainsJSON(finalPrompt)
 	debugInfo.Prompt = finalPrompt
 
@@ -502,7 +502,7 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName string
 }
 
 // GenerateAndCacheExercises generates exercises and saves them to storage.
-func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool) ([]*storage.Exercise, error) {
+func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool, coverageSection string) ([]*storage.Exercise, error) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if strings.TrimSpace(apiKey) == "" {
 		return nil, fmt.Errorf("OPENAI_API_KEY is not configured")
@@ -516,7 +516,7 @@ func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool) ([]*sto
 		modelName = "gpt-3.5-turbo-1106"
 	}
 
-	generatedExercises, err := GenerateExercises(topic, apiKey, openaiURL, modelName)
+	generatedExercises, err := GenerateExercises(topic, apiKey, openaiURL, modelName, coverageSection)
 	if err != nil {
 		return nil, err
 	}

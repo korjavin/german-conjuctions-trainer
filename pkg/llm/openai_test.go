@@ -45,7 +45,7 @@ func TestGenerateExercisesVariationProfileSuccess(t *testing.T) {
 	defer server.Close()
 
 	topic := &storage.Topic{ID: "topic-1", Prompt: "Generate B1 exercises."}
-	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model")
+	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model", "")
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestGenerateExercisesRetriesOnMissingJSONKeywordError(t *testing.T) {
 	defer server.Close()
 
 	topic := &storage.Topic{ID: "topic-2", Prompt: "Generate B1 exercises."}
-	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model")
+	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model", "")
 	if err != nil {
 		t.Fatalf("Expected no error after retry, got: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestGenerateExercisesQualityGateRetry(t *testing.T) {
 	defer server.Close()
 
 	topic := &storage.Topic{ID: "topic-3", Prompt: "Generate B1 exercises."}
-	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model")
+	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model", "")
 	if err != nil {
 		t.Fatalf("Expected successful corrective retry, got: %v", err)
 	}
@@ -328,7 +328,7 @@ func TestGenerateExercisesRefinementFallbackWhenMalformed(t *testing.T) {
 
 	basePrompt := "B1 conjunctions um..zu and damit in daily life situations."
 	topic := &storage.Topic{ID: "topic-4", Prompt: basePrompt}
-	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model")
+	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model", "")
 	if err != nil {
 		t.Fatalf("Expected successful fallback generation, got: %v", err)
 	}

@@ -56,6 +56,14 @@ func (m *mockStorage) GetUserExerciseViews(userID string) (map[string]*storage.U
 	return m.userViews, nil
 }
 
+func (m *mockStorage) GetTopicKeyTerms(topicID, promptHash string) (*storage.TopicKeyTerms, error) {
+	return nil, nil
+}
+
+func (m *mockStorage) SaveTopicKeyTerms(topicID, promptHash string, terms []string) error {
+	return nil
+}
+
 func (m *mockStorage) Close() error {
 	return nil
 }
