@@ -80,13 +80,13 @@ Two enhancements to the settings modal:
 - [x] Run tests — must pass before next task
 
 ### Task 5: Verify acceptance criteria
-- [ ] Collapse All button collapses every parent topic in the tree
-- [ ] Expand All button expands every collapsed topic
-- [ ] Buttons work correctly during search (respect search state)
-- [ ] Database stats section visible only for admin users
-- [ ] Stats show total exercises, topics, audio cache info, DB size, per-topic counts
-- [ ] Run full test suite (unit tests)
-- [ ] Run linter — all issues must be fixed
+- [x] Collapse All button collapses every parent topic in the tree
+- [x] Expand All button expands every collapsed topic
+- [x] Buttons work correctly during search (respect search state)
+- [x] Database stats section visible only for admin users
+- [x] Stats show total exercises, topics, audio cache info, DB size, per-topic counts
+- [x] Run full test suite (unit tests)
+- [x] Run linter — all issues must be fixed
 
 ### Task 6: [Final] Update documentation
 - [ ] Update README.md if needed
