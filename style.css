@@ -1789,3 +1789,75 @@ button:disabled.is-audio-off {
     white-space: nowrap;
     border-width: 0;
 }
+
+/* Review chart */
+.review-chart {
+    background: var(--mr-cream-soft);
+    border: 1px solid var(--mr-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-3) var(--spacing-4);
+    margin-bottom: var(--spacing-4);
+}
+
+.review-chart-header {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--mr-text-muted);
+    margin-bottom: var(--spacing-2);
+}
+
+.review-chart-bars {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.rc-col {
+    flex: 1 1 0%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.rc-count {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--mr-text);
+    height: 14px;
+    line-height: 14px;
+    text-align: center;
+}
+
+.rc-track {
+    width: 100%;
+    height: 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.rc-bar {
+    width: 80%;
+    max-width: 32px;
+    min-width: 6px;
+    border-radius: 3px 3px 0 0;
+    background: var(--mr-orange-bright);
+}
+
+.rc-bar-today {
+    background: var(--mr-success);
+}
+
+.rc-bar-later {
+    background: var(--mr-text-muted);
+    opacity: 0.4;
+}
+
+.rc-label {
+    font-size: 0.625rem;
+    color: var(--mr-text-muted);
+    line-height: 1;
+    text-align: center;
+}
