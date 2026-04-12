@@ -136,11 +136,11 @@ export function getFilteredHistoryData() {
 }
 
 export function renderReviewChart() {
-    const DAYS_TO_SHOW = 14;
+    const DAYS_TO_SHOW = 7;
     const now = Date.now();
     const msPerDay = 1000 * 60 * 60 * 24;
 
-    // Build buckets: day 0 = today, day 1 = tomorrow, ..., day DAYS_TO_SHOW = "later"
+    // Buckets: 0=today, 1..6=next days, 7="later"
     const buckets = new Array(DAYS_TO_SHOW + 1).fill(0);
 
     state.historyData.forEach(item => {
@@ -151,54 +151,37 @@ export function renderReviewChart() {
         const lastViewed = new Date(item.last_viewed).getTime();
         const reviewAt = lastViewed + item.next_review_days * msPerDay;
         const daysFromNow = Math.max(0, Math.ceil((reviewAt - now) / msPerDay));
-        if (daysFromNow >= DAYS_TO_SHOW) {
-            buckets[DAYS_TO_SHOW]++;
-        } else {
-            buckets[daysFromNow]++;
-        }
+        buckets[Math.min(daysFromNow, DAYS_TO_SHOW)]++;
     });
 
     const maxCount = Math.max(...buckets, 1);
-
-    // Build labels
     const today = new Date();
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
     const labels = [];
     for (let i = 0; i < DAYS_TO_SHOW; i++) {
         const d = new Date(today);
         d.setDate(d.getDate() + i);
         if (i === 0) labels.push('Today');
-        else if (i === 1) labels.push('Tmrw');
-        else labels.push(`${d.getDate()}/${d.getMonth() + 1}`);
+        else labels.push(dayNames[d.getDay()]);
     }
-    labels.push(`${DAYS_TO_SHOW}d+`);
+    labels.push('Later');
 
-    // Render
-    dom.historyReviewChartBars.replaceChildren();
+    // Build HTML directly for reliable rendering
+    let html = '';
     buckets.forEach((count, i) => {
-        const col = document.createElement('div');
-        col.className = 'review-chart-col';
-
-        const bar = document.createElement('div');
-        bar.className = 'review-chart-bar';
-        const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
-        bar.style.height = `${Math.max(pct, count > 0 ? 4 : 0)}%`;
-        if (i === 0) bar.classList.add('review-chart-bar-today');
-        else if (i === DAYS_TO_SHOW) bar.classList.add('review-chart-bar-later');
-
-        const countEl = document.createElement('div');
-        countEl.className = 'review-chart-count';
-        countEl.textContent = count > 0 ? String(count) : '';
-
-        const label = document.createElement('div');
-        label.className = 'review-chart-label';
-        label.textContent = labels[i];
-
-        col.appendChild(countEl);
-        col.appendChild(bar);
-        col.appendChild(label);
-        dom.historyReviewChartBars.appendChild(col);
+        const pct = Math.round((count / maxCount) * 100);
+        const height = count > 0 ? Math.max(pct, 6) : 0;
+        let barClass = 'rc-bar';
+        if (i === 0) barClass += ' rc-bar-today';
+        else if (i === DAYS_TO_SHOW) barClass += ' rc-bar-later';
+        html += `<div class="rc-col">` +
+            `<span class="rc-count">${count || ''}</span>` +
+            `<div class="rc-track"><div class="${barClass}" style="height:${height}%"></div></div>` +
+            `<span class="rc-label">${labels[i]}</span>` +
+            `</div>`;
     });
-
+    dom.historyReviewChartBars.innerHTML = html;
     dom.historyReviewChart.classList.remove('hidden');
 }
 

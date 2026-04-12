@@ -1616,58 +1616,55 @@ textarea:focus-visible {
   background: rgba(255, 249, 239, 0.85);
   border: 1px solid rgba(163, 63, 17, 0.15);
   border-radius: 0.5rem;
-  padding: 0.75rem 0.75rem 0.25rem;
+  padding: 0.5rem 0.75rem;
 }
 
 .review-chart-bars {
-  display: flex;
+  display: flex !important;
+  flex-direction: row !important;
   align-items: flex-end;
-  gap: 2px;
-  height: 80px;
+  gap: 4px;
 }
 
-.review-chart-col {
-  flex: 1;
+.rc-col {
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 0;
+  gap: 2px;
 }
 
-.review-chart-count {
-  font-size: 0.625rem;
+.rc-count {
+  font-size: 0.6875rem;
+  font-weight: 600;
   color: var(--mr-text, #5c3a1e);
-  line-height: 1;
-  min-height: 0.75rem;
-  text-align: center;
+  height: 14px;
+  line-height: 14px;
 }
 
-.review-chart-bar {
+.rc-track {
   width: 100%;
-  max-width: 28px;
-  min-height: 0;
-  background: #f0c27a;
-  border-radius: 2px 2px 0 0;
-  transition: height 0.3s ease;
+  height: 48px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
 
-.review-chart-bar-today {
-  background: #4ade80;
+.rc-bar {
+  width: 80%;
+  max-width: 32px;
+  border-radius: 3px 3px 0 0;
+  background: #e8b968;
+  min-width: 8px;
 }
 
-.review-chart-bar-later {
-  background: #d1d5db;
-}
+.rc-bar-today { background: #4ade80; }
+.rc-bar-later { background: #c4c4c4; }
 
-.review-chart-label {
-  font-size: 0.5625rem;
+.rc-label {
+  font-size: 0.625rem;
   color: #9ca3af;
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  text-align: center;
+  line-height: 1;
 }
 
 #history-summary > div {
