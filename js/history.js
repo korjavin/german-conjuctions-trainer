@@ -43,6 +43,7 @@ export async function showExerciseHistory() {
             dom.historyEmpty.classList.remove('hidden');
             dom.historySummary.classList.add('hidden');
             dom.historyControlsContainer.classList.add('hidden');
+            dom.historyReviewChart.classList.add('hidden');
         } else {
             // Calculate summary statistics
             const totalAttempts = state.historyData.reduce((sum, item) => sum + item.total_attempts, 0);
@@ -65,6 +66,7 @@ export async function showExerciseHistory() {
             dom.historySummary.classList.remove('hidden');
             dom.historyControlsContainer.classList.remove('hidden');
             dom.historyContent.classList.remove('hidden');
+            renderReviewChart();
             renderHistoryPage();
         }
 
@@ -73,6 +75,7 @@ export async function showExerciseHistory() {
         dom.historyLoading.classList.add('hidden');
         dom.historySummary.classList.add('hidden');
         dom.historyControlsContainer.classList.add('hidden');
+        dom.historyReviewChart.classList.add('hidden');
         if (error.status === 401) {
             alert("Your session has expired. Please log in again.");
             dom.historyModal.close();
@@ -130,6 +133,73 @@ export function getFilteredHistoryData() {
     });
 
     return filtered;
+}
+
+export function renderReviewChart() {
+    const DAYS_TO_SHOW = 14;
+    const now = Date.now();
+    const msPerDay = 1000 * 60 * 60 * 24;
+
+    // Build buckets: day 0 = today, day 1 = tomorrow, ..., day DAYS_TO_SHOW = "later"
+    const buckets = new Array(DAYS_TO_SHOW + 1).fill(0);
+
+    state.historyData.forEach(item => {
+        if (item.ready_to_repeat) {
+            buckets[0]++;
+            return;
+        }
+        const lastViewed = new Date(item.last_viewed).getTime();
+        const reviewAt = lastViewed + item.next_review_days * msPerDay;
+        const daysFromNow = Math.max(0, Math.ceil((reviewAt - now) / msPerDay));
+        if (daysFromNow >= DAYS_TO_SHOW) {
+            buckets[DAYS_TO_SHOW]++;
+        } else {
+            buckets[daysFromNow]++;
+        }
+    });
+
+    const maxCount = Math.max(...buckets, 1);
+
+    // Build labels
+    const today = new Date();
+    const labels = [];
+    for (let i = 0; i < DAYS_TO_SHOW; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        if (i === 0) labels.push('Today');
+        else if (i === 1) labels.push('Tmrw');
+        else labels.push(`${d.getDate()}/${d.getMonth() + 1}`);
+    }
+    labels.push(`${DAYS_TO_SHOW}d+`);
+
+    // Render
+    dom.historyReviewChartBars.replaceChildren();
+    buckets.forEach((count, i) => {
+        const col = document.createElement('div');
+        col.className = 'review-chart-col';
+
+        const bar = document.createElement('div');
+        bar.className = 'review-chart-bar';
+        const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
+        bar.style.height = `${Math.max(pct, count > 0 ? 4 : 0)}%`;
+        if (i === 0) bar.classList.add('review-chart-bar-today');
+        else if (i === DAYS_TO_SHOW) bar.classList.add('review-chart-bar-later');
+
+        const countEl = document.createElement('div');
+        countEl.className = 'review-chart-count';
+        countEl.textContent = count > 0 ? String(count) : '';
+
+        const label = document.createElement('div');
+        label.className = 'review-chart-label';
+        label.textContent = labels[i];
+
+        col.appendChild(countEl);
+        col.appendChild(bar);
+        col.appendChild(label);
+        dom.historyReviewChartBars.appendChild(col);
+    });
+
+    dom.historyReviewChart.classList.remove('hidden');
 }
 
 export function renderHistoryPage() {

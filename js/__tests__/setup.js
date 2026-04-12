@@ -101,6 +101,8 @@ vi.mock('../dom.js', () => {
       historyFilterTrained: createMockElement('button'),
       historyFilterTrainedCount: createMockElement('span'),
       historyControlsContainer: createMockElement('div'),
+      historyReviewChart: createMockElement('div'),
+      historyReviewChartBars: createMockElement('div'),
       historySortTiming: createMockElement('button'),
       historySortErrors: createMockElement('button'),
       historySortDate: createMockElement('button'),

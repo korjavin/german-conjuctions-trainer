@@ -114,4 +114,6 @@ export const dom = {
     historySortTiming: document.getElementById('history-sort-timing'),
     historySortErrors: document.getElementById('history-sort-errors'),
     historySortDate: document.getElementById('history-sort-date'),
+    historyReviewChart: document.getElementById('history-review-chart'),
+    historyReviewChartBars: document.getElementById('history-review-chart-bars'),
 };
