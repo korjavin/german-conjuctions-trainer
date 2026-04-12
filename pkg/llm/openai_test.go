@@ -157,7 +157,6 @@ func TestBuildGenerationPromptAddsPreambleForSimpleIntent(t *testing.T) {
 	profile := VariationProfile{
 		TargetCount:      10,
 		DifficultyLevel:  "B1",
-		VocabularyTheme:  "daily life",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -182,7 +181,6 @@ func TestBuildGenerationPromptNoPreambleForFullPrompt(t *testing.T) {
 	profile := VariationProfile{
 		TargetCount:      10,
 		DifficultyLevel:  "B1",
-		VocabularyTheme:  "daily life",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -212,7 +210,6 @@ func TestBuildGenerationPromptNoPreambleForIntentStartingWithYouAre(t *testing.T
 	profile := VariationProfile{
 		TargetCount:      10,
 		DifficultyLevel:  "B1",
-		VocabularyTheme:  "daily life",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -237,7 +234,6 @@ func TestBuildGenerationPromptCaseInsensitivePreambleDetection(t *testing.T) {
 	profile := VariationProfile{
 		TargetCount:      10,
 		DifficultyLevel:  "B1",
-		VocabularyTheme:  "daily life",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -265,7 +261,6 @@ func TestBuildGenerationPromptNoPreambleForExpertTeacher(t *testing.T) {
 	profile := VariationProfile{
 		TargetCount:      10,
 		DifficultyLevel:  "B1",
-		VocabularyTheme:  "daily life",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -289,7 +284,6 @@ func TestBuildGenerationPromptNoPreambleForExpertTutor(t *testing.T) {
 	profile := VariationProfile{
 		TargetCount:      10,
 		DifficultyLevel:  "B1",
-		VocabularyTheme:  "daily life",
 		MaxRepetitionPerTerm: 2,
 	}
 

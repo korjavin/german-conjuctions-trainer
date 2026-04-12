@@ -206,7 +206,6 @@ func cloneGenerationDebugInfo(info GenerationDebugInfo) GenerationDebugInfo {
 	copyInfo := info
 	copyInfo.Profile.ConjunctionSet = append([]string(nil), info.Profile.ConjunctionSet...)
 	copyInfo.Profile.TenseMix = append([]string(nil), info.Profile.TenseMix...)
-	copyInfo.Profile.SubjectMix = append([]string(nil), info.Profile.SubjectMix...)
 	copyInfo.Profile.SentenceForms = append([]string(nil), info.Profile.SentenceForms...)
 	copyInfo.Profile.ClausePatterns = append([]string(nil), info.Profile.ClausePatterns...)
 	copyInfo.QualityGateFailures = append([]string(nil), info.QualityGateFailures...)

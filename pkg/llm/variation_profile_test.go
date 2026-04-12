@@ -24,9 +24,6 @@ func TestBuildVariationProfileBasics(t *testing.T) {
 	if len(profile.ConjunctionSet) == 0 {
 		t.Fatalf("expected at least one conjunction target")
 	}
-	if len(profile.SubjectMix) < 3 {
-		t.Fatalf("expected at least 3 subject targets, got %d", len(profile.SubjectMix))
-	}
 	if profile.DifficultyLevel == "" {
 		t.Fatalf("expected difficulty level to be set")
 	}

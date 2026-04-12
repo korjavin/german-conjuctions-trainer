@@ -33,9 +33,7 @@ func BuildGenerationPrompt(basePrompt string, profile VariationProfile) string {
 	if len(profile.TenseMix) > 0 {
 		b.WriteString(fmt.Sprintf("- Use this tense mix across the set: %s.\n", strings.Join(profile.TenseMix, ", ")))
 	}
-	if len(profile.SubjectMix) > 0 {
-		b.WriteString(fmt.Sprintf("- Rotate subjects so these appear naturally: %s.\n", strings.Join(profile.SubjectMix, ", ")))
-	}
+	b.WriteString("- Vary grammatical subjects (ich, du, er/sie, wir, etc.) and pick additional subjects that fit the topic naturally.\n")
 	if len(profile.SentenceForms) > 0 {
 		b.WriteString(fmt.Sprintf("- Include these sentence forms: %s.\n", strings.Join(profile.SentenceForms, ", ")))
 	}
@@ -44,7 +42,7 @@ func BuildGenerationPrompt(basePrompt string, profile VariationProfile) string {
 	}
 
 	b.WriteString(fmt.Sprintf("- Keep difficulty around %s.\n", profile.DifficultyLevel))
-	b.WriteString(fmt.Sprintf("- Vocabulary theme: %s.\n", profile.VocabularyTheme))
+	b.WriteString("- Use vocabulary and subjects that fit the topic naturally. Do NOT introduce unrelated vocabulary from other domains.\n")
 	b.WriteString(fmt.Sprintf("- Limit repeated key terms to at most %d uses when possible.\n", profile.MaxRepetitionPerTerm))
 	b.WriteString("- Avoid near-duplicate sentence skeletons.\n")
 	b.WriteString("- english_hint must be a natural English translation.\n")

@@ -15,10 +15,8 @@ type VariationProfile struct {
 	TargetCount          int      `json:"target_count"`
 	ConjunctionSet       []string `json:"conjunction_set,omitempty"`
 	TenseMix             []string `json:"tense_mix"`
-	SubjectMix           []string `json:"subject_mix"`
 	SentenceForms        []string `json:"sentence_forms"`
 	ClausePatterns       []string `json:"clause_patterns"`
-	VocabularyTheme      string   `json:"vocabulary_theme"`
 	DifficultyLevel      string   `json:"difficulty_level"`
 	MaxRepetitionPerTerm int      `json:"max_repetition_per_term"`
 }
@@ -36,17 +34,6 @@ var tenseMixOptions = [][]string{
 	{"present"},
 	{"present", "perfect"},
 	{"present", "preterite", "perfect"},
-}
-
-var subjectPool = []string{
-	"ich",
-	"du",
-	"er/sie",
-	"wir",
-	"viele Menschen",
-	"die Familie",
-	"die Auswanderer",
-	"die Rueckkehrer",
 }
 
 var sentenceFormPool = []string{
@@ -78,10 +65,8 @@ func BuildVariationProfile(topic *storage.Topic) VariationProfile {
 		TargetCount:          targetExerciseCount,
 		ConjunctionSet:       selectedConjunctions,
 		TenseMix:             chooseStringSlice(rng, tenseMixOptions),
-		SubjectMix:           pickRandomSubset(rng, subjectPool, 3, 5),
 		SentenceForms:        pickRandomSubset(rng, sentenceFormPool, 3, 5),
 		ClausePatterns:       pickRandomSubset(rng, clausePatternPool, 2, 4),
-		VocabularyTheme:      inferVocabularyTheme(topic.Prompt),
 		DifficultyLevel:      "B1",
 		MaxRepetitionPerTerm: 2 + rng.Intn(2),
 	}
@@ -131,20 +116,6 @@ func selectConjunctionTargets(rng *mrand.Rand, pool []string) []string {
 
 	selected := append([]string(nil), candidates[:targetCount]...)
 	return selected
-}
-
-func inferVocabularyTheme(prompt string) string {
-	lower := strings.ToLower(prompt)
-	switch {
-	case strings.Contains(lower, "migration") || strings.Contains(lower, "integration") || strings.Contains(lower, "auswander") || strings.Contains(lower, "rueckkehr"):
-		return "migration-integration-living-abroad"
-	case strings.Contains(lower, "stud") || strings.Contains(lower, "school") || strings.Contains(lower, "university"):
-		return "education-and-career"
-	case strings.Contains(lower, "family") || strings.Contains(lower, "famil"):
-		return "family-and-daily-life"
-	default:
-		return "general-b1-context"
-	}
 }
 
 func chooseStringSlice(rng *mrand.Rand, options [][]string) []string {
