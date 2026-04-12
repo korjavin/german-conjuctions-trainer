@@ -11,7 +11,7 @@
     <link rel="shortcut icon" href="favicon.svg">
     <link rel="apple-touch-icon" href="favicon.svg">
     <meta name="theme-color" content="#A33F11">
-    <link href="style.css?v=202604121500" rel="stylesheet">
+    <link href="style.css?v=202604121600" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -64,7 +64,12 @@
                 <div class="exercise-header mb-6">
                     <div id="exercise-counter" class="exercise-counter text-center"></div>
                     <div id="progress-bar-container" class="progress-bar-container w-full mx-6">
-                        <progress id="progress-bar" class="progress-bar w-full rounded-full" value="0" max="100"></progress>
+                        <div class="progress-track">
+                            <div class="progress-milestone" style="left: 25%"></div>
+                            <div class="progress-milestone" style="left: 50%"></div>
+                            <div class="progress-milestone" style="left: 75%"></div>
+                            <div id="progress-bar" class="progress-fill" style="width: 0%"></div>
+                        </div>
                     </div>
                     <div class="progress-percentage-container text-sm">
                         <span id="progress-percentage">0%</span>
@@ -84,6 +89,10 @@
                     </div>
                 </div>
                 <div id="empty-state-container" class="text-center hidden">
+                    <div class="empty-state-proverb mb-4">
+                        <p id="proverb-de" class="proverb-de"></p>
+                        <p id="proverb-en" class="proverb-en"></p>
+                    </div>
                     <p class="empty-state-title mb-2">Ready to practice?</p>
                     <p class="empty-state-subtitle">Select a topic above and click "Start Practice" to begin.</p>
                 </div>

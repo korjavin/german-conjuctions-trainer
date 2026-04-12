@@ -5,6 +5,67 @@ import { toggleFavoriteAPI, hideExerciseAPI, fetchExplainAPI } from './api.js';
 
 let _onSessionComplete = () => {};
 
+const PROVERBS = [
+    { de: 'Übung macht den Meister', en: 'Practice makes perfect' },
+    { de: 'Aller Anfang ist schwer', en: 'Every beginning is hard' },
+    { de: 'Wer rastet, der rostet', en: 'If you rest, you rust' },
+    { de: 'Ohne Fleiß kein Preis', en: 'No pain, no gain' },
+    { de: 'Es ist noch kein Meister vom Himmel gefallen', en: 'No one is born a master' },
+    { de: 'Der Weg ist das Ziel', en: 'The journey is the destination' },
+    { de: 'Wissen ist Macht', en: 'Knowledge is power' },
+];
+
+let proverbInterval = null;
+let proverbIndex = 0;
+
+function showProverb() {
+    const deEl = document.getElementById('proverb-de');
+    const enEl = document.getElementById('proverb-en');
+    if (!deEl || !enEl) return;
+    const p = PROVERBS[proverbIndex % PROVERBS.length];
+    deEl.textContent = `„${p.de}"`;
+    enEl.textContent = p.en;
+}
+
+function startProverbRotation() {
+    proverbIndex = Math.floor(Math.random() * PROVERBS.length);
+    showProverb();
+    stopProverbRotation();
+    proverbInterval = setInterval(() => {
+        const deEl = document.getElementById('proverb-de');
+        const enEl = document.getElementById('proverb-en');
+        if (!deEl || !enEl) return;
+        deEl.classList.add('proverb-fade-out');
+        enEl.classList.add('proverb-fade-out');
+        setTimeout(() => {
+            proverbIndex++;
+            showProverb();
+            deEl.classList.remove('proverb-fade-out');
+            enEl.classList.remove('proverb-fade-out');
+        }, 500);
+    }, 7000);
+}
+
+function stopProverbRotation() {
+    if (proverbInterval) {
+        clearInterval(proverbInterval);
+        proverbInterval = null;
+    }
+}
+
+function spawnConfetti() {
+    const burst = document.createElement('div');
+    burst.className = 'confetti-burst';
+    for (let i = 0; i < 10; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'confetti-dot';
+        burst.appendChild(dot);
+    }
+    dom.feedbackArea.style.position = 'relative';
+    dom.feedbackArea.appendChild(burst);
+    setTimeout(() => burst.remove(), 1000);
+}
+
 export function initExercise({ onSessionComplete }) {
     _onSessionComplete = onSessionComplete;
 }
@@ -46,12 +107,14 @@ export function renderExercise() {
         dom.emptyStateContainer.classList.remove('hidden');
         dom.exerciseCounter.classList.add('hidden');
         dom.hintBtn.classList.add('hidden');
+        startProverbRotation();
         return;
     }
 
     dom.exerciseContent.classList.remove('hidden');
     dom.emptyStateContainer.classList.add('hidden');
     dom.exerciseCounter.classList.remove('hidden');
+    stopProverbRotation();
 
     const exercise = state.exercises[state.currentExerciseIndex];
 
@@ -65,7 +128,7 @@ export function renderExercise() {
     // Update progress bar
     const progress = ((state.currentExerciseIndex + 1) / state.exercises.length) * 100;
     if (dom.progressBar) {
-        dom.progressBar.value = progress;
+        dom.progressBar.style.width = `${progress}%`;
     }
     if (dom.progressPercentage) {
         dom.progressPercentage.textContent = `${Math.round(progress)}%`;
@@ -215,6 +278,7 @@ async function handleSentenceCompletion(exercise, correctWordArray, lastWord = '
     const isCorrect = state.userSentence.join(' ') === correctWordArray.join(' ');
 
     if (isCorrect) {
+        spawnConfetti();
         dom.correctSentenceDisplay.textContent = ''; // Hide the green text
         
         const exerciseId = state.exerciseIds[state.currentExerciseIndex];
