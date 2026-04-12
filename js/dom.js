@@ -31,6 +31,8 @@ export const dom = {
     topicsSearchInput: document.getElementById('topics-search-input'),
     topicsSearchClear: document.getElementById('topics-search-clear'),
     topicSort: document.getElementById('topic-sort'),
+    collapseAllBtn: document.getElementById('collapse-all-btn'),
+    expandAllBtn: document.getElementById('expand-all-btn'),
     addTopicBtn: document.getElementById('add-topic-btn'),
     addTopicForm: document.getElementById('add-topic-form'),
     newTopicName: document.getElementById('new-topic-name'),

@@ -5,6 +5,8 @@ import {
     removeRecentlyUsedTopic,
     toggleTopicCollapse,
     isTopicCollapsed,
+    collapseAllTopics,
+    expandAllTopics,
     saveTopicCollapseState
 } from '../state.js';
 
@@ -95,6 +97,95 @@ describe('state.js', () => {
         it('saves to localStorage', () => {
             toggleTopicCollapse('t1');
             expect(globalThis.localStorage.setItem).toHaveBeenCalledWith('topicCollapseState', JSON.stringify(['t1']));
+        });
+    });
+
+    describe('collapseAllTopics', () => {
+        it('collapses all parent topics (topics that have children)', () => {
+            state.topics = [
+                { id: 'p1', name: 'Parent 1', parent_id: '' },
+                { id: 'c1', name: 'Child 1', parent_id: 'p1' },
+                { id: 'p2', name: 'Parent 2', parent_id: '' },
+                { id: 'c2', name: 'Child 2', parent_id: 'p2' },
+                { id: 'leaf', name: 'Leaf', parent_id: '' },
+            ];
+
+            collapseAllTopics();
+
+            expect(state.collapsedTopicIds.has('p1')).toBe(true);
+            expect(state.collapsedTopicIds.has('p2')).toBe(true);
+            expect(state.collapsedTopicIds.has('leaf')).toBe(false);
+            expect(state.collapsedTopicIds.has('c1')).toBe(false);
+            expect(state.collapsedTopicIds.has('c2')).toBe(false);
+        });
+
+        it('saves to localStorage', () => {
+            state.topics = [
+                { id: 'p1', name: 'Parent 1', parent_id: '' },
+                { id: 'c1', name: 'Child 1', parent_id: 'p1' },
+            ];
+
+            collapseAllTopics();
+
+            expect(globalThis.localStorage.setItem).toHaveBeenCalledWith(
+                'topicCollapseState',
+                JSON.stringify(['p1'])
+            );
+        });
+
+        it('handles nested parents (multi-level)', () => {
+            state.topics = [
+                { id: 'root', name: 'Root', parent_id: '' },
+                { id: 'mid', name: 'Mid', parent_id: 'root' },
+                { id: 'leaf', name: 'Leaf', parent_id: 'mid' },
+            ];
+
+            collapseAllTopics();
+
+            // root has child 'mid', mid has child 'leaf'
+            expect(state.collapsedTopicIds.has('root')).toBe(true);
+            expect(state.collapsedTopicIds.has('mid')).toBe(true);
+            expect(state.collapsedTopicIds.has('leaf')).toBe(false);
+        });
+
+        it('does nothing when there are no parent topics', () => {
+            state.topics = [
+                { id: 'a', name: 'A', parent_id: '' },
+                { id: 'b', name: 'B', parent_id: '' },
+            ];
+
+            collapseAllTopics();
+
+            expect(state.collapsedTopicIds.size).toBe(0);
+        });
+    });
+
+    describe('expandAllTopics', () => {
+        it('clears all collapsed topic IDs', () => {
+            state.collapsedTopicIds.add('t1');
+            state.collapsedTopicIds.add('t2');
+            state.collapsedTopicIds.add('t3');
+
+            expandAllTopics();
+
+            expect(state.collapsedTopicIds.size).toBe(0);
+        });
+
+        it('saves empty state to localStorage', () => {
+            state.collapsedTopicIds.add('t1');
+
+            expandAllTopics();
+
+            expect(globalThis.localStorage.setItem).toHaveBeenCalledWith(
+                'topicCollapseState',
+                JSON.stringify([])
+            );
+        });
+
+        it('works when already all expanded', () => {
+            expandAllTopics();
+
+            expect(state.collapsedTopicIds.size).toBe(0);
         });
     });
 });

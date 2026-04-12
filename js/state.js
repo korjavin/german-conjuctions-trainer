@@ -222,6 +222,21 @@ export function toggleTopicCollapse(topicId) {
     }
 }
 
+export function collapseAllTopics() {
+    for (const topic of state.topics) {
+        const hasChildren = state.topics.some(t => t.parent_id === topic.id);
+        if (hasChildren) {
+            state.collapsedTopicIds.add(topic.id);
+        }
+    }
+    _saveTopicCollapseState(state.collapsedTopicIds);
+}
+
+export function expandAllTopics() {
+    state.collapsedTopicIds.clear();
+    _saveTopicCollapseState(state.collapsedTopicIds);
+}
+
 export function isTopicCollapsed(topicId) {
     return state.collapsedTopicIds.has(topicId);
 }

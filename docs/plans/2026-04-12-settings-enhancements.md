@@ -34,13 +34,13 @@ Two enhancements to the settings modal:
 ## Implementation Steps
 
 ### Task 1: Add Collapse All / Expand All buttons to topic tree toolbar
-- [ ] Add two icon buttons (`collapse-all-btn`, `expand-all-btn`) in `index.html` after the sort dropdown (line ~187), before the "Add New Topic" button — use chevron-down-double / chevron-up-double SVG icons
-- [ ] Add `collapseAllBtn` and `expandAllBtn` to `js/dom.js`
-- [ ] Add `collapseAllTopics()` and `expandAllTopics()` functions in `js/state.js` — collapseAll adds all parent topic IDs to `collapsedTopicIds`, expandAll clears the set; both call `_saveTopicCollapseState()`
-- [ ] Wire click handlers in `js/main.js` — call collapse/expand function then `renderTopicsList()`
-- [ ] Style buttons to match existing toolbar (small icon buttons, consistent spacing) in `style.css`
-- [ ] Write tests for `collapseAllTopics()` and `expandAllTopics()` in state tests
-- [ ] Run tests — must pass before next task
+- [x] Add two icon buttons (`collapse-all-btn`, `expand-all-btn`) in `index.html` after the sort dropdown (line ~187), before the "Add New Topic" button — use chevron-down-double / chevron-up-double SVG icons
+- [x] Add `collapseAllBtn` and `expandAllBtn` to `js/dom.js`
+- [x] Add `collapseAllTopics()` and `expandAllTopics()` functions in `js/state.js` — collapseAll adds all parent topic IDs to `collapsedTopicIds`, expandAll clears the set; both call `_saveTopicCollapseState()`
+- [x] Wire click handlers in `js/main.js` — call collapse/expand function then `renderTopicsList()`
+- [x] Style buttons to match existing toolbar (small icon buttons, consistent spacing) in `style.css`
+- [x] Write tests for `collapseAllTopics()` and `expandAllTopics()` in state tests
+- [x] Run tests — must pass before next task
 
 ### Task 2: Add `GetDatabaseStats` to storage layer
 - [ ] Define `DatabaseStats` struct in `pkg/storage/storage.go`:

@@ -1,4 +1,4 @@
-import { state, toggleTopicCollapse, isTopicCollapsed, addRecentlyUsedTopic } from './state.js';
+import { state, toggleTopicCollapse, isTopicCollapsed, collapseAllTopics, expandAllTopics, addRecentlyUsedTopic } from './state.js';
 import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
 import {
@@ -108,6 +108,16 @@ if (dom.topicSort) {
         renderTopicsList();
     });
 }
+
+dom.collapseAllBtn.addEventListener('click', () => {
+    collapseAllTopics();
+    renderTopicsList();
+});
+
+dom.expandAllBtn.addEventListener('click', () => {
+    expandAllTopics();
+    renderTopicsList();
+});
 
 dom.addTopicBtn.addEventListener('click', () => showAddTopicForm(null));
 dom.cancelAddBtn.addEventListener('click', hideAddTopicForm);
@@ -401,6 +411,8 @@ function init() {
         window.renderTopicsList = renderTopicsList;
         window.toggleTopicCollapse = toggleTopicCollapse;
         window.isTopicCollapsed = isTopicCollapsed;
+        window.collapseAllTopics = collapseAllTopics;
+        window.expandAllTopics = expandAllTopics;
         window.validateTopicName = validateTopicName;
         window.validateTopicPrompt = validateTopicPrompt;
         window.showFieldError = showFieldError;

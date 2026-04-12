@@ -265,6 +265,30 @@ textarea:focus-visible,
     font-size: 0.875rem;
 }
 
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--mr-border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--mr-text-muted);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-icon:hover {
+    background-color: var(--mr-cream-soft);
+    color: var(--mr-text);
+}
+
+.btn-icon:active {
+    transform: scale(0.95);
+}
+
 /* Forms */
 .topic-search-input {
     width: 100%;
