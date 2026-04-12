@@ -20,16 +20,31 @@ func TestGetDatabaseStats(t *testing.T) {
 	store.db.Exec("DELETE FROM topics")
 
 	// Create topics
-	t1, _ := store.CreateTopic("Alpha", "prompt1", nil, 0)
-	t2, _ := store.CreateTopic("Beta", "prompt2", nil, 1)
-	t3, _ := store.CreateTopic("Gamma", "prompt3", nil, 2)
+	t1, err := store.CreateTopic("Alpha", "prompt1", nil, 0)
+	if err != nil {
+		t.Fatalf("Failed to create topic Alpha: %v", err)
+	}
+	t2, err := store.CreateTopic("Beta", "prompt2", nil, 1)
+	if err != nil {
+		t.Fatalf("Failed to create topic Beta: %v", err)
+	}
+	t3, err := store.CreateTopic("Gamma", "prompt3", nil, 2)
+	if err != nil {
+		t.Fatalf("Failed to create topic Gamma: %v", err)
+	}
 
 	// Create exercises: 2 for Alpha, 3 for Beta, 0 for Gamma
-	store.CreateExercise(t1.ID, "h1", `{"q":"a1"}`, "")
-	store.CreateExercise(t1.ID, "h1", `{"q":"a2"}`, "")
-	store.CreateExercise(t2.ID, "h2", `{"q":"b1"}`, "")
-	store.CreateExercise(t2.ID, "h2", `{"q":"b2"}`, "")
-	store.CreateExercise(t2.ID, "h2", `{"q":"b3"}`, "")
+	for _, ex := range []struct{ topicID, hash, data string }{
+		{t1.ID, "h1", `{"q":"a1"}`},
+		{t1.ID, "h1", `{"q":"a2"}`},
+		{t2.ID, "h2", `{"q":"b1"}`},
+		{t2.ID, "h2", `{"q":"b2"}`},
+		{t2.ID, "h2", `{"q":"b3"}`},
+	} {
+		if _, err := store.CreateExercise(ex.topicID, ex.hash, ex.data, ""); err != nil {
+			t.Fatalf("Failed to create exercise: %v", err)
+		}
+	}
 
 	// Create a temporary audio cache directory with some files
 	audioCacheDir := filepath.Join(t.TempDir(), "audio_cache")

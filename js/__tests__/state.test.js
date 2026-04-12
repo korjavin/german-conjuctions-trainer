@@ -158,6 +158,35 @@ describe('state.js', () => {
 
             expect(state.collapsedTopicIds.size).toBe(0);
         });
+
+        it('updates search tracking sets when search is active', () => {
+            state.topics = [
+                { id: 'p1', name: 'Parent 1', parent_id: '' },
+                { id: 'c1', name: 'Child 1', parent_id: 'p1' },
+                { id: 'p2', name: 'Parent 2', parent_id: '' },
+                { id: 'c2', name: 'Child 2', parent_id: 'p2' },
+            ];
+            state.preSearchCollapsedTopicIds = new Set();
+
+            collapseAllTopics();
+
+            expect(state.searchManualCollapsedTopicIds.has('p1')).toBe(true);
+            expect(state.searchManualCollapsedTopicIds.has('p2')).toBe(true);
+            expect(state.searchManualExpandedTopicIds.has('p1')).toBe(false);
+            expect(state.searchManualExpandedTopicIds.has('p2')).toBe(false);
+        });
+
+        it('does not update search tracking sets when no search is active', () => {
+            state.topics = [
+                { id: 'p1', name: 'Parent 1', parent_id: '' },
+                { id: 'c1', name: 'Child 1', parent_id: 'p1' },
+            ];
+            state.preSearchCollapsedTopicIds = undefined;
+
+            collapseAllTopics();
+
+            expect(state.searchManualCollapsedTopicIds.size).toBe(0);
+        });
     });
 
     describe('expandAllTopics', () => {
@@ -186,6 +215,28 @@ describe('state.js', () => {
             expandAllTopics();
 
             expect(state.collapsedTopicIds.size).toBe(0);
+        });
+
+        it('updates search tracking sets when search is active', () => {
+            state.collapsedTopicIds.add('p1');
+            state.collapsedTopicIds.add('p2');
+            state.preSearchCollapsedTopicIds = new Set(['p1']);
+
+            expandAllTopics();
+
+            expect(state.searchManualExpandedTopicIds.has('p1')).toBe(true);
+            expect(state.searchManualExpandedTopicIds.has('p2')).toBe(true);
+            expect(state.searchManualCollapsedTopicIds.has('p1')).toBe(false);
+            expect(state.searchManualCollapsedTopicIds.has('p2')).toBe(false);
+        });
+
+        it('does not update search tracking sets when no search is active', () => {
+            state.collapsedTopicIds.add('p1');
+            state.preSearchCollapsedTopicIds = undefined;
+
+            expandAllTopics();
+
+            expect(state.searchManualExpandedTopicIds.size).toBe(0);
         });
     });
 });

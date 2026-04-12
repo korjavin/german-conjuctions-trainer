@@ -1375,7 +1375,9 @@ func (s *SQLiteStorage) ToggleHideExercise(userID, exerciseID string) (bool, err
 
 // GetDatabaseStats returns aggregate statistics about the database, audio cache, and DB file.
 func (s *SQLiteStorage) GetDatabaseStats(audioCacheDir, dbFilePath string) (*DatabaseStats, error) {
-	stats := &DatabaseStats{}
+	stats := &DatabaseStats{
+		ExercisesPerTopic: []TopicExerciseCount{},
+	}
 
 	// Total exercises
 	if err := s.db.QueryRow("SELECT COUNT(*) FROM exercises").Scan(&stats.TotalExercises); err != nil {

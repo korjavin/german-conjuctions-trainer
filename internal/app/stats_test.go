@@ -30,8 +30,14 @@ func TestHandleDatabaseStats_AdminOnly(t *testing.T) {
 	app, _ := setupTestAppWithPaths(t)
 	app.AdminGoogleID = "admin-google-123"
 
-	adminUser, _ := app.DB.CreateUser("admin-google-123")
-	regularUser, _ := app.DB.CreateUser("regular-google-456")
+	adminUser, err := app.DB.CreateUser("admin-google-123")
+	if err != nil {
+		t.Fatalf("Failed to create admin user: %v", err)
+	}
+	regularUser, err := app.DB.CreateUser("regular-google-456")
+	if err != nil {
+		t.Fatalf("Failed to create regular user: %v", err)
+	}
 
 	tests := []struct {
 		name           string
@@ -92,9 +98,14 @@ func TestHandleDatabaseStats_MethodNotAllowed(t *testing.T) {
 func TestHandleDatabaseStats_ResponseShape(t *testing.T) {
 	app, _ := setupTestAppWithPaths(t)
 
-	// Create some test data
-	topic, _ := app.DB.CreateTopic("Test Topic", "prompt", nil, 0)
-	app.DB.CreateExercise(topic.ID, "hash1", `{"sentence":"test"}`, "")
+	// Create test data
+	topic, err := app.DB.CreateTopic("Test Topic", "prompt", nil, 0)
+	if err != nil {
+		t.Fatalf("Failed to create topic: %v", err)
+	}
+	if _, err := app.DB.CreateExercise(topic.ID, "hash1", `{"sentence":"test"}`, ""); err != nil {
+		t.Fatalf("Failed to create exercise: %v", err)
+	}
 
 	req, _ := http.NewRequest("GET", "/api/db/stats", nil)
 	rr := httptest.NewRecorder()

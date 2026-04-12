@@ -47,6 +47,7 @@ import {
     getTopicPath,
     debounce,
     resetDropdownCollapseState,
+    escapeHtml,
     BLUR_TIMEOUT_MS,
     FOCUSOUT_TIMEOUT_MS,
 } from './topics.js';
@@ -422,12 +423,6 @@ function renderDatabaseStats(stats) {
             .map(t => `<div class="db-stats-topic-row"><span class="db-stats-topic-name">${escapeHtml(t.topic_name)}</span><span class="db-stats-topic-count">${t.count}</span></div>`)
             .join('');
     }
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 // --- Initialization ---
