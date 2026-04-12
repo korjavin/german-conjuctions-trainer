@@ -277,6 +277,7 @@ document.addEventListener('keydown', (e) => {
         // Open settings modal if not already open
         if (!dom.settingsModal.open) {
             dom.settingsModal.showModal();
+            loadDatabaseStats();
         }
         // Focus search input
         dom.topicsSearchInput.focus();

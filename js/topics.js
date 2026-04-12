@@ -1157,7 +1157,13 @@ export function renderTopicsList() {
         const { matchingIds, expandedIds } = findMatchingTopics(state.topicsSearchQuery, nodesById);
         state.topicsMatchingIds = matchingIds;
         state.searchExpandedTopicIds = expandedIds;
-        searchExpandedIds = expandedIds;
+
+        // Respect manual collapse/expand overrides during search
+        searchExpandedIds = new Set(expandedIds);
+        for (const id of state.searchManualCollapsedTopicIds) {
+            searchExpandedIds.delete(id);
+        }
+
         flattenedNodes = flattenTopicTree(roots, nodesById, searchExpandedIds);
         // Filter to only show matching topics and their parents
         flattenedNodes = flattenedNodes.filter(({ topic }) => {
