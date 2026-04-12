@@ -325,6 +325,40 @@ Situations: [contexts, e.g. explaining reasons, expressing goals, giving instruc
                 </div>
             </div>
 
+            <!-- Database Stats (admin only) -->
+            <div id="db-stats-section" class="mb-6 hidden">
+                <div class="db-stats-separator"></div>
+                <h3 class="section-title mb-4">Database</h3>
+                <div id="db-stats-container" class="db-stats-container">
+                    <div id="db-stats-loading" class="section-desc">Loading statistics...</div>
+                    <div id="db-stats-content" class="hidden">
+                        <div class="db-stats-grid">
+                            <div class="db-stat-item">
+                                <span class="db-stat-label">Total Exercises</span>
+                                <span id="db-stat-exercises" class="db-stat-value">-</span>
+                            </div>
+                            <div class="db-stat-item">
+                                <span class="db-stat-label">Total Topics</span>
+                                <span id="db-stat-topics" class="db-stat-value">-</span>
+                            </div>
+                            <div class="db-stat-item">
+                                <span class="db-stat-label">Database Size</span>
+                                <span id="db-stat-db-size" class="db-stat-value">-</span>
+                            </div>
+                            <div class="db-stat-item">
+                                <span class="db-stat-label">Audio Cache</span>
+                                <span id="db-stat-audio-cache" class="db-stat-value">-</span>
+                            </div>
+                        </div>
+                        <details class="mt-4">
+                            <summary class="db-stats-summary">Exercises per topic</summary>
+                            <div id="db-stats-per-topic" class="db-stats-per-topic mt-2"></div>
+                        </details>
+                    </div>
+                    <div id="db-stats-error" class="text-error text-sm hidden"></div>
+                </div>
+            </div>
+
             <div class="flex justify-end">
                 <button id="settings-close-btn" class="btn-secondary">Close</button>
             </div>

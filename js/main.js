@@ -53,6 +53,7 @@ import {
 import {
     checkAuthStatus,
 } from './auth.js';
+import { fetchDatabaseStatsAPI } from './api.js';
 import {
     showExerciseHistory,
     renderHistoryPage,
@@ -87,6 +88,7 @@ initSession({ renderExercise });
 dom.settingsBtn.addEventListener('click', () => {
     loadTopics(); // Refresh topics when opening settings
     dom.settingsModal.showModal();
+    loadDatabaseStats();
 });
 
 dom.settingsCloseBtn.addEventListener('click', () => {
@@ -378,6 +380,55 @@ dom.historyNextBtn.addEventListener('click', () => {
         renderHistoryPage();
     }
 });
+
+// --- Database Stats ---
+async function loadDatabaseStats() {
+    if (!state.isAdmin) {
+        dom.dbStatsSection.classList.add('hidden');
+        return;
+    }
+
+    dom.dbStatsSection.classList.remove('hidden');
+    dom.dbStatsLoading.classList.remove('hidden');
+    dom.dbStatsContent.classList.add('hidden');
+    dom.dbStatsError.classList.add('hidden');
+
+    try {
+        const stats = await fetchDatabaseStatsAPI();
+        renderDatabaseStats(stats);
+    } catch (error) {
+        dom.dbStatsLoading.classList.add('hidden');
+        dom.dbStatsError.classList.remove('hidden');
+        dom.dbStatsError.textContent = 'Failed to load database statistics.';
+        console.error('Error loading database stats:', error);
+    }
+}
+
+function renderDatabaseStats(stats) {
+    dom.dbStatsLoading.classList.add('hidden');
+    dom.dbStatsContent.classList.remove('hidden');
+
+    dom.dbStatExercises.textContent = stats.total_exercises.toLocaleString();
+    dom.dbStatTopics.textContent = stats.total_topics.toLocaleString();
+    dom.dbStatDbSize.textContent = `${stats.database_size_mb.toFixed(1)} MB`;
+    dom.dbStatAudioCache.textContent = `${stats.audio_cache_size_mb.toFixed(1)} MB (${stats.audio_cache_file_count.toLocaleString()} files)`;
+
+    // Per-topic exercise counts
+    const perTopic = stats.exercises_per_topic || [];
+    if (perTopic.length === 0) {
+        dom.dbStatsPerTopic.textContent = 'No topics found.';
+    } else {
+        dom.dbStatsPerTopic.innerHTML = perTopic
+            .map(t => `<div class="db-stats-topic-row"><span class="db-stats-topic-name">${escapeHtml(t.topic_name)}</span><span class="db-stats-topic-count">${t.count}</span></div>`)
+            .join('');
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 // --- Initialization ---
 function init() {

@@ -2104,3 +2104,82 @@ button:disabled.is-audio-off {
     line-height: 1;
     text-align: center;
 }
+
+/* ==========================================================================
+   Database Stats Section
+   ========================================================================== */
+.db-stats-separator {
+    border-top: 1px solid var(--mr-border);
+    margin-bottom: var(--spacing-6);
+}
+
+.db-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-3);
+}
+
+.db-stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-2) var(--spacing-3);
+    background: rgba(255, 249, 239, 0.85);
+    border: 1px solid rgba(163, 63, 17, 0.15);
+    border-radius: var(--radius-md);
+}
+
+.db-stat-label {
+    font-size: 0.8125rem;
+    color: var(--mr-text-muted);
+}
+
+.db-stat-value {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--mr-text);
+}
+
+.db-stats-summary {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--mr-text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.db-stats-summary:hover {
+    color: var(--mr-text);
+}
+
+.db-stats-per-topic {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.db-stats-topic-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-1) var(--spacing-2);
+    font-size: 0.8125rem;
+    border-bottom: 1px solid rgba(163, 63, 17, 0.08);
+}
+
+.db-stats-topic-row:last-child {
+    border-bottom: none;
+}
+
+.db-stats-topic-name {
+    color: var(--mr-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: var(--spacing-2);
+}
+
+.db-stats-topic-count {
+    color: var(--mr-text-muted);
+    font-weight: 600;
+    flex-shrink: 0;
+}

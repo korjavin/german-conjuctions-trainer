@@ -4,7 +4,8 @@ import {
     fetchExercisesFromAPI,
     moveTopicAPI,
     fetchExplainAPI,
-    loadExerciseHistoryAPI
+    loadExerciseHistoryAPI,
+    fetchDatabaseStatsAPI
 } from '../api.js';
 
 describe('api.js', () => {
@@ -164,6 +165,32 @@ describe('api.js', () => {
             });
 
             await expect(fetchExplainAPI('topic', 'correct', [])).rejects.toThrow('Failed to load explanation');
+        });
+    });
+
+    describe('fetchDatabaseStatsAPI', () => {
+        it('returns JSON on success', async () => {
+            const mockStats = {
+                total_exercises: 100,
+                total_topics: 10,
+                audio_cache_size_mb: 50.5,
+                audio_cache_file_count: 200,
+                database_size_mb: 5.2,
+                exercises_per_topic: [{ topic_id: 't1', topic_name: 'Topic 1', count: 10 }]
+            };
+            globalThis.fetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => mockStats
+            });
+
+            const result = await fetchDatabaseStatsAPI();
+            expect(result).toEqual(mockStats);
+            expect(globalThis.fetch).toHaveBeenCalledWith('/api/db/stats');
+        });
+
+        it('throws on failure', async () => {
+            globalThis.fetch.mockResolvedValueOnce({ ok: false });
+            await expect(fetchDatabaseStatsAPI()).rejects.toThrow('Failed to fetch database stats');
         });
     });
 

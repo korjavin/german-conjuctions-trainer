@@ -71,13 +71,13 @@ Two enhancements to the settings modal:
 - [x] Run tests — must pass before next task
 
 ### Task 4: Add Database section to settings modal frontend
-- [ ] Add `fetchDatabaseStatsAPI()` function in `js/api.js` — `GET /api/db/stats`
-- [ ] Add HTML section at bottom of settings modal in `index.html` (after topics list, before close button) — "Database" heading with `db-stats-container` div, initially hidden
-- [ ] Add DOM references in `js/dom.js` for the new container
-- [ ] Add rendering logic in `js/topics.js` (or `js/main.js`) — on settings modal open, if user is admin, fetch stats and render: total exercises, total topics, audio cache (size + file count), DB size, per-topic exercise counts as a simple list
-- [ ] Style the database section in `style.css` — separator line, consistent with existing sections, compact layout
-- [ ] Only show section for admin users (check `state.isAdmin`)
-- [ ] Run tests — must pass before next task
+- [x] Add `fetchDatabaseStatsAPI()` function in `js/api.js` — `GET /api/db/stats`
+- [x] Add HTML section at bottom of settings modal in `index.html` (after topics list, before close button) — "Database" heading with `db-stats-container` div, initially hidden
+- [x] Add DOM references in `js/dom.js` for the new container
+- [x] Add rendering logic in `js/topics.js` (or `js/main.js`) — on settings modal open, if user is admin, fetch stats and render: total exercises, total topics, audio cache (size + file count), DB size, per-topic exercise counts as a simple list
+- [x] Style the database section in `style.css` — separator line, consistent with existing sections, compact layout
+- [x] Only show section for admin users (check `state.isAdmin`)
+- [x] Run tests — must pass before next task
 
 ### Task 5: Verify acceptance criteria
 - [ ] Collapse All button collapses every parent topic in the tree
