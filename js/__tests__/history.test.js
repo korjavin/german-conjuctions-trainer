@@ -16,6 +16,7 @@ mockTemplate.innerHTML = `
         <div class="history-item-title"></div>
         <div class="history-item-hint"></div>
         <div class="history-item-status-container"></div>
+        <button class="history-item-ignore-btn"><svg></svg></button>
         <div class="history-item-topic"></div>
         <div class="history-item-date"></div>
         <div class="history-item-success"></div>
@@ -40,6 +41,7 @@ describe('history.js', () => {
         state.historyFilterReady = false;
         state.historyFilterFavorites = false;
         state.historyFilterTrained = false;
+        state.historyFilterIgnored = false;
 
         // Reset DOM elements mock classes
         dom.historyModal.showModal = vi.fn();
@@ -63,6 +65,8 @@ describe('history.js', () => {
         dom.historyFilterFavorites.innerHTML = '<svg></svg>';
         dom.historyFilterFavorites.classList.add = vi.fn();
         dom.historyFilterFavorites.classList.remove = vi.fn();
+        dom.historyFilterIgnored.classList.add = vi.fn();
+        dom.historyFilterIgnored.classList.remove = vi.fn();
 
         dom.historySortTiming.classList.add = vi.fn();
         dom.historySortTiming.classList.remove = vi.fn();

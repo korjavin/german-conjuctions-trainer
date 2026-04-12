@@ -20,7 +20,7 @@ vi.mock('../audio.js', () => ({
 
 vi.mock('../api.js', () => ({
     toggleFavoriteAPI: vi.fn(),
-    hideExerciseAPI: vi.fn(),
+    toggleHideExerciseAPI: vi.fn(),
     fetchExplainAPI: vi.fn()
 }));
 
