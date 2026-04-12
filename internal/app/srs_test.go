@@ -51,26 +51,26 @@ func TestSRS_HiddenExercisesAreExcluded(t *testing.T) {
 func TestSRS_OverdueCalculation(t *testing.T) {
 	now := time.Now()
 	allExercises := []*storage.Exercise{
-		{ID: "due-yesterday"}, // counter=1 -> next review in 1 day. view=2 days ago -> overdue = 2 - 1 = +1
-		{ID: "due-tomorrow"},  // counter=2 -> next review in 4 days. view=3 days ago -> overdue = 3 - 4 = -1
-		{ID: "due-today"},     // counter=1 -> next review in 1 day. view=1 day ago -> overdue = 1 - 1 = 0
+		{ID: "due-yesterday"}, // counter=1 -> next review in 1 hour. view=2 hours ago -> overdue = 2 - 1 = +1
+		{ID: "due-tomorrow"},  // counter=2 -> next review in 4 hours. view=3 hours ago -> overdue = 3 - 4 = -1
+		{ID: "due-today"},     // counter=1 -> next review in 1 hour. view=1 hour ago -> overdue = 1 - 1 = 0
 	}
 
 	userViews := map[string]*storage.UserExerciseView{
 		"due-yesterday": {
 			ExerciseID:        "due-yesterday",
-			LastViewed:        now.Add(-48 * time.Hour), // 2 days ago
-			RepetitionCounter: 1,                        // 1 day wait
+			LastViewed:        now.Add(-2 * time.Hour), // 2 hours ago
+			RepetitionCounter: 1,                       // 1 hour wait
 		},
 		"due-tomorrow": {
 			ExerciseID:        "due-tomorrow",
-			LastViewed:        now.Add(-72 * time.Hour), // 3 days ago
-			RepetitionCounter: 2,                        // 4 days wait
+			LastViewed:        now.Add(-3 * time.Hour), // 3 hours ago
+			RepetitionCounter: 2,                       // 4 hours wait
 		},
 		"due-today": {
 			ExerciseID:        "due-today",
-			LastViewed:        now.Add(-24 * time.Hour), // 1 day ago
-			RepetitionCounter: 1,                        // 1 day wait
+			LastViewed:        now.Add(-1 * time.Hour), // 1 hour ago
+			RepetitionCounter: 1,                       // 1 hour wait
 		},
 	}
 
@@ -99,13 +99,13 @@ func TestSRS_FavoritesBreakTies(t *testing.T) {
 	userViews := map[string]*storage.UserExerciseView{
 		"ex1": {
 			ExerciseID:        "ex1",
-			LastViewed:        now.Add(-24 * time.Hour),
+			LastViewed:        now.Add(-1 * time.Hour),
 			RepetitionCounter: 1,
 			IsFavorite:        true,
 		},
 		"ex2": {
 			ExerciseID:        "ex2",
-			LastViewed:        now.Add(-24 * time.Hour),
+			LastViewed:        now.Add(-1 * time.Hour),
 			RepetitionCounter: 1,
 			IsFavorite:        false,
 		},

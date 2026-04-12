@@ -1150,11 +1150,11 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 	}
 
 	// This logic mirrors the SRS logic from the main handler.
-	// It calculates the number of days since the last view and compares it to the repetition counter squared.
+	// It calculates the number of hours since the last view and compares it to the repetition counter squared (in hours).
 	query := `
 		SELECT COUNT(*)
 		FROM user_exercise_views
-		WHERE user_id = ? AND (julianday('now') - julianday(last_viewed)) >= (repetition_counter * repetition_counter)
+		WHERE user_id = ? AND (julianday('now') - julianday(last_viewed)) * 24 >= (repetition_counter * repetition_counter)
 	`
 	var readyToRepeatCount int
 	row = s.db.QueryRow(query, userID)
@@ -1258,10 +1258,10 @@ func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*Exerc
 			item.EnglishHint = hint
 		}
 
-		// Calculate next review time using SRS formula: (counter^2) days
-		daysSinceView := now.Sub(item.LastViewed).Hours() / 24
-		item.NextReviewDays = float64(item.RepetitionCounter * item.RepetitionCounter)
-		item.ReadyToRepeat = daysSinceView >= item.NextReviewDays
+		// Calculate next review time using SRS formula: (counter^2) hours
+		hoursSinceView := now.Sub(item.LastViewed).Hours()
+		item.NextReviewHours = float64(item.RepetitionCounter * item.RepetitionCounter)
+		item.ReadyToRepeat = hoursSinceView >= item.NextReviewHours
 
 		history = append(history, &item)
 	}

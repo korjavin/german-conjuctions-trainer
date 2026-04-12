@@ -83,7 +83,7 @@ type ExerciseHistoryItem struct {
 	FailedAttempts     int       `json:"failed_attempts"`
 	HintsUsed          int       `json:"hints_used"`
 	MistakesMade       int       `json:"mistakes_made"`
-	NextReviewDays     float64   `json:"next_review_days"`
+	NextReviewHours    float64   `json:"next_review_hours"`
 	ReadyToRepeat      bool      `json:"ready_to_repeat"`
 	IsFavorite         bool      `json:"is_favorite"`
 	IsHidden           bool      `json:"is_hidden"`

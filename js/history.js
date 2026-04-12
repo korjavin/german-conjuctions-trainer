@@ -115,9 +115,9 @@ export function getFilteredHistoryData() {
     filtered.sort((a, b) => {
         switch (state.historySortDimension) {
             case 'sooner':
-                return a.next_review_days - b.next_review_days;
+                return a.next_review_hours - b.next_review_hours;
             case 'later':
-                return b.next_review_days - a.next_review_days;
+                return b.next_review_hours - a.next_review_hours;
             case 'most_errors': {
                 const aErrRate = a.total_attempts > 0 ? 1 - (a.successful_attempts / a.total_attempts) : 0;
                 const bErrRate = b.total_attempts > 0 ? 1 - (b.successful_attempts / b.total_attempts) : 0;
@@ -139,7 +139,7 @@ export function getFilteredHistoryData() {
                 return aDate - bDate;
             }
             default:
-                return a.next_review_days - b.next_review_days;
+                return a.next_review_hours - b.next_review_hours;
         }
     });
 
@@ -150,6 +150,7 @@ export function renderReviewChart() {
     const DAYS_TO_SHOW = 7;
     const now = Date.now();
     const msPerDay = 1000 * 60 * 60 * 24;
+    const msPerHour = 1000 * 60 * 60;
 
     // Buckets: 0=today, 1..6=next days, 7="later"
     const buckets = new Array(DAYS_TO_SHOW + 1).fill(0);
@@ -161,7 +162,7 @@ export function renderReviewChart() {
             return;
         }
         const lastViewed = new Date(item.last_viewed).getTime();
-        const reviewAt = lastViewed + item.next_review_days * msPerDay;
+        const reviewAt = lastViewed + item.next_review_hours * msPerHour;
         const daysFromNow = Math.max(0, Math.ceil((reviewAt - now) / msPerDay));
         buckets[Math.min(daysFromNow, DAYS_TO_SHOW)]++;
     });
@@ -237,8 +238,14 @@ function createHistoryItem(item) {
 
     // Calculate time info
     const lastViewed = new Date(item.last_viewed);
-    const daysAgo = Math.floor((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60 * 24));
-    const timeText = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`;
+    const hoursAgo = Math.floor((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60));
+    let timeText;
+    if (hoursAgo < 1) timeText = 'Just now';
+    else if (hoursAgo < 24) timeText = `${hoursAgo}h ago`;
+    else {
+        const daysAgo = Math.floor(hoursAgo / 24);
+        timeText = daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`;
+    }
 
     const template = document.getElementById('history-item-template');
     if (!template) {
@@ -294,9 +301,12 @@ function createHistoryItem(item) {
     } else if (item.ready_to_repeat) {
         statusContainer.innerHTML = '<span class="badge-success">Ready to Practice</span>';
     } else {
-        const daysUntilReady = Math.ceil(item.next_review_days - ((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60 * 24)));
-        if (daysUntilReady > 0) {
-            statusContainer.innerHTML = `<span class="badge-info">Ready in ${daysUntilReady}d</span>`;
+        const hoursUntilReady = Math.ceil(item.next_review_hours - ((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60)));
+        if (hoursUntilReady > 0) {
+            const label = hoursUntilReady >= 24
+                ? `${Math.ceil(hoursUntilReady / 24)}d`
+                : `${hoursUntilReady}h`;
+            statusContainer.innerHTML = `<span class="badge-info">Ready in ${label}</span>`;
         }
     }
 

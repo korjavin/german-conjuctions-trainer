@@ -32,12 +32,12 @@ func getEligibleExercisesForSRS(allExercises []*storage.Exercise, userViews map[
 			continue
 		}
 
-		daysSinceView := now.Sub(view.LastViewed).Hours() / 24
-		nextReviewInDays := float64(view.RepetitionCounter * view.RepetitionCounter)
-		overdueAmount := daysSinceView - nextReviewInDays
+		hoursSinceView := now.Sub(view.LastViewed).Hours()
+		nextReviewInHours := float64(view.RepetitionCounter * view.RepetitionCounter)
+		overdueAmount := hoursSinceView - nextReviewInHours
 
-		log.Printf("[SRS_ELIGIBILITY] Exercise %s: counter=%d, days_since_view=%.2f, next_review_in=%.0f days, overdue=%.2f, favorite=%v",
-			ex.ID, view.RepetitionCounter, daysSinceView, nextReviewInDays, overdueAmount, view.IsFavorite)
+		log.Printf("[SRS_ELIGIBILITY] Exercise %s: counter=%d, hours_since_view=%.2f, next_review_in=%.0f hours, overdue=%.2f, favorite=%v",
+			ex.ID, view.RepetitionCounter, hoursSinceView, nextReviewInHours, overdueAmount, view.IsFavorite)
 
 		if overdueAmount >= 0 {
 			candidates = append(candidates, ScoredExercise{
