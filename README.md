@@ -22,6 +22,7 @@ An interactive German language learning application that helps B1-level students
 - **Prompt Customization**: Tailor exercise generation prompts for each topic.
 - **Version History**: Track and restore the last 10 versions of a prompt.
 - **Persistent Storage**: Uses SQLite for fast and reliable data storage.
+- **Database Statistics** (Admin): View total exercises, topics, audio cache size/file count, database size, and per-topic exercise counts from the settings modal.
 - **Legacy Airtable Integration**: Support for Airtable (Deprecated).
 - **Optional Google Login**: Allows users to log in with their Google account to enable the SRS feature and save settings.
 
@@ -190,7 +191,7 @@ Topics can be organized hierarchically in a tree structure with advanced feature
 **Topic Hierarchy Features:**
 
 - **Visual Tree Lines**: Clear visual connectors show parent-child relationships at any depth level
-- **Expand/Collapse**: Collapse branches to reduce clutter, with state persisted across sessions
+- **Expand/Collapse**: Collapse branches to reduce clutter, with state persisted across sessions. Collapse All / Expand All buttons in the toolbar for quick bulk toggling
 - **Topic Icons**: Folder icons for topics with children, file icons for leaf topics
 - **Search & Filter**: Instant search with auto-expansion of parent topics and text highlighting
 - **Top-Level Sorting**: Sort top-level topics by name (A-Z, Z-A), date (newest/oldest), or custom order without affecting nested children

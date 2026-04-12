@@ -89,7 +89,7 @@ Two enhancements to the settings modal:
 - [x] Run linter — all issues must be fixed
 
 ### Task 6: [Final] Update documentation
-- [ ] Update README.md if needed
+- [x] Update README.md if needed
 
 ## Technical Details
 
