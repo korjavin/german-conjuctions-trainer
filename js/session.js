@@ -37,7 +37,8 @@ export async function fetchExercises() {
                 id: ex.id,
                 audio_file_path: ex.audio_file_path,
                 is_favorite: ex.is_favorite || false,
-                topic_id: ex.topic_id
+                topic_id: ex.topic_id,
+                repetition_counter: ex.repetition_counter || 0
             }));
             state.exerciseIds = data.exercises.map(ex => ex.id);
             state.currentExerciseIndex = 0;

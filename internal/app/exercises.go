@@ -154,24 +154,28 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type ExerciseResponse struct {
-		ID            string          `json:"id"`
-		TopicID       string          `json:"topic_id"`
-		ExerciseJSON  json.RawMessage `json:"exercise_json"`
-		AudioFilePath string          `json:"audio_file_path"`
-		IsFavorite    bool            `json:"is_favorite"`
+		ID                string          `json:"id"`
+		TopicID           string          `json:"topic_id"`
+		ExerciseJSON      json.RawMessage `json:"exercise_json"`
+		AudioFilePath     string          `json:"audio_file_path"`
+		IsFavorite        bool            `json:"is_favorite"`
+		RepetitionCounter int             `json:"repetition_counter"`
 	}
 	var responseExercises []ExerciseResponse
 	for _, ex := range finalExercises {
 		isFavorite := false
+		repetitionCounter := 0
 		if view, exists := userViews[ex.ID]; exists {
 			isFavorite = view.IsFavorite
+			repetitionCounter = view.RepetitionCounter
 		}
 		responseExercises = append(responseExercises, ExerciseResponse{
-			ID:            ex.ID,
-			TopicID:       ex.TopicID,
-			ExerciseJSON:  []byte(ex.ExerciseJSON),
-			AudioFilePath: ex.AudioFilePath,
-			IsFavorite:    isFavorite,
+			ID:                ex.ID,
+			TopicID:           ex.TopicID,
+			ExerciseJSON:      []byte(ex.ExerciseJSON),
+			AudioFilePath:     ex.AudioFilePath,
+			IsFavorite:        isFavorite,
+			RepetitionCounter: repetitionCounter,
 		})
 	}
 

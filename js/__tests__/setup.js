@@ -73,6 +73,7 @@ vi.mock('../dom.js', () => {
       toggleFavoriteBtn: createMockElement('button'),
       favoriteBtnText: createMockElement('span'),
       completionStatusIndicator: createMockElement('div'),
+      nextReviewLabel: createMockElement('span'),
       loadingSpinner: createMockElement('div'),
       exerciseContent: createMockElement('div'),
       generateBtn: createMockElement('button'),

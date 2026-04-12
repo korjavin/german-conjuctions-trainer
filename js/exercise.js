@@ -97,6 +97,7 @@ export function renderExercise() {
 
     // Hide control buttons by default and show hint/skip buttons
     dom.exerciseControls.classList.add('hidden');
+    if (dom.nextReviewLabel) dom.nextReviewLabel.classList.add('hidden');
     dom.hintBtn.classList.remove('hidden');
     dom.skipExerciseBtn.classList.remove('hidden');
     dom.scrambledWordsContainer.classList.remove('hidden');
@@ -293,6 +294,30 @@ async function handleSentenceCompletion(exercise, correctWordArray, lastWord = '
             iconHtml = '<span title="Perfectly completed" style="display: inline-flex; align-items: center; justify-content: center; color: #22c55e;"><svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></span>';
         }
         dom.completionStatusIndicator.innerHTML = iconHtml;
+
+        // Calculate and show next review time
+        if (state.isLoggedIn) {
+            const oldCounter = exercise.repetition_counter || 0;
+            let newCounter;
+            if (perf.mistakes > 0) {
+                newCounter = Math.max(0, oldCounter - 1);
+            } else if (perf.hints > 0) {
+                newCounter = oldCounter;
+            } else {
+                newCounter = oldCounter + 1;
+            }
+            const nextReviewHours = newCounter * newCounter;
+            let reviewText;
+            if (nextReviewHours === 0) {
+                reviewText = 'Review: now';
+            } else if (nextReviewHours < 24) {
+                reviewText = `Review: ${nextReviewHours}h`;
+            } else {
+                reviewText = `Review: ${Math.ceil(nextReviewHours / 24)}d`;
+            }
+            dom.nextReviewLabel.textContent = reviewText;
+            dom.nextReviewLabel.classList.remove('hidden');
+        }
 
         state.lastAudioUrl = exercise.audio_file_path;
         state.lastAudioText = exercise.correct_german_sentence;

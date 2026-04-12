@@ -82,7 +82,8 @@ describe('session.js', () => {
                 correct_german_sentence: 'S1',
                 audio_file_path: '/audio1.mp3',
                 is_favorite: true,
-                topic_id: 'child-topic-123'
+                topic_id: 'child-topic-123',
+                repetition_counter: 0
             });
             expect(state.exerciseIds).toEqual(['ex1', 'ex2']);
             expect(state.exercisePerformance.get('ex1')).toEqual({ hints: 0, mistakes: 0 });
