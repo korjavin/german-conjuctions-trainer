@@ -48,4 +48,4 @@ The new bucketing scheme should use smart time-based buckets:
 
 ### Task 3: Update documentation
 
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Move this plan to `docs/plans/completed/`
