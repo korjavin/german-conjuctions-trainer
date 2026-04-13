@@ -348,6 +348,23 @@ describe('history.js', () => {
             expect(buckets).toEqual([2, 1, 1, 1, 1, 1, 1, 1]);
         });
 
+        it('places items at exact bucket boundaries in the next bucket', () => {
+            // Exactly at maxHours threshold should go to the NEXT bucket (strict <)
+            // e.g., exactly 1h => "1-4h" (not "Now"), exactly 4h => "4-12h" (not "1-4h")
+            const items = [
+                makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 1 }),   // exactly 1h => 1-4h
+                makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 4 }),   // exactly 4h => 4-12h
+                makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 12 }),  // exactly 12h => 12-24h
+                makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 24 }),  // exactly 24h => 1-2d
+                makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 48 }),  // exactly 48h => 2-4d
+                makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 96 }),  // exactly 96h => 4-7d
+                makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 168 }), // exactly 168h => Later
+            ];
+            const buckets = bucketReviewItems(items, NOW);
+            //                    Now  1-4h  4-12h 12-24h 1-2d  2-4d  4-7d  Later
+            expect(buckets).toEqual([0,  1,    1,    1,     1,    1,    1,    1]);
+        });
+
         it('treats overdue items (negative hours from now) as Now', () => {
             // lastViewed 10h ago, next_review_hours = 2 => due 8h ago
             const items = [makeItem({ lastViewedHoursAgo: 10, nextReviewHours: 2 })];
