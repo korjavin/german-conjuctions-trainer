@@ -146,39 +146,49 @@ export function getFilteredHistoryData() {
     return filtered;
 }
 
-export function renderReviewChart() {
-    const DAYS_TO_SHOW = 7;
-    const now = Date.now();
-    const msPerDay = 1000 * 60 * 60 * 24;
+// Hour-aware bucket boundaries and labels for the review chart
+export const REVIEW_BUCKETS = [
+    { label: 'Now',   maxHours: 1 },
+    { label: '1-4h',  maxHours: 4 },
+    { label: '4-12h', maxHours: 12 },
+    { label: '12-24h', maxHours: 24 },
+    { label: '1-2d',  maxHours: 48 },
+    { label: '2-4d',  maxHours: 96 },
+    { label: '4-7d',  maxHours: 168 },
+    { label: 'Later', maxHours: Infinity },
+];
+
+export function bucketReviewItems(items, now) {
     const msPerHour = 1000 * 60 * 60;
+    const buckets = new Array(REVIEW_BUCKETS.length).fill(0);
 
-    // Buckets: 0=today, 1..6=next days, 7="later"
-    const buckets = new Array(DAYS_TO_SHOW + 1).fill(0);
-
-    state.historyData.forEach(item => {
-        if (item.is_hidden) return; // Exclude ignored exercises from chart
+    items.forEach(item => {
+        if (item.is_hidden) return;
+        let hoursFromNow;
         if (item.ready_to_repeat) {
-            buckets[0]++;
-            return;
+            hoursFromNow = 0;
+        } else {
+            const lastViewed = new Date(item.last_viewed).getTime();
+            const reviewAt = lastViewed + item.next_review_hours * msPerHour;
+            hoursFromNow = Math.max(0, (reviewAt - now) / msPerHour);
         }
-        const lastViewed = new Date(item.last_viewed).getTime();
-        const reviewAt = lastViewed + item.next_review_hours * msPerHour;
-        const daysFromNow = Math.max(0, Math.ceil((reviewAt - now) / msPerDay));
-        buckets[Math.min(daysFromNow, DAYS_TO_SHOW)]++;
+        for (let i = 0; i < REVIEW_BUCKETS.length; i++) {
+            if (hoursFromNow < REVIEW_BUCKETS[i].maxHours) {
+                buckets[i]++;
+                break;
+            }
+        }
     });
 
-    const maxCount = Math.max(...buckets, 1);
-    const today = new Date();
-    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return buckets;
+}
 
-    const labels = [];
-    for (let i = 0; i < DAYS_TO_SHOW; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() + i);
-        if (i === 0) labels.push('Today');
-        else labels.push(dayNames[d.getDay()]);
-    }
-    labels.push('Later');
+export function renderReviewChart() {
+    const now = Date.now();
+    const buckets = bucketReviewItems(state.historyData, now);
+    const lastIdx = REVIEW_BUCKETS.length - 1;
+
+    const maxCount = Math.max(...buckets, 1);
 
     // Build HTML directly for reliable rendering
     let html = '';
@@ -187,11 +197,11 @@ export function renderReviewChart() {
         const height = count > 0 ? Math.max(pct, 6) : 0;
         let barClass = 'rc-bar';
         if (i === 0) barClass += ' rc-bar-today';
-        else if (i === DAYS_TO_SHOW) barClass += ' rc-bar-later';
+        else if (i === lastIdx) barClass += ' rc-bar-later';
         html += `<div class="rc-col">` +
             `<span class="rc-count">${count || ''}</span>` +
             `<div class="rc-track"><div class="${barClass}" style="height:${height}%"></div></div>` +
-            `<span class="rc-label">${labels[i]}</span>` +
+            `<span class="rc-label">${REVIEW_BUCKETS[i].label}</span>` +
             `</div>`;
     });
     dom.historyReviewChartBars.innerHTML = html;
