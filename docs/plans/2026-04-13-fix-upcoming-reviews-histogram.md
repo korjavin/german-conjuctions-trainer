@@ -43,8 +43,8 @@ The new bucketing scheme should use smart time-based buckets:
 
 ### Task 2: Verify acceptance criteria
 
-- [ ] Run full test suite (`make test`)
-- [ ] Run linter (`make lint`)
+- [x] Run full test suite (`make test`)
+- [x] Run linter (`make lint`)
 
 ### Task 3: Update documentation
 
