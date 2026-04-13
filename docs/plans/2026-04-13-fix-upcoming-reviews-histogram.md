@@ -34,12 +34,12 @@ The new bucketing scheme should use smart time-based buckets:
 - "4-7d" (due in 4-7 days)
 - "Later" (due beyond 7 days)
 
-- [ ] Replace DAYS_TO_SHOW / day-based bucketing logic with hour-aware bucket boundaries
-- [ ] Update label generation to use the new bucket labels instead of day names
-- [ ] Keep the first bucket styling (rc-bar-today class) for the "Now" bucket
-- [ ] Keep the last bucket styling (rc-bar-later class) for the "Later" bucket
-- [ ] Write tests for the new bucketing logic in `js/__tests__/history.test.js`
-- [ ] Run project test suite - must pass before task 2
+- [x] Replace DAYS_TO_SHOW / day-based bucketing logic with hour-aware bucket boundaries
+- [x] Update label generation to use the new bucket labels instead of day names
+- [x] Keep the first bucket styling (rc-bar-today class) for the "Now" bucket
+- [x] Keep the last bucket styling (rc-bar-later class) for the "Later" bucket
+- [x] Write tests for the new bucketing logic in `js/__tests__/history.test.js`
+- [x] Run project test suite - must pass before task 2
 
 ### Task 2: Verify acceptance criteria
 
