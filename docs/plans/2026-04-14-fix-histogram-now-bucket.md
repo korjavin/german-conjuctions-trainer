@@ -34,9 +34,9 @@ The histogram "Now" bucket currently counts items due within 1 hour (including n
 
 ### Task 2: Verify acceptance criteria
 
-- [ ] Run full test suite (`make test`)
-- [ ] Run linter (`make lint`)
-- [ ] Verify: histogram "Now" count logic matches "Ready to Practice" filter count logic (both use `ready_to_repeat === true` for non-hidden items)
+- [x] Run full test suite (`make test`)
+- [x] Run linter (`make lint`)
+- [x] Verify: histogram "Now" count logic matches "Ready to Practice" filter count logic (both use `ready_to_repeat === true` for non-hidden items)
 
 ### Task 3: Update documentation
 
