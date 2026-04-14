@@ -149,7 +149,7 @@ export function getFilteredHistoryData() {
 // Hour-aware bucket boundaries and labels for the review chart
 export const REVIEW_BUCKETS = [
     { label: 'Now',   maxHours: 1 },
-    { label: '1-4h',  maxHours: 4 },
+    { label: '<4h',   maxHours: 4 },
     { label: '4-12h', maxHours: 12 },
     { label: '12-24h', maxHours: 24 },
     { label: '1-2d',  maxHours: 48 },
@@ -172,7 +172,8 @@ export function bucketReviewItems(items, now) {
             const reviewAt = lastViewed + item.next_review_hours * msPerHour;
             hoursFromNow = Math.max(0, (reviewAt - now) / msPerHour);
         }
-        for (let i = 0; i < REVIEW_BUCKETS.length; i++) {
+        const startIdx = item.ready_to_repeat ? 0 : 1;
+        for (let i = startIdx; i < REVIEW_BUCKETS.length; i++) {
             if (hoursFromNow < REVIEW_BUCKETS[i].maxHours) {
                 buckets[i]++;
                 break;

@@ -24,13 +24,13 @@ The histogram "Now" bucket currently counts items due within 1 hour (including n
 - Modify: `js/history.js`
 - Modify: `js/__tests__/history.test.js`
 
-- [ ] Update test "puts items due in <1h in Now bucket" - this should now expect the item in bucket 1 (renamed "<4h"), not bucket 0
-- [ ] Update test "distributes a mix of items across buckets correctly" - the <1h non-ready item should move from Now to <4h bucket, expected result changes from `[2, 1, ...]` to `[1, 2, ...]`
-- [ ] Update test "treats overdue items (negative hours from now) as Now" - overdue but non-ready items should go to "<4h" bucket (bucket 1), not "Now"
-- [ ] Add a new test: "non-ready items due in <1h go to <4h bucket, not Now"
-- [ ] In `bucketReviewItems()` (history.js:175), for items where `ready_to_repeat === false`, start the bucket loop from index 1 instead of 0 so they skip the "Now" bucket
-- [ ] Rename REVIEW_BUCKETS[1] label from "1-4h" to "<4h" (history.js:152) since it now includes <1h non-ready items
-- [ ] Run project test suite - must pass before next task
+- [x] Update test "puts items due in <1h in Now bucket" - this should now expect the item in bucket 1 (renamed "<4h"), not bucket 0
+- [x] Update test "distributes a mix of items across buckets correctly" - the <1h non-ready item should move from Now to <4h bucket, expected result changes from `[2, 1, ...]` to `[1, 2, ...]`
+- [x] Update test "treats overdue items (negative hours from now) as Now" - overdue but non-ready items should go to "<4h" bucket (bucket 1), not "Now"
+- [x] Add a new test: "non-ready items due in <1h go to <4h bucket, not Now"
+- [x] In `bucketReviewItems()` (history.js:175), for items where `ready_to_repeat === false`, start the bucket loop from index 1 instead of 0 so they skip the "Now" bucket
+- [x] Rename REVIEW_BUCKETS[1] label from "1-4h" to "<4h" (history.js:152) since it now includes <1h non-ready items
+- [x] Run project test suite - must pass before next task
 
 ### Task 2: Verify acceptance criteria
 
