@@ -116,13 +116,8 @@ describe('history.js', () => {
             expect(dom.historyTotalCount.textContent).toBe('2'); // length
             expect(dom.historyFilterFavoritesCount.textContent).toBe('0'); // 0 favorites
 
-            // Optional properties which might have been removed in the updated branch
-            if (dom.historyReadyCount.textContent) {
-                expect(dom.historyReadyCount.textContent).toBe('1'); // 1 ready
-            }
-            if (dom.historyTrainedCount.textContent) {
-                expect(dom.historyTrainedCount.textContent).toBe('1'); // 1 trained
-            }
+            expect(dom.historyFilterReadyCount.textContent).toBe('1'); // 1 ready
+            expect(dom.historyFilterTrainedCount.textContent).toBe('1'); // 1 trained
             expect(dom.historyTotalAttempts.textContent).toBe('15'); // 10 + 5
 
             // Math.round((9 / 15) * 100) = 60
@@ -275,18 +270,19 @@ describe('history.js', () => {
             expect(buckets.every(c => c === 0)).toBe(true);
         });
 
-        it('puts items due in <1h in Now bucket', () => {
-            // lastViewed 2h ago, next_review_hours = 2.5 => due in 0.5h
+        it('puts non-ready items due in <1h in <4h bucket, not Now', () => {
+            // lastViewed 2h ago, next_review_hours = 2.5 => due in 0.5h, but not ready
             const items = [makeItem({ lastViewedHoursAgo: 2, nextReviewHours: 2.5 })];
             const buckets = bucketReviewItems(items, NOW);
-            expect(buckets[0]).toBe(1); // Now
+            expect(buckets[0]).toBe(0); // Not in Now
+            expect(buckets[1]).toBe(1); // <4h
         });
 
-        it('puts items due in 1-4h in the 1-4h bucket', () => {
+        it('puts items due in 1-4h in the <4h bucket', () => {
             // lastViewed 1h ago, next_review_hours = 3 => due in 2h
             const items = [makeItem({ lastViewedHoursAgo: 1, nextReviewHours: 3 })];
             const buckets = bucketReviewItems(items, NOW);
-            expect(buckets[1]).toBe(1); // 1-4h
+            expect(buckets[1]).toBe(1); // <4h
         });
 
         it('puts items due in 4-12h in the 4-12h bucket', () => {
@@ -334,8 +330,8 @@ describe('history.js', () => {
         it('distributes a mix of items across buckets correctly', () => {
             const items = [
                 makeItem({ readyToRepeat: true }),                              // Now
-                makeItem({ lastViewedHoursAgo: 2, nextReviewHours: 2.5 }),      // Now (0.5h)
-                makeItem({ lastViewedHoursAgo: 1, nextReviewHours: 3 }),        // 1-4h (2h)
+                makeItem({ lastViewedHoursAgo: 2, nextReviewHours: 2.5 }),      // <4h (0.5h, not ready)
+                makeItem({ lastViewedHoursAgo: 1, nextReviewHours: 3 }),        // <4h (2h)
                 makeItem({ lastViewedHoursAgo: 1, nextReviewHours: 10 }),       // 4-12h (9h)
                 makeItem({ lastViewedHoursAgo: 1, nextReviewHours: 16 }),       // 12-24h (15h)
                 makeItem({ lastViewedHoursAgo: 1, nextReviewHours: 30 }),       // 1-2d (29h)
@@ -345,14 +341,14 @@ describe('history.js', () => {
                 makeItem({ readyToRepeat: true, isHidden: true }),              // excluded
             ];
             const buckets = bucketReviewItems(items, NOW);
-            expect(buckets).toEqual([2, 1, 1, 1, 1, 1, 1, 1]);
+            expect(buckets).toEqual([1, 2, 1, 1, 1, 1, 1, 1]);
         });
 
         it('places items at exact bucket boundaries in the next bucket', () => {
             // Exactly at maxHours threshold should go to the NEXT bucket (strict <)
-            // e.g., exactly 1h => "1-4h" (not "Now"), exactly 4h => "4-12h" (not "1-4h")
+            // e.g., exactly 1h => "<4h" (not "Now"), exactly 4h => "4-12h" (not "<4h")
             const items = [
-                makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 1 }),   // exactly 1h => 1-4h
+                makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 1 }),   // exactly 1h => <4h
                 makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 4 }),   // exactly 4h => 4-12h
                 makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 12 }),  // exactly 12h => 12-24h
                 makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 24 }),  // exactly 24h => 1-2d
@@ -361,15 +357,27 @@ describe('history.js', () => {
                 makeItem({ lastViewedHoursAgo: 0, nextReviewHours: 168 }), // exactly 168h => Later
             ];
             const buckets = bucketReviewItems(items, NOW);
-            //                    Now  1-4h  4-12h 12-24h 1-2d  2-4d  4-7d  Later
+            //                    Now  <4h   4-12h 12-24h 1-2d  2-4d  4-7d  Later
             expect(buckets).toEqual([0,  1,    1,    1,     1,    1,    1,    1]);
         });
 
-        it('treats overdue items (negative hours from now) as Now', () => {
-            // lastViewed 10h ago, next_review_hours = 2 => due 8h ago
+        it('treats overdue non-ready items as <4h, not Now', () => {
+            // lastViewed 10h ago, next_review_hours = 2 => due 8h ago, but not ready
             const items = [makeItem({ lastViewedHoursAgo: 10, nextReviewHours: 2 })];
             const buckets = bucketReviewItems(items, NOW);
-            expect(buckets[0]).toBe(1); // Now
+            expect(buckets[0]).toBe(0); // Not in Now
+            expect(buckets[1]).toBe(1); // <4h
+        });
+
+        it('non-ready items due in <1h go to <4h bucket, not Now', () => {
+            // Two non-ready items due very soon - both should skip Now bucket
+            const items = [
+                makeItem({ lastViewedHoursAgo: 2, nextReviewHours: 2.1 }),  // due in 0.1h
+                makeItem({ lastViewedHoursAgo: 5, nextReviewHours: 5.5 }),  // due in 0.5h
+            ];
+            const buckets = bucketReviewItems(items, NOW);
+            expect(buckets[0]).toBe(0); // Now: empty
+            expect(buckets[1]).toBe(2); // <4h: both items
         });
     });
 });
