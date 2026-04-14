@@ -40,4 +40,4 @@ The histogram "Now" bucket currently counts items due within 1 hour (including n
 
 ### Task 3: Update documentation
 
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Move this plan to `docs/plans/completed/`
