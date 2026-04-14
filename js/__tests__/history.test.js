@@ -116,13 +116,8 @@ describe('history.js', () => {
             expect(dom.historyTotalCount.textContent).toBe('2'); // length
             expect(dom.historyFilterFavoritesCount.textContent).toBe('0'); // 0 favorites
 
-            // Optional properties which might have been removed in the updated branch
-            if (dom.historyReadyCount.textContent) {
-                expect(dom.historyReadyCount.textContent).toBe('1'); // 1 ready
-            }
-            if (dom.historyTrainedCount.textContent) {
-                expect(dom.historyTrainedCount.textContent).toBe('1'); // 1 trained
-            }
+            expect(dom.historyFilterReadyCount.textContent).toBe('1'); // 1 ready
+            expect(dom.historyFilterTrainedCount.textContent).toBe('1'); // 1 trained
             expect(dom.historyTotalAttempts.textContent).toBe('15'); // 10 + 5
 
             // Math.round((9 / 15) * 100) = 60
