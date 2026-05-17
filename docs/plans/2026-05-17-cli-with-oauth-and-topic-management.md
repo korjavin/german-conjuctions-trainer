@@ -202,11 +202,11 @@ CLI (new):
 
 ### Task 8: Wire CLI build into Makefile / CI + add `gct --version`
 
-- [ ] add `make build-cli` target to existing build pipeline (or new `Makefile` if none exists — check `.github/workflows/` first)
-- [ ] add `gct --version` and `gct version` printing version + commit (use `runtime/debug.ReadBuildInfo` for module info; commit injected via `-ldflags`)
-- [ ] update `.github/workflows/` to also `go build ./cmd/cli` so a broken CLI fails CI
-- [ ] verify `go vet ./...` and `go build ./...` pass
-- [ ] run full test suite `go test ./...` — must pass before next task
+- [x] add `make build-cli` target to existing build pipeline (or new `Makefile` if none exists — check `.github/workflows/` first)
+- [x] add `gct --version` and `gct version` printing version + commit (use `runtime/debug.ReadBuildInfo` for module info; commit injected via `-ldflags`)
+- [x] update `.github/workflows/` to also `go build ./cmd/cli` so a broken CLI fails CI
+- [x] verify `go vet ./...` and `go build ./...` pass
+- [x] run full test suite `go test ./...` — must pass before next task
 
 ### Task 9: Verify acceptance criteria
 

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -772,13 +773,36 @@ func TestExercisesHelp(t *testing.T) {
 }
 
 func TestVersionCmd(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	code := run([]string{"version"}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Errorf("code = %d, stderr=%s", code, stderr.String())
+	for _, arg := range []string{"version", "--version", "-v"} {
+		t.Run(arg, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := run([]string{arg}, nil, &stdout, &stderr)
+			if code != 0 {
+				t.Errorf("code = %d, stderr=%s", code, stderr.String())
+			}
+			out := stdout.String()
+			if !strings.HasPrefix(out, "gct ") {
+				t.Errorf("expected version line to start with 'gct ', got %q", out)
+			}
+			if !strings.Contains(out, version) {
+				t.Errorf("expected version %q in output, got %q", version, out)
+			}
+			if !strings.Contains(out, runtime.Version()) {
+				t.Errorf("expected Go runtime version in output, got %q", out)
+			}
+		})
 	}
-	if strings.TrimSpace(stdout.String()) == "" {
-		t.Error("expected version output")
+}
+
+func TestPrintVersionWithCommit(t *testing.T) {
+	orig := commit
+	commit = "abcdef1"
+	t.Cleanup(func() { commit = orig })
+
+	var buf bytes.Buffer
+	printVersion(&buf)
+	if !strings.Contains(buf.String(), "commit abcdef1") {
+		t.Errorf("expected commit in output, got %q", buf.String())
 	}
 }
 

@@ -16,6 +16,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -23,9 +25,36 @@ import (
 	"german-conjunctions-trainer/internal/cli"
 )
 
-// version is overridden via -ldflags at build time (Task 8). The zero value
-// ("dev") is what you get from `go run` or a plain `go build`.
-var version = "dev"
+// version and commit are overridden via -ldflags at build time (see the
+// Makefile). With a plain `go build` they stay at "dev"/"" and we fall back
+// to runtime/debug.ReadBuildInfo for the VCS revision so `gct version` still
+// reports something useful when invoked from a `go install`'d binary.
+var (
+	version = "dev"
+	commit  = ""
+)
+
+// printVersion renders the build info. It prefers ldflags-injected values
+// and falls back to runtime/debug.ReadBuildInfo for the VCS revision when
+// the binary was produced by `go install`/`go build` without ldflags.
+func printVersion(w io.Writer) {
+	v, c := version, commit
+	if c == "" {
+		if info, ok := debug.ReadBuildInfo(); ok {
+			for _, s := range info.Settings {
+				if s.Key == "vcs.revision" {
+					c = s.Value
+					break
+				}
+			}
+		}
+	}
+	if c == "" {
+		fmt.Fprintf(w, "gct %s (%s)\n", v, runtime.Version())
+		return
+	}
+	fmt.Fprintf(w, "gct %s (commit %s, %s)\n", v, c, runtime.Version())
+}
 
 // usage prints the top-level help. Subcommand-specific help is delegated to
 // each subcommand's *flag.FlagSet (-h / --help on `gct topics`, etc.).
@@ -70,7 +99,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, usage)
 		return 0
 	case "version", "--version", "-v":
-		fmt.Fprintln(stdout, version)
+		printVersion(stdout)
 		return 0
 	case "login":
 		return runLogin(rest, stdout, stderr)
