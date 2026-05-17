@@ -54,7 +54,7 @@ import {
 import {
     checkAuthStatus,
 } from './auth.js';
-import { fetchDatabaseStatsAPI } from './api.js';
+import { fetchDatabaseStatsAPI, createCLITokenAPI } from './api.js';
 import {
     showExerciseHistory,
     renderHistoryPage,
@@ -90,7 +90,67 @@ dom.settingsBtn.addEventListener('click', () => {
     loadTopics(); // Refresh topics when opening settings
     dom.settingsModal.showModal();
     loadDatabaseStats();
+    toggleCLIAccessSection();
 });
+
+// --- CLI Access (admin only) ---
+// Shows or hides the "CLI Access" panel based on admin status, and clears
+// any token left over from a previous open. We never want a token to be
+// visible after the user closes and re-opens the modal — it was a one-time
+// reveal.
+function toggleCLIAccessSection() {
+    if (!dom.cliAccessSection) return;
+    if (!state.isAdmin) {
+        dom.cliAccessSection.classList.add('hidden');
+        return;
+    }
+    dom.cliAccessSection.classList.remove('hidden');
+    if (dom.cliTokenResult) dom.cliTokenResult.classList.add('hidden');
+    if (dom.cliTokenValue) dom.cliTokenValue.value = '';
+    if (dom.cliTokenError) {
+        dom.cliTokenError.classList.add('hidden');
+        dom.cliTokenError.textContent = '';
+    }
+}
+
+if (dom.cliTokenGenerateBtn) {
+    dom.cliTokenGenerateBtn.addEventListener('click', async () => {
+        dom.cliTokenError.classList.add('hidden');
+        dom.cliTokenError.textContent = '';
+        dom.cliTokenGenerateBtn.disabled = true;
+        try {
+            const label = (dom.cliTokenLabel.value || '').trim() || 'cli';
+            const result = await createCLITokenAPI(label);
+            dom.cliTokenValue.value = result.token || '';
+            dom.cliTokenResult.classList.remove('hidden');
+            dom.cliTokenValue.focus();
+            dom.cliTokenValue.select();
+        } catch (err) {
+            dom.cliTokenError.textContent = err.message || 'Failed to mint CLI token.';
+            dom.cliTokenError.classList.remove('hidden');
+        } finally {
+            dom.cliTokenGenerateBtn.disabled = false;
+        }
+    });
+}
+
+if (dom.cliTokenCopyBtn) {
+    dom.cliTokenCopyBtn.addEventListener('click', async () => {
+        const value = dom.cliTokenValue.value;
+        if (!value) return;
+        try {
+            await navigator.clipboard.writeText(value);
+            const original = dom.cliTokenCopyBtn.textContent;
+            dom.cliTokenCopyBtn.textContent = 'Copied!';
+            setTimeout(() => { dom.cliTokenCopyBtn.textContent = original; }, 1500);
+        } catch (_) {
+            // Clipboard API can fail (e.g. insecure context). Fall back to
+            // selecting the field so the user can ctrl/cmd-C themselves.
+            dom.cliTokenValue.focus();
+            dom.cliTokenValue.select();
+        }
+    });
+}
 
 dom.settingsCloseBtn.addEventListener('click', () => {
     dom.settingsModal.close();

@@ -2157,6 +2157,20 @@ button:disabled.is-audio-off {
     overflow-y: auto;
 }
 
+/* CLI Access panel — admin-only token mint UI in the settings modal. */
+.cli-token-snippet {
+    background-color: var(--mr-surface);
+    border: 1px solid rgba(163, 63, 17, 0.15);
+    border-radius: 4px;
+    padding: var(--spacing-2);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--mr-text);
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
 .db-stats-topic-row {
     display: flex;
     justify-content: space-between;

@@ -69,7 +69,8 @@ Usage:
   gct <command> [flags]
 
 Commands:
-  login      Authenticate via Google OAuth (device flow) and save a bearer token
+  auth       Manage CLI auth without Google device flow (set-token)
+  login      Authenticate via Google OAuth device flow (legacy; see step 1c)
   logout     Clear the locally-stored token (does not revoke on the server)
   whoami     Print the currently-configured user and server URL
   topics     Manage topics (list, get, create, update, delete, move)
@@ -88,18 +89,31 @@ Global flags (apply to most subcommands):
 AGENT QUICKSTART — how to use gct from a non-interactive shell
 ============================================================================
 
-1. AUTHENTICATE. Two options:
+1. AUTHENTICATE. Pick whichever fits your setup — all three end with a
+   bearer token on disk that subsequent commands use non-interactively.
 
-   a) Run 'gct login --server https://trainer.example.com' once interactively.
-      It prints a short code and the URL https://www.google.com/device.
-      Open that URL in any browser, enter the code, finish Google sign-in.
-      The bearer token is saved to ~/.config/gct/config.json (mode 0600).
-      Subsequent gct invocations are fully non-interactive.
+   a) RECOMMENDED — mint a token from the web UI:
+        - Open the web app in any browser, sign in with your Google admin
+          account (you have to be the admin configured on the server).
+        - Open the Settings modal → "CLI Access" → click "Generate token".
+        - Copy the token (shown once), then on the CLI host:
+            gct auth set-token <PASTED_TOKEN> --server https://trainer.example.com
+        - No GCP setup required.
 
-   b) Skip 'gct login' entirely: set GCT_TOKEN=<bearer-token> and pass
-      --server URL (or persist it once via 'gct login' on another host).
-      Tokens are issued by the server's POST /api/auth/cli-exchange endpoint;
-      the admin can mint one on your behalf.
+   b) Mint via curl using your browser session cookie (if you don't want to
+      use the UI):
+        curl -X POST https://trainer.example.com/api/auth/cli-tokens \
+             -H "Cookie: user-session=<COOKIE_FROM_DEVTOOLS>" \
+             -d '{"label":"server"}'
+      Then:  gct auth set-token <token> --server https://trainer.example.com
+
+   c) Google device flow (legacy): 'gct login --server URL'. Requires a
+      "TVs and Limited Input devices" OAuth client in GCP (Google's device
+      endpoint refuses other client types) plus GCT_GOOGLE_CLIENT_ID /
+      GCT_GOOGLE_CLIENT_SECRET env vars. Most users should prefer (a).
+
+   d) For agents / CI: set GCT_TOKEN=<bearer-token> in the environment plus
+      --server URL. No config file needed.
 
    'gct whoami' confirms auth. If it prints "User: <uuid>" you are good.
    "not logged in" or "token rejected by server" → fix auth first; no other
@@ -186,6 +200,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "version", "--version", "-v":
 		printVersion(stdout)
 		return 0
+	case "auth":
+		return runAuth(rest, stdout, stderr)
 	case "login":
 		return runLogin(rest, stdout, stderr)
 	case "logout":
@@ -251,6 +267,96 @@ func runLogin(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	fmt.Fprintf(stdout, "Logged in as %s (label: %s)\n", res.UserID, res.Label)
+	return 0
+}
+
+// authUsage documents the `gct auth` subcommands. set-token is the primary
+// path for users who'd rather not deal with Google's device-flow OAuth
+// client-type restrictions — they generate a token in the web UI (or via
+// curl against /api/auth/cli-tokens) and persist it locally with one
+// command.
+const authUsage = `gct auth — manage CLI credentials without Google OAuth
+
+Usage:
+  gct auth set-token <TOKEN> [--server URL] [--config PATH]
+
+The token comes from the server's "CLI Access" settings panel (admin only)
+or from a direct call to POST /api/auth/cli-tokens with your web session
+cookie. After set-token, run 'gct whoami' to confirm.
+`
+
+// runAuth dispatches `gct auth <sub>` subcommands.
+func runAuth(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprint(stderr, authUsage)
+		return 2
+	}
+	sub, rest := args[0], args[1:]
+	switch sub {
+	case "-h", "--help", "help":
+		fmt.Fprint(stdout, authUsage)
+		return 0
+	case "set-token":
+		return runAuthSetToken(rest, stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "gct auth: unknown subcommand %q\n\n", sub)
+		fmt.Fprint(stderr, authUsage)
+		return 2
+	}
+}
+
+// runAuthSetToken persists a manually-supplied bearer token to the config
+// file. Intended for the workflow "admin mints token in the web UI, pastes
+// it into the CLI host". --server is optional if the config already has a
+// server URL; otherwise it's required so subsequent commands know where
+// to talk.
+func runAuthSetToken(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("auth set-token", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var (
+		server     = fs.String("server", "", "Server base URL (required if not already in config)")
+		configPath = fs.String("config", "", "Config file path (overrides $GCT_CONFIG)")
+	)
+	if err := fs.Parse(reorderArgs(args)); err != nil {
+		return 2
+	}
+	if fs.NArg() < 1 {
+		fmt.Fprintln(stderr, "gct auth set-token: token argument required")
+		fmt.Fprintln(stderr, "usage: gct auth set-token <TOKEN> [--server URL]")
+		return 2
+	}
+	if fs.NArg() > 1 {
+		fmt.Fprintf(stderr, "gct auth set-token: expected exactly one token, got %d\n", fs.NArg())
+		return 2
+	}
+	token := strings.TrimSpace(fs.Arg(0))
+	if token == "" {
+		fmt.Fprintln(stderr, "gct auth set-token: token cannot be empty")
+		return 2
+	}
+
+	cfg, err := loadConfig(*configPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "gct auth set-token: %v\n", err)
+		return 1
+	}
+	if *server != "" {
+		cfg.ServerURL = *server
+	}
+	if cfg.ServerURL == "" {
+		fmt.Fprintln(stderr, "gct auth set-token: server URL is required — pass --server URL or run 'gct login --server URL' first")
+		return 2
+	}
+	cfg.Token = token
+	// Clear the cached UserID — it belonged to the previous token (if any)
+	// and would be misleading if the new token is for a different user. The
+	// next `gct whoami` call will re-populate it from /api/auth/status.
+	cfg.UserID = ""
+	if err := saveConfig(cfg, *configPath); err != nil {
+		fmt.Fprintf(stderr, "gct auth set-token: save config: %v\n", err)
+		return 1
+	}
+	fmt.Fprintln(stdout, "Token saved. Run 'gct whoami' to verify.")
 	return 0
 }
 

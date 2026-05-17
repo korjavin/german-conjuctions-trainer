@@ -256,16 +256,7 @@ func (a *App) handleCLIExchange(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "TOKEN_GENERATION_FAILED", "Failed to generate token", err.Error(), false)
-		return
-	}
-	plaintext := "gct_" + base64.RawURLEncoding.EncodeToString(raw)
-	sum := sha256.Sum256([]byte(plaintext))
-	hash := hex.EncodeToString(sum[:])
-
-	tok, err := a.DB.CreateCLIToken(user.ID, hash, label)
+	plaintext, tokenID, err := a.mintCLIToken(user.ID, label)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "TOKEN_PERSIST_FAILED", "Failed to persist token", err.Error(), false)
 		return
@@ -275,8 +266,81 @@ func (a *App) handleCLIExchange(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"token":    plaintext,
-		"token_id": tok.ID,
+		"token_id": tokenID,
 		"user_id":  user.ID,
+	})
+}
+
+// mintCLIToken generates a fresh "gct_…" bearer token for the given user,
+// persists its SHA-256 hash under the supplied label, and returns the
+// plaintext token plus the row ID. Shared between handleCLIExchange (Google
+// OAuth path) and handleCreateCLIToken (cookie/admin path) so the token
+// format, hash algorithm, and storage call live in one place.
+func (a *App) mintCLIToken(userID, label string) (plaintext, tokenID string, err error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", "", err
+	}
+	plaintext = "gct_" + base64.RawURLEncoding.EncodeToString(raw)
+	sum := sha256.Sum256([]byte(plaintext))
+	hash := hex.EncodeToString(sum[:])
+
+	tok, err := a.DB.CreateCLIToken(userID, hash, label)
+	if err != nil {
+		return "", "", err
+	}
+	return plaintext, tok.ID, nil
+}
+
+// handleCreateCLIToken mints a CLI bearer token for the authenticated user
+// using their existing web session. This is the simpler alternative to
+// handleCLIExchange: instead of requiring the CLI to complete a Google
+// device-authorization flow (which now forces operators to register a
+// "TVs and Limited Input devices" OAuth client in GCP), the admin logs into
+// the web UI, hits the CLI section, and copy-pastes a token. Wrapped by
+// adminOnly in the route table so only configured admins can mint tokens.
+func (a *App) handleCreateCLIToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "", false)
+		return
+	}
+
+	userID := getUserIDFromRequest(r)
+	if userID == "" {
+		// Defensive — adminOnly already required auth, but this keeps the
+		// handler safe to wire under different middleware later.
+		writeJSONError(w, http.StatusUnauthorized, "NOT_AUTHENTICATED", "You must be logged in to mint a CLI token", "", false)
+		return
+	}
+
+	var req struct {
+		Label string `json:"label"`
+	}
+	// Body is optional — empty/no body is treated as label="cli".
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST_BODY", "Invalid request body", err.Error(), false)
+			return
+		}
+	}
+	label := strings.TrimSpace(req.Label)
+	if label == "" {
+		label = "cli"
+	}
+
+	plaintext, tokenID, err := a.mintCLIToken(userID, label)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "TOKEN_PERSIST_FAILED", "Failed to persist token", err.Error(), false)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"token":    plaintext,
+		"token_id": tokenID,
+		"user_id":  userID,
+		"label":    label,
 	})
 }
 

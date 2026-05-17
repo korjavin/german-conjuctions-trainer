@@ -132,4 +132,13 @@ export const dom = {
     dbStatDbSize: document.getElementById('db-stat-db-size'),
     dbStatAudioCache: document.getElementById('db-stat-audio-cache'),
     dbStatsPerTopic: document.getElementById('db-stats-per-topic'),
+
+    // CLI access (admin only)
+    cliAccessSection: document.getElementById('cli-access-section'),
+    cliTokenLabel: document.getElementById('cli-token-label'),
+    cliTokenGenerateBtn: document.getElementById('cli-token-generate-btn'),
+    cliTokenResult: document.getElementById('cli-token-result'),
+    cliTokenValue: document.getElementById('cli-token-value'),
+    cliTokenCopyBtn: document.getElementById('cli-token-copy-btn'),
+    cliTokenError: document.getElementById('cli-token-error'),
 };

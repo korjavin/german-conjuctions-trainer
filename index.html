@@ -359,6 +359,36 @@ Situations: [contexts, e.g. explaining reasons, expressing goals, giving instruc
                 </div>
             </div>
 
+            <!-- CLI Access (admin only) -->
+            <div id="cli-access-section" class="mb-6 hidden">
+                <div class="db-stats-separator"></div>
+                <h3 class="section-title mb-2">CLI Access</h3>
+                <p class="section-desc mb-3">
+                    Generate a bearer token for the <code>gct</code> command-line tool.
+                    The token grants the same permissions as your current admin session.
+                    Save the token now — it is shown only once.
+                </p>
+                <div class="flex items-center gap-2 mb-3">
+                    <label for="cli-token-label" class="text-label">Label:</label>
+                    <input type="text" id="cli-token-label" class="form-input" placeholder="laptop" maxlength="64" style="max-width: 16rem;">
+                    <button id="cli-token-generate-btn" class="btn-primary btn-sm">Generate token</button>
+                </div>
+                <div id="cli-token-result" class="hidden">
+                    <label class="text-label block mb-1">Token (copy now):</label>
+                    <div class="flex items-center gap-2 mb-2">
+                        <input type="text" id="cli-token-value" class="form-input flex-1" readonly>
+                        <button id="cli-token-copy-btn" class="btn-secondary btn-sm">Copy</button>
+                    </div>
+                    <details>
+                        <summary class="db-stats-summary">How to use this token</summary>
+                        <pre class="cli-token-snippet mt-2"># On the machine that will run gct:
+gct auth set-token &lt;PASTED_TOKEN&gt; --server &lt;THIS_SERVER_URL&gt;
+gct whoami</pre>
+                    </details>
+                </div>
+                <div id="cli-token-error" class="text-error text-sm hidden mt-2"></div>
+            </div>
+
             <div class="flex justify-end">
                 <button id="settings-close-btn" class="btn-secondary">Close</button>
             </div>
