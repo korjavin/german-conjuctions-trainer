@@ -55,6 +55,15 @@ To provide insight into the prompt refinement process, you can view the most rec
 
 You can access this feature via the "View Last Refined Prompt" button in the settings menu.
 
+## Command-Line Client (`gct`)
+
+A Go-based CLI under `cmd/cli` lets admins and coding agents manage topics and
+trigger exercise generation without using the web UI. It authenticates via
+Google OAuth (device flow) and stores a long-lived bearer token in
+`~/.config/gct/config.json`. Build it with `make build-cli`. See
+[CLI.md](CLI.md) for installation, GCP setup, command reference, and
+troubleshooting.
+
 ## Running with Docker
 
 ### Using the pre-built image from GHCR:

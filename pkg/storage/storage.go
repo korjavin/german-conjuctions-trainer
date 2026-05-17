@@ -55,6 +55,19 @@ type User struct {
 	GoogleID string `json:"google_id"`
 }
 
+// CLIToken represents a long-lived bearer token issued to a CLI / agent
+// after a successful OAuth device-flow login. The plaintext token is never
+// stored; only its SHA-256 hex digest lives in the database.
+type CLIToken struct {
+	ID         string     `json:"id"`
+	UserID     string     `json:"user_id"`
+	TokenHash  string     `json:"token_hash"`
+	Label      string     `json:"label"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+}
+
 type UserStats struct {
 	UserID         string `json:"user_id"`
 	TotalExercises int    `json:"total_exercises"`
@@ -153,6 +166,13 @@ type Storage interface {
 	GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error)
 	ToggleFavorite(userID, exerciseID string) (bool, error)
 	ToggleHideExercise(userID, exerciseID string) (bool, error)
+
+	// CLI Tokens
+	CreateCLIToken(userID, tokenHash, label string) (*CLIToken, error)
+	GetCLITokenByHash(tokenHash string) (*CLIToken, error)
+	TouchCLIToken(id string) error
+	RevokeCLIToken(id, userID string) error
+	ListCLITokensForUser(userID string) ([]*CLIToken, error)
 
 	// Statistics
 	GetDatabaseStats(audioCacheDir, dbFilePath string) (*DatabaseStats, error)

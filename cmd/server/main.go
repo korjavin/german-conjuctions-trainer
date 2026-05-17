@@ -134,6 +134,10 @@ func main() {
 	db.InitializeDefaultTopics()
 
 	a := app.New(db, sc, oauthConfig, oauthState, adminGoogleID, el, corsAllowedOrigins, dbPath, "./audio_cache")
+	a.CLIGoogleClientID = os.Getenv("GCT_GOOGLE_CLIENT_ID")
+	if a.CLIGoogleClientID == "" {
+		log.Println("Warning: GCT_GOOGLE_CLIENT_ID not set. CLI login (POST /api/auth/cli-exchange) will be disabled.")
+	}
 	a.RegisterRoutes()
 
 	port := os.Getenv("PORT")

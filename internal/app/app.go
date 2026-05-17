@@ -19,10 +19,23 @@ type App struct {
 	OAuthConfig        *oauth2.Config
 	OAuthState         string
 	AdminGoogleID      string
+	// CLIGoogleClientID is the OAuth client ID of the CLI's Google
+	// application. handleCLIExchange refuses to mint app bearer tokens for
+	// Google access tokens whose audience does not match this value.
+	// Without this gate, a token minted for any third-party OAuth client
+	// could be replayed to log in as the corresponding Google user. Set
+	// from GCT_GOOGLE_CLIENT_ID at server startup.
+	CLIGoogleClientID  string
 	ElevenLabs         ElevenLabsConfig
 	CORSAllowedOrigins string
 	DBPath             string
 	AudioCacheDir      string
+	// UserInfo is the Google userinfo fetcher used by the CLI exchange handler.
+	// Defaulted to a real google.golang.org/api/oauth2/v2 client in New(); tests
+	// inject a fake to avoid hitting Google. The userinfo URL is hardcoded
+	// inside the oauth2v2 SDK, so this interface seam is the only practical way
+	// to test the handler in isolation.
+	UserInfo           UserInfoFetcher
 	clients            map[string]*rateclient
 	mu                 sync.Mutex
 	shutdown           chan struct{} // Channel to signal goroutine shutdown
@@ -75,6 +88,7 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 		CORSAllowedOrigins: corsAllowedOrigins,
 		DBPath:             dbPath,
 		AudioCacheDir:      audioCacheDir,
+		UserInfo:           googleUserInfoFetcher{},
 		clients:            make(map[string]*rateclient),
 		shutdown:           make(chan struct{}),
 	}
@@ -144,9 +158,10 @@ func (a *App) RegisterRoutes() {
 
 	http.HandleFunc("/auth/google/login", a.handleGoogleLogin)
 	http.HandleFunc("/auth/google/callback", a.handleGoogleCallback)
-	http.HandleFunc("/api/auth/status", a.handleAuthStatus)
+	http.HandleFunc("/api/auth/status", a.withOptionalAuth(a.handleAuthStatus))
 	http.HandleFunc("/auth/logout", a.handleLogout)
 	http.HandleFunc("/api/auth/is_admin", a.withOptionalAuth(a.handleIsAdmin))
+	http.HandleFunc("/api/auth/cli-exchange", a.handleCLIExchange)
 
 	http.HandleFunc("/api/user/stats", a.withAuth(a.handleUserStats))
 	http.HandleFunc("/api/user/settings", a.withAuth(a.handleUserSettings))
