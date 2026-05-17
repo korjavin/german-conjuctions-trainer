@@ -160,19 +160,19 @@ CLI (new):
 
 ### Task 5: Implement `gct login` / `logout` / `whoami` (device flow)
 
-- [ ] create `internal/cli/oauth.go` implementing the device flow:
-  - `func Login(ctx, serverURL, label string) (token, userID string, err error)`
-  - build `oauth2.Config{ClientID: googleClientID, ClientSecret: googleClientSecret, Scopes: [userinfo.email, userinfo.profile], Endpoint: google.Endpoint}`
+- [x] create `internal/cli/oauth.go` implementing the device flow:
+  - `func Login(ctx, serverURL, label string, out io.Writer) (*LoginResult, error)` — runs the OAuth 2.0 Device Authorization Grant and exchanges the resulting Google access token for a server-issued bearer via POST /api/auth/cli-exchange. Internal `loginWith(ctx, loginOptions)` is the test seam so httptest.Server can stand in for both Google and the project's own server.
+  - build `oauth2.Config{ClientID, ClientSecret, Scopes: [userinfo.email, userinfo.profile], Endpoint}` (endpoint defaults to `google.Endpoint`)
   - call `cfg.DeviceAuth(ctx)` → get `*oauth2.DeviceAuthResponse{DeviceCode, UserCode, VerificationURI, Interval, Expiry}`
-  - print prompt: `"Visit %s and enter code: %s\n(expires in %s)\n"` using `VerificationURI` and `UserCode`
-  - call `cfg.DeviceAccessToken(ctx, da)` — blocks, polling at `Interval` until success/expiry/denial; surface friendly errors for `authorization_pending` exhaustion, `access_denied`, `expired_token`
-  - POST `{ "google_access_token": tok.AccessToken, "label": label }` to `<serverURL>/api/auth/cli-exchange`, return the server-issued token + user ID
-- [ ] embed `googleClientID` / `googleClientSecret` via `-ldflags "-X 'german-conjunctions-trainer/internal/cli.googleClientID=…' -X 'german-conjunctions-trainer/internal/cli.googleClientSecret=…'"`; also accept `GCT_GOOGLE_CLIENT_ID`/`GCT_GOOGLE_CLIENT_SECRET` env overrides; error with a clear message if neither is set
-- [ ] add `gct login [--server URL] [--label NAME]` command in `cmd/cli/main.go` (default label `"cli"`); on success, write token to config; print `"Logged in as <userID> (label: <label>)"`. Re-running `gct login` does NOT revoke prior tokens — server accumulates them.
-- [ ] add `gct logout` — clears token from local config only (server-side revocation is a future enhancement)
-- [ ] add `gct whoami` — `GET /api/auth/status` with bearer header; prints user ID and configured server URL
-- [ ] write `internal/cli/oauth_test.go`: stand up an `httptest.Server` that fakes both Google device endpoints (device auth, token poll) and the project's `/api/auth/cli-exchange`. Use a custom `oauth2.Endpoint{DeviceAuthURL, TokenURL}` pointing at the fake server. Assert: happy path returns token + saves config; `authorization_pending` then success works; `access_denied` returns clean error; ctx cancel/timeout works.
-- [ ] run `go test ./internal/cli/...` and `go build ./cmd/cli` — must pass before next task
+  - print prompt: `"To sign in, open this URL on any device:\n    <URI>\nAnd enter this code:\n    <CODE>\nWaiting for confirmation… (expires in <D>)\n"` to the supplied `io.Writer`
+  - call `cfg.DeviceAccessToken(ctx, da)` — blocks, polling at `Interval` until success/expiry/denial; `friendlyDeviceErr` maps `*oauth2.RetrieveError` codes onto action-oriented messages for `access_denied`, `expired_token`
+  - POST `{ "google_access_token": tok.AccessToken, "label": label }` to `<serverURL>/api/auth/cli-exchange`, return `LoginResult{Token, UserID, Label}`
+- [x] embed `googleClientID` / `googleClientSecret` via `-ldflags "-X 'german-conjunctions-trainer/internal/cli.googleClientID=…' -X 'german-conjunctions-trainer/internal/cli.googleClientSecret=…'"`; also accept `GCT_GOOGLE_CLIENT_ID`/`GCT_GOOGLE_CLIENT_SECRET` env overrides; `ErrMissingGoogleClient` returned with a clear message if neither is set
+- [x] add `gct login [--server URL] [--label NAME] [--config PATH]` command in `cmd/cli/main.go` (default label `"cli"`); on success, write token to config; print `"Logged in as <userID> (label: <label>)"`. Re-running `gct login` does NOT revoke prior tokens — server accumulates them. Ctrl-C cancels via a SIGINT-aware context.
+- [x] add `gct logout` — clears token from local config only (server-side revocation is a future enhancement)
+- [x] add `gct whoami` — `GET /api/auth/status` with bearer header; prints user ID and configured server URL. Required wrapping `handleAuthStatus` in `withOptionalAuth` so bearer-token requests authenticate the same way cookie requests do.
+- [x] write `internal/cli/oauth_test.go`: stand up an `httptest.Server` that fakes both Google device endpoints (device auth, token poll) and the project's `/api/auth/cli-exchange`. Use a custom `oauth2.Endpoint{DeviceAuthURL, TokenURL}` pointing at the fake server. Asserts: happy path returns token + records label/google-token on the server; `authorization_pending` then success works; `access_denied` and `expired_token` return clean errors; context cancellation propagates as `context.DeadlineExceeded`; exchange failure surfaces an `ErrUnauthorized`-wrapped `*APIError`; missing client credentials → `ErrMissingGoogleClient`; env-var overrides bypass `ErrMissingGoogleClient`.
+- [x] run `go test ./internal/cli/...` and `go build ./cmd/cli` — passes; full `go test ./...` is green.
 
 ### Task 6: Implement `gct topics` subcommands
 

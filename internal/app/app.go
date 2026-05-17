@@ -151,7 +151,7 @@ func (a *App) RegisterRoutes() {
 
 	http.HandleFunc("/auth/google/login", a.handleGoogleLogin)
 	http.HandleFunc("/auth/google/callback", a.handleGoogleCallback)
-	http.HandleFunc("/api/auth/status", a.handleAuthStatus)
+	http.HandleFunc("/api/auth/status", a.withOptionalAuth(a.handleAuthStatus))
 	http.HandleFunc("/auth/logout", a.handleLogout)
 	http.HandleFunc("/api/auth/is_admin", a.withOptionalAuth(a.handleIsAdmin))
 	http.HandleFunc("/api/auth/cli-exchange", a.handleCLIExchange)

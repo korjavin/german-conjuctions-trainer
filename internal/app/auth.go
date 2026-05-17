@@ -137,20 +137,18 @@ func (a *App) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
+// handleAuthStatus reports whether the request is authenticated. It is
+// wrapped in withOptionalAuth so it transparently honours both the
+// user-session cookie and the CLI bearer token; the actual user lookup is
+// done by the middleware, leaving this handler to just format the response.
 func (a *App) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(cookieName)
-	if err != nil {
-		json.NewEncoder(w).Encode(map[string]any{"logged_in": false})
+	w.Header().Set("Content-Type", "application/json")
+	userID := getUserIDFromRequest(r)
+	if userID == "" {
+		_ = json.NewEncoder(w).Encode(map[string]any{"logged_in": false})
 		return
 	}
-
-	var userID string
-	if err = a.SC.Decode(cookieName, cookie.Value, &userID); err != nil {
-		json.NewEncoder(w).Encode(map[string]any{"logged_in": false})
-		return
-	}
-
-	json.NewEncoder(w).Encode(map[string]any{"logged_in": true, "user_id": userID})
+	_ = json.NewEncoder(w).Encode(map[string]any{"logged_in": true, "user_id": userID})
 }
 
 func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
