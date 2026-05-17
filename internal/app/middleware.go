@@ -2,9 +2,12 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -14,6 +17,7 @@ type contextKey string
 
 const userContextKey = contextKey("userID")
 const cookieName = "user-session"
+const bearerPrefix = "Bearer "
 
 type rateclient struct {
 	limiter  *rate.Limiter
@@ -36,8 +40,66 @@ func getUserIDFromRequest(r *http.Request) string {
 	return ""
 }
 
+// bearerAuthResult captures the outcome of inspecting the Authorization
+// header. The header takes precedence over the session cookie, so we need
+// to distinguish "no bearer presented" (fall back to cookie) from
+// "bearer presented but invalid" (reject — do not silently fall back, as
+// the caller has unambiguously chosen a credential type).
+type bearerAuthResult int
+
+const (
+	bearerAbsent bearerAuthResult = iota
+	bearerValid
+	bearerInvalid
+)
+
+// resolveBearer parses the Authorization header. When a bearer token is
+// present it is looked up via its SHA-256 hash in the cli_tokens table; a
+// valid, non-revoked token yields the bound user ID. The token's
+// last_used_at column is refreshed asynchronously so request latency is
+// unaffected.
+func (a *App) resolveBearer(r *http.Request) (string, bearerAuthResult) {
+	header := r.Header.Get("Authorization")
+	if !strings.HasPrefix(header, bearerPrefix) {
+		return "", bearerAbsent
+	}
+	token := strings.TrimSpace(header[len(bearerPrefix):])
+	if token == "" {
+		return "", bearerInvalid
+	}
+	sum := sha256.Sum256([]byte(token))
+	hash := hex.EncodeToString(sum[:])
+
+	tok, err := a.DB.GetCLITokenByHash(hash)
+	if err != nil {
+		log.Printf("[AUTH] CLI token lookup failed: %v", err)
+		return "", bearerInvalid
+	}
+	if tok == nil || tok.RevokedAt != nil {
+		return "", bearerInvalid
+	}
+	go func(id string) {
+		if err := a.DB.TouchCLIToken(id); err != nil {
+			log.Printf("[AUTH] TouchCLIToken(%s) failed: %v", id, err)
+		}
+	}(tok.ID)
+	return tok.UserID, bearerValid
+}
+
 func (a *App) withOptionalAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		switch userID, result := a.resolveBearer(r); result {
+		case bearerValid:
+			log.Printf("[AUTH] Valid bearer token for user %s", userID)
+			ctx := context.WithValue(r.Context(), userContextKey, userID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		case bearerInvalid:
+			log.Printf("[AUTH] Invalid/revoked bearer token, proceeding as guest")
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		cookie, err := r.Cookie(cookieName)
 		if err != nil {
 			log.Printf("[AUTH] No session cookie found, proceeding as guest")
@@ -60,6 +122,16 @@ func (a *App) withOptionalAuth(next http.HandlerFunc) http.HandlerFunc {
 
 func (a *App) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		switch userID, result := a.resolveBearer(r); result {
+		case bearerValid:
+			ctx := context.WithValue(r.Context(), userContextKey, userID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		case bearerInvalid:
+			http.Error(w, "Unauthorized: Invalid or revoked bearer token.", http.StatusUnauthorized)
+			return
+		}
+
 		cookie, err := r.Cookie(cookieName)
 		if err != nil {
 			http.Error(w, "Unauthorized: No session cookie provided.", http.StatusUnauthorized)

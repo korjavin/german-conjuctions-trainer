@@ -129,17 +129,18 @@ CLI (new):
 
 ### Task 3: Extend auth middleware to accept bearer tokens
 
-- [ ] in `internal/app/middleware.go`, add helper `func (a *App) resolveBearerUserID(r *http.Request) (string, bool)`:
+- [x] in `internal/app/middleware.go`, add helper `func (a *App) resolveBearerUserID(r *http.Request) (string, bool)`:
   - read `Authorization` header; if not `Bearer <token>`, return `"", false`
   - hash the token with SHA-256
   - call `a.DB.GetCLITokenByHash(hash)`; if nil or `RevokedAt != nil`, return `"", false`
   - fire `a.DB.TouchCLIToken(tok.ID)` in a goroutine (don't block requests)
   - return `tok.UserID, true`
-- [ ] modify `withAuth` (line 61): before falling through to cookie check, try `resolveBearerUserID`; if it succeeds, inject `userContextKey` and call `next`
-- [ ] modify `withOptionalAuth` (line 39) identically
-- [ ] `adminOnly` (line 81) needs no change — it reads `userIDFromRequest` which we've already populated
-- [ ] write `internal/app/middleware_test.go` (extend existing file if present): table-driven test covering: valid bearer → user injected; revoked bearer → 401 from `withAuth`, guest path from `withOptionalAuth`; unknown bearer → 401/guest; bearer + cookie present → bearer wins; cookie-only still works; bearer for admin user passes `adminOnly`; bearer for non-admin user fails `adminOnly`
-- [ ] run `go test ./internal/app/...` — must pass before next task
+  - (Implemented as `resolveBearer` returning a three-state result so an explicit-but-invalid bearer rejects rather than silently falling back to cookie.)
+- [x] modify `withAuth` (line 61): before falling through to cookie check, try `resolveBearerUserID`; if it succeeds, inject `userContextKey` and call `next`
+- [x] modify `withOptionalAuth` (line 39) identically
+- [x] `adminOnly` (line 81) needs no change — it reads `userIDFromRequest` which we've already populated
+- [x] write `internal/app/middleware_test.go` (extend existing file if present): table-driven test covering: valid bearer → user injected; revoked bearer → 401 from `withAuth`, guest path from `withOptionalAuth`; unknown bearer → 401/guest; bearer + cookie present → bearer wins; cookie-only still works; bearer for admin user passes `adminOnly`; bearer for non-admin user fails `adminOnly`
+- [x] run `go test ./internal/app/...` — must pass before next task
 
 ### Task 4: Scaffold CLI binary structure
 
