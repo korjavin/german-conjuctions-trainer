@@ -134,6 +134,16 @@ func (s *SQLiteStorage) runMigrations() error {
 			PRIMARY KEY(topic_id, prompt_hash),
 			FOREIGN KEY(topic_id) REFERENCES topics(id) ON DELETE CASCADE
 		)`,
+		`CREATE TABLE IF NOT EXISTS cli_tokens (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token_hash TEXT NOT NULL UNIQUE,
+			label TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL,
+			last_used_at DATETIME,
+			revoked_at DATETIME
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_cli_tokens_user_id ON cli_tokens(user_id)`,
 	}
 
 	for _, migration := range migrations {
@@ -1439,4 +1449,105 @@ func (s *SQLiteStorage) GetDatabaseStats(audioCacheDir, dbFilePath string) (*Dat
 	}
 
 	return stats, nil
+}
+
+func (s *SQLiteStorage) CreateCLIToken(userID, tokenHash, label string) (*CLIToken, error) {
+	now := time.Now().UTC()
+	tok := &CLIToken{
+		ID:        uuid.NewString(),
+		UserID:    userID,
+		TokenHash: tokenHash,
+		Label:     label,
+		CreatedAt: now,
+	}
+
+	_, err := s.db.Exec(
+		`INSERT INTO cli_tokens(id, user_id, token_hash, label, created_at) VALUES(?, ?, ?, ?, ?)`,
+		tok.ID, tok.UserID, tok.TokenHash, tok.Label, tok.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return tok, nil
+}
+
+func (s *SQLiteStorage) GetCLITokenByHash(tokenHash string) (*CLIToken, error) {
+	row := s.db.QueryRow(
+		`SELECT id, user_id, token_hash, label, created_at, last_used_at, revoked_at
+		 FROM cli_tokens WHERE token_hash = ?`,
+		tokenHash,
+	)
+	var tok CLIToken
+	var lastUsed, revoked sql.NullTime
+	err := row.Scan(&tok.ID, &tok.UserID, &tok.TokenHash, &tok.Label, &tok.CreatedAt, &lastUsed, &revoked)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if lastUsed.Valid {
+		t := lastUsed.Time
+		tok.LastUsedAt = &t
+	}
+	if revoked.Valid {
+		t := revoked.Time
+		tok.RevokedAt = &t
+	}
+	return &tok, nil
+}
+
+func (s *SQLiteStorage) TouchCLIToken(id string) error {
+	_, err := s.db.Exec(`UPDATE cli_tokens SET last_used_at = ? WHERE id = ?`, time.Now().UTC(), id)
+	return err
+}
+
+func (s *SQLiteStorage) RevokeCLIToken(id, userID string) error {
+	res, err := s.db.Exec(
+		`UPDATE cli_tokens SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL`,
+		time.Now().UTC(), id, userID,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("cli token not found or already revoked")
+	}
+	return nil
+}
+
+func (s *SQLiteStorage) ListCLITokensForUser(userID string) ([]*CLIToken, error) {
+	rows, err := s.db.Query(
+		`SELECT id, user_id, token_hash, label, created_at, last_used_at, revoked_at
+		 FROM cli_tokens WHERE user_id = ? AND revoked_at IS NULL
+		 ORDER BY created_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tokens []*CLIToken
+	for rows.Next() {
+		var tok CLIToken
+		var lastUsed, revoked sql.NullTime
+		if err := rows.Scan(&tok.ID, &tok.UserID, &tok.TokenHash, &tok.Label, &tok.CreatedAt, &lastUsed, &revoked); err != nil {
+			return nil, err
+		}
+		if lastUsed.Valid {
+			t := lastUsed.Time
+			tok.LastUsedAt = &t
+		}
+		if revoked.Valid {
+			t := revoked.Time
+			tok.RevokedAt = &t
+		}
+		tokens = append(tokens, &tok)
+	}
+	return tokens, rows.Err()
 }
