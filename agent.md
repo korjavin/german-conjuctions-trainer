@@ -446,6 +446,18 @@ This entire process is now triggered **only when the exercise cache is insuffici
 3. **Cache Issues**: Server restart generates new timestamps
 4. **API Testing**: Requires valid OpenAI API key in environment
 
+## CLI for Agents (`gct`)
+
+Coding agents can manage topics and trigger exercise generation directly,
+without touching the web UI, via the `gct` CLI under `cmd/cli` (built with
+`make build-cli`). Once an admin has run `gct login` inside the agent's
+environment, `~/.config/gct/config.json` holds a long-lived bearer token and
+every subcommand (`gct topics list`, `gct topics create --name … --prompt …`,
+`gct exercises generate <topic-id>`, etc.) is fully non-interactive. The
+bearer flows through the existing auth middleware via
+`Authorization: Bearer …`, so cookie-based web auth is unaffected. See
+[CLI.md](CLI.md) for the full subcommand surface and Google OAuth setup.
+
 ## Frontend Dependencies
 - **Tailwind CSS**: Via CDN for styling
 - **Google Fonts**: Inter font family

@@ -221,9 +221,9 @@ CLI (new):
 
 ### Task 10: [Final] Documentation
 
-- [ ] add a `CLI.md` (or extend `README.md`) covering: install/build, one-time GCP setup for the Desktop OAuth client, `gct login`, common commands, troubleshooting (token expiry, server URL config)
-- [ ] document the new env vars (none required for server — Google CLI client config is in the CLI binary itself; optionally support `GCT_GOOGLE_CLIENT_ID`/`GCT_GOOGLE_CLIENT_SECRET` overrides for self-hosted forks)
-- [ ] add a short section to `agent.md` noting that agents can use `gct` directly once an admin has run `gct login` in the agent's environment
+- [x] add a `CLI.md` (or extend `README.md`) covering: install/build, one-time GCP setup for the Desktop OAuth client, `gct login`, common commands, troubleshooting (token expiry, server URL config)
+- [x] document the new env vars (none required for server — Google CLI client config is in the CLI binary itself; optionally support `GCT_GOOGLE_CLIENT_ID`/`GCT_GOOGLE_CLIENT_SECRET` overrides for self-hosted forks)
+- [x] add a short section to `agent.md` noting that agents can use `gct` directly once an admin has run `gct login` in the agent's environment
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`*
 
