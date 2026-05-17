@@ -218,7 +218,11 @@ func TestWithOptionalAuth_ValidBearer(t *testing.T) {
 	}
 }
 
-func TestWithOptionalAuth_RevokedBearer_Guest(t *testing.T) {
+func TestWithOptionalAuth_RevokedBearer_Rejected(t *testing.T) {
+	// Explicit-but-invalid credentials must be rejected even on
+	// optional-auth routes. Silently treating a revoked bearer as guest
+	// would let CLI flows like `gct exercises generate` succeed with
+	// guest behaviour and never prompt the user to re-login.
 	app := setupAuthTestApp(t)
 	user, _ := app.DB.CreateUser("google-opt-rev")
 	token, id := issueToken(t, app, user.ID, "")
@@ -232,18 +236,15 @@ func TestWithOptionalAuth_RevokedBearer_Guest(t *testing.T) {
 	rr := httptest.NewRecorder()
 	app.withOptionalAuth(next.ServeHTTP)(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status: got %d, want 200", rr.Code)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want 401", rr.Code)
 	}
-	if next.calls != 1 {
-		t.Errorf("next called %d times, want 1", next.calls)
-	}
-	if next.userID != "" {
-		t.Errorf("userID should be empty (guest), got %q", next.userID)
+	if next.calls != 0 {
+		t.Errorf("next called %d times, want 0", next.calls)
 	}
 }
 
-func TestWithOptionalAuth_UnknownBearer_Guest(t *testing.T) {
+func TestWithOptionalAuth_UnknownBearer_Rejected(t *testing.T) {
 	app := setupAuthTestApp(t)
 
 	next := &recordedUserHandler{}
@@ -252,11 +253,11 @@ func TestWithOptionalAuth_UnknownBearer_Guest(t *testing.T) {
 	rr := httptest.NewRecorder()
 	app.withOptionalAuth(next.ServeHTTP)(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status: got %d, want 200", rr.Code)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want 401", rr.Code)
 	}
-	if next.userID != "" {
-		t.Errorf("userID should be empty (guest), got %q", next.userID)
+	if next.calls != 0 {
+		t.Errorf("next called %d times, want 0", next.calls)
 	}
 }
 

@@ -19,25 +19,30 @@ import (
 // fakeUserInfoFetcher returns a canned response or error from Fetch. Tests
 // supply this via the App.UserInfo seam to avoid hitting Google.
 type fakeUserInfoFetcher struct {
-	info        *GoogleUserInfo
-	err         error
-	lastToken   string
-	calledTimes int
+	info         *GoogleUserInfo
+	err          error
+	lastToken    string
+	lastAudience string
+	calledTimes  int
 }
 
-func (f *fakeUserInfoFetcher) Fetch(ctx context.Context, accessToken string) (*GoogleUserInfo, error) {
+func (f *fakeUserInfoFetcher) Fetch(ctx context.Context, accessToken, expectedAudience string) (*GoogleUserInfo, error) {
 	f.calledTimes++
 	f.lastToken = accessToken
+	f.lastAudience = expectedAudience
 	if f.err != nil {
 		return nil, f.err
 	}
 	return f.info, nil
 }
 
+const testCLIClientID = "cli-client-id.apps.googleusercontent.com"
+
 func setupCLIExchangeApp(t *testing.T, fetcher UserInfoFetcher) *App {
 	t.Helper()
 	app := setupTestApp(t)
 	app.UserInfo = fetcher
+	app.CLIGoogleClientID = testCLIClientID
 	return app
 }
 
@@ -237,10 +242,54 @@ func TestHandleCLIExchange_DefaultFetcherFallback(t *testing.T) {
 	// before the fetcher is consulted so this test stays hermetic.
 	app := setupTestApp(t)
 	app.UserInfo = nil
+	app.CLIGoogleClientID = testCLIClientID
 
 	rr := postCLIExchange(t, app, `{"label":"laptop"}`)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for nil fetcher + missing token, got %d", rr.Code)
+	}
+}
+
+func TestHandleCLIExchange_UntrustedGoogleClient(t *testing.T) {
+	fetcher := &fakeUserInfoFetcher{err: ErrUntrustedGoogleClient}
+	app := setupCLIExchangeApp(t, fetcher)
+
+	rr := postCLIExchange(t, app, `{"google_access_token":"tok"}`)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for untrusted client, got %d (body=%q)", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "UNTRUSTED_GOOGLE_CLIENT") {
+		t.Errorf("expected UNTRUSTED_GOOGLE_CLIENT code in body, got %q", rr.Body.String())
+	}
+}
+
+func TestHandleCLIExchange_CLILoginNotConfigured(t *testing.T) {
+	// When CLIGoogleClientID is empty we cannot verify the token audience,
+	// so the endpoint must refuse rather than fall back to "any Google
+	// access token works" behaviour.
+	fetcher := &fakeUserInfoFetcher{info: &GoogleUserInfo{ID: "google-x"}}
+	app := setupCLIExchangeApp(t, fetcher)
+	app.CLIGoogleClientID = ""
+
+	rr := postCLIExchange(t, app, `{"google_access_token":"tok"}`)
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when CLI login is unconfigured, got %d (body=%q)", rr.Code, rr.Body.String())
+	}
+	if fetcher.calledTimes != 0 {
+		t.Errorf("fetcher should not be called when CLI login is unconfigured, got %d calls", fetcher.calledTimes)
+	}
+}
+
+func TestHandleCLIExchange_PassesAudienceToFetcher(t *testing.T) {
+	fetcher := &fakeUserInfoFetcher{info: &GoogleUserInfo{ID: "google-audience"}}
+	app := setupCLIExchangeApp(t, fetcher)
+
+	rr := postCLIExchange(t, app, `{"google_access_token":"tok"}`)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d (body=%q)", rr.Code, rr.Body.String())
+	}
+	if fetcher.lastAudience != testCLIClientID {
+		t.Errorf("fetcher saw audience %q, want %q", fetcher.lastAudience, testCLIClientID)
 	}
 }
 

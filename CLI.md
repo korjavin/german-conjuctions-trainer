@@ -109,7 +109,7 @@ gct topics create --name X --prompt-file -          # prompt from stdin
 gct topics update <id> [--name X] [--prompt Y | --prompt-file PATH]
                        [--parent ID | --no-parent] [--sort N]
 gct topics delete <id> [--yes]
-gct topics move <id> --parent ID [--position N]
+gct topics move <id> --parent ID|--no-parent [--position N]
 ```
 
 Exercises:
@@ -172,6 +172,13 @@ configured `ADMIN_GOOGLE_ID`. Read-only endpoints (`gct topics list`,
 | `GCT_GOOGLE_CLIENT_ID` | Google OAuth client ID for the device flow. Required if not baked in via `-ldflags`. |
 | `GCT_GOOGLE_CLIENT_SECRET` | Google OAuth client secret for the device flow. Required if not baked in via `-ldflags`. |
 
-The server itself needs no new env vars — it discovers the user behind a
-bearer token via the existing `cli_tokens` table + `Authorization: Bearer …`
-middleware path. Existing web cookie auth is unchanged.
+On the **server** side, `GCT_GOOGLE_CLIENT_ID` must be set to the same
+Google OAuth client ID the CLI uses. The cli-exchange endpoint verifies
+that incoming Google access tokens were issued to this client before
+minting a server bearer; without it the endpoint returns
+`503 CLI_LOGIN_NOT_CONFIGURED`. This audience check prevents a token
+minted for an unrelated third-party OAuth client from being replayed to
+log in as the same Google user.
+
+Existing web cookie auth is unchanged and uses the separate
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` web-app credentials.

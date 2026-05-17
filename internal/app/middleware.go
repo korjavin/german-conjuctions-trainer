@@ -95,8 +95,15 @@ func (a *App) withOptionalAuth(next http.HandlerFunc) http.HandlerFunc {
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		case bearerInvalid:
-			log.Printf("[AUTH] Invalid/revoked bearer token, proceeding as guest")
-			next.ServeHTTP(w, r)
+			// The caller explicitly presented a bearer credential and it
+			// failed validation (unknown, malformed, or revoked). Reject
+			// rather than silently downgrade to guest: a revoked CLI
+			// token would otherwise let "gct exercises generate"
+			// succeed with guest behaviour and never prompt the user to
+			// re-run `gct login`. Only the absence of credentials means
+			// "guest".
+			log.Printf("[AUTH] Invalid/revoked bearer token on optional-auth route, rejecting")
+			http.Error(w, "Unauthorized: Invalid or revoked bearer token.", http.StatusUnauthorized)
 			return
 		}
 

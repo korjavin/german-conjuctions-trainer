@@ -148,6 +148,37 @@ func TestSaveWritesMode0600(t *testing.T) {
 	}
 }
 
+func TestSaveRepairsModeOnExistingFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX file mode bits don't translate on Windows")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	// Pre-create the file with permissive mode — this is the scenario the
+	// fix needs to handle: a user-created or copied-in config that's
+	// world-readable. os.WriteFile on its own would keep the 0644 mode.
+	if err := os.WriteFile(path, []byte(`{"token":"old"}`), 0o644); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+	if err := SaveTo(&Config{Token: "new"}, path); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("config file mode = %#o, want 0600 (Save did not repair permissions on existing file)", mode)
+	}
+	cfg, err := LoadFrom(path)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if cfg.Token != "new" {
+		t.Errorf("token after save = %q, want %q", cfg.Token, "new")
+	}
+}
+
 func TestLoadCorruptFileReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")

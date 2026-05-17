@@ -33,6 +33,16 @@ const (
 	envGoogleClientSecret = "GCT_GOOGLE_CLIENT_SECRET"
 )
 
+// loginHTTPTimeout caps every individual HTTP request the device flow makes —
+// the initial device-code POST, each poll of Google's token endpoint, and the
+// cli-exchange POST against our own server. It does NOT cap the overall flow
+// duration: oauth2.DeviceAccessToken issues discrete polls at the interval,
+// so the total wait is gated by Google's expires_in (typically 15 min), not
+// by this value. Using http.DefaultClient (no timeout) means a stalled
+// endpoint hangs forever until the user hits Ctrl-C, so we ship our own
+// bounded client instead.
+const loginHTTPTimeout = 60 * time.Second
+
 // oauthScopes mirrors what the web app uses; the userinfo endpoint needs
 // these to populate the Google user ID/email that handleCLIExchange relies
 // on for find-or-create.
@@ -96,7 +106,7 @@ func Login(ctx context.Context, serverURL, label string, out io.Writer) (*LoginR
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		endpoint:     google.Endpoint,
-		httpClient:   http.DefaultClient,
+		httpClient:   &http.Client{Timeout: loginHTTPTimeout},
 		out:          out,
 		now:          time.Now,
 	})
@@ -115,7 +125,7 @@ func loginWith(ctx context.Context, opts loginOptions) (*LoginResult, error) {
 		opts.out = io.Discard
 	}
 	if opts.httpClient == nil {
-		opts.httpClient = http.DefaultClient
+		opts.httpClient = &http.Client{Timeout: loginHTTPTimeout}
 	}
 	if opts.now == nil {
 		opts.now = time.Now

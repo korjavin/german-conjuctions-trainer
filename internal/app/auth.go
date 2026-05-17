@@ -30,23 +30,45 @@ type GoogleUserInfo struct {
 // re-run the device flow rather than treat it as a transient failure.
 var ErrInvalidGoogleToken = errors.New("invalid Google access token")
 
-// UserInfoFetcher resolves a Google access token to a Google user record.
-// Stored as a field on App so tests can inject a fake without touching the
-// network. The real implementation uses google.golang.org/api/oauth2/v2,
-// which has a hardcoded userinfo URL — that hardcoding is what motivates
-// this interface seam.
+// ErrUntrustedGoogleClient is returned when the Google access token is
+// otherwise valid but was issued to an OAuth client the server does not
+// trust (audience mismatch). Without this check, a token minted for any
+// third-party Google OAuth client could be replayed against our
+// cli-exchange endpoint to mint a long-lived app bearer for the same
+// Google account — see the audience verification in googleUserInfoFetcher.
+var ErrUntrustedGoogleClient = errors.New("Google access token issued to an untrusted OAuth client")
+
+// UserInfoFetcher resolves a Google access token to a Google user record
+// after verifying the token's audience matches expectedAudience. Stored as
+// a field on App so tests can inject a fake without touching the network.
+// The real implementation uses google.golang.org/api/oauth2/v2, which has
+// a hardcoded userinfo URL — that hardcoding is what motivates this
+// interface seam.
 type UserInfoFetcher interface {
-	Fetch(ctx context.Context, accessToken string) (*GoogleUserInfo, error)
+	Fetch(ctx context.Context, accessToken, expectedAudience string) (*GoogleUserInfo, error)
 }
 
 type googleUserInfoFetcher struct{}
 
-func (googleUserInfoFetcher) Fetch(ctx context.Context, accessToken string) (*GoogleUserInfo, error) {
+func (googleUserInfoFetcher) Fetch(ctx context.Context, accessToken, expectedAudience string) (*GoogleUserInfo, error) {
 	client := oauth2.NewClient(ctx, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: accessToken}))
 	svc, err := oauth2v2.New(client)
 	if err != nil {
 		return nil, err
 	}
+
+	tokInfo, err := svc.Tokeninfo().AccessToken(accessToken).Context(ctx).Do()
+	if err != nil {
+		var apiErr *googleapi.Error
+		if errors.As(err, &apiErr) && (apiErr.Code == http.StatusUnauthorized || apiErr.Code == http.StatusBadRequest) {
+			return nil, ErrInvalidGoogleToken
+		}
+		return nil, err
+	}
+	if tokInfo.Audience != expectedAudience && tokInfo.IssuedTo != expectedAudience {
+		return nil, ErrUntrustedGoogleClient
+	}
+
 	info, err := svc.Userinfo.Get().Context(ctx).Do()
 	if err != nil {
 		var apiErr *googleapi.Error
@@ -191,15 +213,25 @@ func (a *App) handleCLIExchange(w http.ResponseWriter, r *http.Request) {
 		label = "cli"
 	}
 
+	if strings.TrimSpace(a.CLIGoogleClientID) == "" {
+		log.Printf("[CLI-EXCHANGE] refusing exchange: CLIGoogleClientID is not configured")
+		writeJSONError(w, http.StatusServiceUnavailable, "CLI_LOGIN_NOT_CONFIGURED", "CLI login is not configured on this server", "", false)
+		return
+	}
+
 	fetcher := a.UserInfo
 	if fetcher == nil {
 		fetcher = googleUserInfoFetcher{}
 	}
 
-	info, err := fetcher.Fetch(r.Context(), req.GoogleAccessToken)
+	info, err := fetcher.Fetch(r.Context(), req.GoogleAccessToken, a.CLIGoogleClientID)
 	if err != nil {
 		if errors.Is(err, ErrInvalidGoogleToken) {
 			writeJSONError(w, http.StatusUnauthorized, "INVALID_GOOGLE_TOKEN", "Google access token is invalid", err.Error(), false)
+			return
+		}
+		if errors.Is(err, ErrUntrustedGoogleClient) {
+			writeJSONError(w, http.StatusUnauthorized, "UNTRUSTED_GOOGLE_CLIENT", "Google access token was issued to an untrusted OAuth client", err.Error(), false)
 			return
 		}
 		log.Printf("[CLI-EXCHANGE] userinfo fetch failed: %v", err)

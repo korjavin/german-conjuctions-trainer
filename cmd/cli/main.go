@@ -281,7 +281,7 @@ Usage:
   gct topics create --name X --prompt Y|--prompt-file F [--parent ID] [--sort N] [--json]
   gct topics update <id> [--name X] [--prompt Y|--prompt-file F] [--parent ID|--no-parent] [--sort N] [--json]
   gct topics delete <id> [--yes]
-  gct topics move   <id> --parent ID [--position N] [--json]
+  gct topics move   <id> --parent ID|--no-parent [--position N] [--json]
 
 Global flags (apply to every subcommand):
   --server URL    Server base URL (overrides config)
@@ -593,6 +593,10 @@ func runTopicsUpdate(args []string, stdin io.Reader, stdout, stderr io.Writer) i
 		fmt.Fprintln(stderr, "gct topics update: --parent and --no-parent are mutually exclusive")
 		return 2
 	}
+	if isFlagSet(fs, "parent") && strings.TrimSpace(*parent) == "" {
+		fmt.Fprintln(stderr, "gct topics update: --parent requires a topic ID (use --no-parent to move to root)")
+		return 2
+	}
 	if *noParent {
 		update.ClearParent = true
 	} else if isFlagSet(fs, "parent") {
@@ -675,7 +679,8 @@ func runTopicsMove(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("topics move", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	cf := registerCommonFlags(fs)
-	parent := fs.String("parent", "", "Destination parent topic ID (empty = root)")
+	parent := fs.String("parent", "", "Destination parent topic ID")
+	noParent := fs.Bool("no-parent", false, "Move topic to the root level (mutually exclusive with --parent)")
 	position := fs.Int("position", -1, "Position within the destination parent (default: append)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return 2
@@ -690,6 +695,31 @@ func runTopicsMove(args []string, stdout, stderr io.Writer) int {
 	}
 	id := fs.Arg(0)
 
+	// Require an explicit destination: either --parent ID or --no-parent.
+	// Without this guard, `gct topics move t1 --position 0` would silently
+	// fall back to an empty parent and reparent the topic to root — a
+	// surprising destructive default. The pattern mirrors `topics update`.
+	parentSet := isFlagSet(fs, "parent")
+	if *noParent && parentSet {
+		fmt.Fprintln(stderr, "gct topics move: --parent and --no-parent are mutually exclusive")
+		return 2
+	}
+	if !*noParent && !parentSet {
+		fmt.Fprintln(stderr, "gct topics move: --parent ID or --no-parent is required")
+		return 2
+	}
+	// Reject blank --parent (e.g. `--parent=` or `--parent "$EMPTY_VAR"` from
+	// scripts). Without this, an unset shell variable would silently reparent
+	// the topic to root, defeating the explicit-destination guard above.
+	if parentSet && strings.TrimSpace(*parent) == "" {
+		fmt.Fprintln(stderr, "gct topics move: --parent requires a topic ID (use --no-parent to move to root)")
+		return 2
+	}
+	destParent := ""
+	if parentSet {
+		destParent = *parent
+	}
+
 	var positionPtr *int
 	if isFlagSet(fs, "position") {
 		if *position < 0 {
@@ -703,7 +733,7 @@ func runTopicsMove(args []string, stdout, stderr io.Writer) int {
 	if client == nil {
 		return code
 	}
-	topic, err := client.MoveTopic(id, *parent, positionPtr)
+	topic, err := client.MoveTopic(id, destParent, positionPtr)
 	if err != nil {
 		return printAPIError("gct topics move", err, stderr)
 	}

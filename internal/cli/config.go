@@ -94,20 +94,46 @@ func Save(cfg *Config) error {
 	return SaveTo(cfg, p)
 }
 
-// SaveTo writes cfg to an explicit path. The write is non-atomic — we
-// truncate-and-write rather than write-temp-then-rename. Concurrent runs of
-// gct against the same config could lose updates, but the expected usage
-// (one human / one agent at a time) makes that an acceptable tradeoff.
+// SaveTo writes cfg to an explicit path. The write goes via a sibling temp
+// file then a rename so a) a crash mid-write can't leave a truncated
+// config and b) the file ends up with mode 0600 even if a pre-existing
+// file at path had looser permissions. os.WriteFile alone only sets the
+// requested mode on newly-created files, so overwriting a world-readable
+// config in place would leak the plaintext bearer token.
 func SaveTo(cfg *Config, path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), configDirMode); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, configDirMode); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode config: %w", err)
 	}
-	if err := os.WriteFile(path, data, configFileMode); err != nil {
-		return fmt.Errorf("write config %s: %w", path, err)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create temp config: %w", err)
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() {
+		_ = os.Remove(tmpPath)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return fmt.Errorf("write temp config: %w", err)
+	}
+	if err := tmp.Chmod(configFileMode); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return fmt.Errorf("chmod temp config: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return fmt.Errorf("close temp config: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		cleanup()
+		return fmt.Errorf("rename temp config to %s: %w", path, err)
 	}
 	return nil
 }

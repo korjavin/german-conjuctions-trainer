@@ -19,6 +19,13 @@ type App struct {
 	OAuthConfig        *oauth2.Config
 	OAuthState         string
 	AdminGoogleID      string
+	// CLIGoogleClientID is the OAuth client ID of the CLI's Google
+	// application. handleCLIExchange refuses to mint app bearer tokens for
+	// Google access tokens whose audience does not match this value.
+	// Without this gate, a token minted for any third-party OAuth client
+	// could be replayed to log in as the corresponding Google user. Set
+	// from GCT_GOOGLE_CLIENT_ID at server startup.
+	CLIGoogleClientID  string
 	ElevenLabs         ElevenLabsConfig
 	CORSAllowedOrigins string
 	DBPath             string

@@ -353,6 +353,25 @@ func TestTopicsUpdateParentAndNoParentConflict(t *testing.T) {
 	}
 }
 
+func TestTopicsUpdateRejectsBlankParent(t *testing.T) {
+	// Guards against scripted callers passing `--parent "$VAR"` where $VAR is
+	// unset, which would otherwise silently send parent_id:"" and reparent
+	// the topic to root.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("server should not be called, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, _, stderr := runTopicsCmd(t, nil, "update", "t1", "--parent", "")
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "--parent requires a topic ID") {
+		t.Errorf("stderr = %q, want it to reject blank --parent", stderr)
+	}
+}
+
 func TestTopicsDeleteWithYes(t *testing.T) {
 	var sawDelete bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -456,6 +475,78 @@ func TestTopicsMoveDefaultsToAppend(t *testing.T) {
 	}
 	if _, present := captured["position"]; present {
 		t.Errorf("position should be omitted, got %v", captured["position"])
+	}
+}
+
+func TestTopicsMoveRequiresParentOrNoParent(t *testing.T) {
+	// Server should never be hit when the CLI rejects the args; failing the
+	// test if it is guards against regressions where a missing --parent
+	// silently reparents the topic to root.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("server should not be called, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, _, stderr := runTopicsCmd(t, nil, "move", "t1", "--position", "0")
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "--parent ID or --no-parent is required") {
+		t.Errorf("stderr = %q, want it to mention the missing flag", stderr)
+	}
+}
+
+func TestTopicsMoveRejectsBothParentAndNoParent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("server should not be called, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, _, stderr := runTopicsCmd(t, nil, "move", "t1", "--parent", "p", "--no-parent")
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "mutually exclusive") {
+		t.Errorf("stderr = %q, want it to mention mutual exclusion", stderr)
+	}
+}
+
+func TestTopicsMoveRejectsBlankParent(t *testing.T) {
+	// Guards against scripted callers passing `--parent "$VAR"` where $VAR is
+	// unset, which would otherwise silently send parent_id:"" and reparent
+	// the topic to root despite the explicit-destination requirement.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("server should not be called, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, _, stderr := runTopicsCmd(t, nil, "move", "t1", "--parent", "")
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "--parent requires a topic ID") {
+		t.Errorf("stderr = %q, want it to reject blank --parent", stderr)
+	}
+}
+
+func TestTopicsMoveNoParentSendsEmptyParent(t *testing.T) {
+	var captured map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&captured)
+		_, _ = w.Write([]byte(`{"id":"t1"}`))
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, _, stderr := runTopicsCmd(t, nil, "move", "t1", "--no-parent")
+	if code != 0 {
+		t.Fatalf("code = %d, stderr=%s", code, stderr)
+	}
+	if v, ok := captured["parent_id"]; !ok || v != "" {
+		t.Errorf("body.parent_id = %v (present=%v), want empty string", v, ok)
 	}
 }
 
