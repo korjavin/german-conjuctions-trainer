@@ -17,6 +17,13 @@ import (
 // setupAuthTestApp builds an App backed by a fresh on-disk SQLite store and
 // a deterministic securecookie codec so tests can mint valid session
 // cookies through app.SC.Encode.
+//
+// The cleanup hook drains any background goroutines launched by
+// resolveBearer (the async TouchCLIToken update) before closing the
+// SQLite handle. Without this, the goroutine can write to the database
+// after t.TempDir() removes the WAL/SHM sidecars, producing flaky
+// "directory not empty" cleanup errors and "attempt to write a readonly
+// database" log lines that bleed into adjacent tests.
 func setupAuthTestApp(t *testing.T) *App {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
@@ -25,7 +32,14 @@ func setupAuthTestApp(t *testing.T) *App {
 		t.Fatalf("NewSQLiteStorage: %v", err)
 	}
 	sc := securecookie.New(securecookie.GenerateRandomKey(64), securecookie.GenerateRandomKey(32))
-	return &App{DB: store, SC: sc}
+	app := &App{DB: store, SC: sc}
+	t.Cleanup(func() {
+		app.WaitBackground()
+		if err := store.Close(); err != nil {
+			t.Logf("storage close: %v", err)
+		}
+	})
+	return app
 }
 
 // issueToken creates a CLI token row for userID and returns the plaintext

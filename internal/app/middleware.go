@@ -78,7 +78,9 @@ func (a *App) resolveBearer(r *http.Request) (string, bearerAuthResult) {
 	if tok == nil || tok.RevokedAt != nil {
 		return "", bearerInvalid
 	}
+	a.bgWG.Add(1)
 	go func(id string) {
+		defer a.bgWG.Done()
 		if err := a.DB.TouchCLIToken(id); err != nil {
 			log.Printf("[AUTH] TouchCLIToken(%s) failed: %v", id, err)
 		}

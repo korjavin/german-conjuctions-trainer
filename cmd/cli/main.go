@@ -56,26 +56,111 @@ func printVersion(w io.Writer) {
 	fmt.Fprintf(w, "gct %s (commit %s, %s)\n", v, c, runtime.Version())
 }
 
-// usage prints the top-level help. Subcommand-specific help is delegated to
-// each subcommand's *flag.FlagSet (-h / --help on `gct topics`, etc.).
+// usage prints the top-level help. It is written for both humans and AI
+// agents: any non-interactive caller should be able to drive the CLI from
+// this text alone without reading source. Subcommand-specific help is
+// delegated to each subcommand's *flag.FlagSet (`gct topics -h`, etc.).
 const usage = `gct — German Conjunctions Trainer CLI
+
+Lets you (or an AI agent) manage topics and trigger exercise generation
+against a German Conjunctions Trainer server without using the web UI.
 
 Usage:
   gct <command> [flags]
 
 Commands:
   login      Authenticate via Google OAuth (device flow) and save a bearer token
-  logout     Clear the locally-stored token
-  whoami     Show the currently-configured user and server
+  logout     Clear the locally-stored token (does not revoke on the server)
+  whoami     Print the currently-configured user and server URL
   topics     Manage topics (list, get, create, update, delete, move)
   exercises  Trigger exercise generation for a topic
   version    Print version and exit
 
 Global flags (apply to most subcommands):
-  --server URL    Server base URL (overrides config)
-  --config PATH   Config file path (overrides $GCT_CONFIG / XDG default)
-  --token TOKEN   Bearer token (overrides config)
-  --json          Emit raw JSON instead of human-readable output
+  --server URL    Server base URL (e.g. https://trainer.example.com)
+  --config PATH   Config file path (overrides $GCT_CONFIG / XDG default
+                  ~/.config/gct/config.json)
+  --token TOKEN   Bearer token (overrides config and $GCT_TOKEN)
+  --json          Emit raw JSON instead of human-readable output — use this
+                  when parsing programmatically
+
+============================================================================
+AGENT QUICKSTART — how to use gct from a non-interactive shell
+============================================================================
+
+1. AUTHENTICATE. Two options:
+
+   a) Run 'gct login --server https://trainer.example.com' once interactively.
+      It prints a short code and the URL https://www.google.com/device.
+      Open that URL in any browser, enter the code, finish Google sign-in.
+      The bearer token is saved to ~/.config/gct/config.json (mode 0600).
+      Subsequent gct invocations are fully non-interactive.
+
+   b) Skip 'gct login' entirely: set GCT_TOKEN=<bearer-token> and pass
+      --server URL (or persist it once via 'gct login' on another host).
+      Tokens are issued by the server's POST /api/auth/cli-exchange endpoint;
+      the admin can mint one on your behalf.
+
+   'gct whoami' confirms auth. If it prints "User: <uuid>" you are good.
+   "not logged in" or "token rejected by server" → fix auth first; no other
+   subcommand will work.
+
+2. DISCOVER TOPICS.
+
+     gct topics list --json          # full flat list, machine-parseable
+     gct topics list --tree          # indented tree, human-readable
+     gct topics get <id> --json      # one topic with its full prompt body
+
+3. MUTATE TOPICS (admin permission required — server returns 403 otherwise).
+
+     gct topics create --name "Modal verbs" --prompt-file ./modal.md
+     gct topics update <id> --prompt-file ./new-prompt.md
+     gct topics update <id> --name "Modal verbs (revised)"
+     gct topics move   <id> --parent <parent-id> [--position N]
+     gct topics move   <id> --no-parent              # move to root
+     gct topics delete <id> --yes                    # skip confirmation
+
+   Tip for agents: use --prompt-file rather than --prompt for anything
+   non-trivial. Pass "-" to read the prompt body from stdin:
+     cat prompt.md | gct topics create --name X --prompt-file -
+
+4. GENERATE EXERCISES for a topic.
+
+     gct topics list --json \
+       | jq -r '.[] | select(.name=="Modal verbs").id' \
+       | xargs gct exercises generate
+     gct exercises generate <topic-id> --watch    # poll until ≥10 exercises
+     gct exercises generate <topic-id> --json     # raw exercise array
+
+5. EXIT CODES.
+
+     0  success
+     1  runtime error (auth rejected, server error, network failure)
+     2  usage error (bad flags / missing arguments)
+
+   Stderr carries diagnostics; stdout carries data. Safe to capture stdout
+   for parsing without filtering.
+
+6. ENVIRONMENT VARIABLES (alternatives to flags).
+
+     GCT_TOKEN                 Bearer token (used when config has no token)
+     GCT_CONFIG                Path to config file
+     GCT_GOOGLE_CLIENT_ID      Override the baked-in Google OAuth client ID
+     GCT_GOOGLE_CLIENT_SECRET  Override the baked-in Google OAuth client secret
+
+   The two GCT_GOOGLE_* vars are only needed for 'gct login' on a build
+   that wasn't compiled with -ldflags credentials. Once you have a token,
+   the CLI no longer touches Google at all.
+
+7. TROUBLESHOOTING.
+
+     - "not logged in" → run 'gct login' or export GCT_TOKEN
+     - "token rejected by server" → token revoked or expired; 'gct login' again
+     - "admin permission required" (403) → your Google account is not the
+       admin configured on the server; ask the admin to either grant access
+       or run mutating commands themselves
+     - HTTP 4xx on create/update → the body printed after the status code is
+       the server's validation message (e.g. duplicate name, prompt too short)
 `
 
 func main() {

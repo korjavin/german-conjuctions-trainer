@@ -39,6 +39,21 @@ type App struct {
 	clients            map[string]*rateclient
 	mu                 sync.Mutex
 	shutdown           chan struct{} // Channel to signal goroutine shutdown
+	// bgWG tracks per-request fire-and-forget goroutines (currently only the
+	// async TouchCLIToken update in resolveBearer). It lets tests drain
+	// these workers before t.TempDir() cleanup deletes the sqlite database,
+	// avoiding "attempt to write a readonly database" races and
+	// "directory not empty" cleanup failures observed in CI.
+	bgWG sync.WaitGroup
+}
+
+// WaitBackground blocks until all per-request background goroutines launched
+// via a.bgWG have finished. Intended for tests; production code can call it
+// during shutdown if it wants a clean drain, but the long-lived background
+// jobs started in New are gated on a.shutdown instead and are not counted
+// here.
+func (a *App) WaitBackground() {
+	a.bgWG.Wait()
 }
 
 // ElevenLabsConfig holds ElevenLabs TTS configuration.
