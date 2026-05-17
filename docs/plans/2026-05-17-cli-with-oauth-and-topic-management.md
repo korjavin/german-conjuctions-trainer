@@ -113,7 +113,7 @@ CLI (new):
 
 ### Task 2: Add `POST /api/auth/cli-exchange` endpoint
 
-- [ ] in `internal/app/auth.go`, add `handleCLIExchange(w, r)`:
+- [x] in `internal/app/auth.go`, add `handleCLIExchange(w, r)`:
   - decode `{ "google_access_token": "..." , "label": "..." }`
   - call `oauth2v2.Userinfo.Get().Do()` using `oauth2.StaticTokenSource` with the supplied access token (mirror `auth.go:44-57`)
   - find-or-create user via `a.DB.GetUserByGoogleID` / `a.DB.CreateUser` (mirror `auth.go:59-72`)
@@ -121,11 +121,11 @@ CLI (new):
   - hash with `sha256.Sum256([]byte(plaintext))` → hex string
   - call `a.DB.CreateCLIToken(user.ID, hash, label)`
   - respond `{ "token": "<plaintext>", "token_id": "...", "user_id": "..." }`
-- [ ] in `internal/app/app.go`, register `http.HandleFunc("/api/auth/cli-exchange", a.handleCLIExchange)` (unauthenticated — the Google token *is* the credential)
-- [ ] write `internal/app/auth_cli_test.go`: spin up `httptest.Server` that mocks Google userinfo at a configurable URL; verify token returned has correct format, hash stored in DB matches, new user created if Google ID unknown, existing user reused otherwise
-- [ ] write tests for error cases (invalid Google token → 401; missing body → 400; userinfo fetch failure → 502)
-- [ ] **Note on testability**: the Google userinfo URL is hardcoded inside `oauth2v2`. To test, abstract the userinfo fetch behind an interface field on `App` (default: real `oauth2v2`; in tests: a fake). Document this in code.
-- [ ] run `go test ./internal/app/...` — must pass before next task
+- [x] in `internal/app/app.go`, register `http.HandleFunc("/api/auth/cli-exchange", a.handleCLIExchange)` (unauthenticated — the Google token *is* the credential)
+- [x] write `internal/app/auth_cli_test.go`: covers happy path + format/hash/user assertions via a fake UserInfoFetcher (preferred over httptest.Server because the oauth2v2 SDK URL is hardcoded)
+- [x] write tests for error cases (invalid Google token → 401; missing body → 400; userinfo fetch failure → 502)
+- [x] **Note on testability**: the Google userinfo URL is hardcoded inside `oauth2v2`. To test, abstract the userinfo fetch behind an interface field on `App` (default: real `oauth2v2`; in tests: a fake). Document this in code.
+- [x] run `go test ./internal/app/...` — must pass before next task
 
 ### Task 3: Extend auth middleware to accept bearer tokens
 
