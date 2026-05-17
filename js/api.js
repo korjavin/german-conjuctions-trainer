@@ -256,3 +256,19 @@ export async function fetchDatabaseStatsAPI() {
     if (!response.ok) throw new Error('Failed to fetch database stats');
     return response.json();
 }
+
+// createCLITokenAPI mints a new bearer token for the `gct` CLI. Admin-only
+// on the server side; non-admins get a 403 that the caller should surface.
+export async function createCLITokenAPI(label) {
+    const response = await fetch('/api/auth/cli-tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: label || 'cli' }),
+    });
+    if (!response.ok) {
+        let detail = '';
+        try { detail = (await response.json()).message || ''; } catch (_) {}
+        throw new Error(detail || `Failed to mint CLI token (HTTP ${response.status})`);
+    }
+    return response.json();
+}

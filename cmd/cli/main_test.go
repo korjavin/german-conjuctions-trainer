@@ -55,6 +55,115 @@ func runTopicsCmd(t *testing.T, stdin io.Reader, args ...string) (int, string, s
 	return code, stdout.String(), stderr.String()
 }
 
+// readSavedConfig parses the on-disk config file written by run(...) so tests
+// can assert against the post-command state without re-implementing the
+// XDG lookup logic.
+func readSavedConfig(t *testing.T, path string) cliConfig {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	var got cliConfig
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	return got
+}
+
+func TestAuthSetTokenPersistsToken(t *testing.T) {
+	path := withConfig(t, cliConfig{ServerURL: "https://prev.example.com", Token: "old-token", UserID: "old-user"})
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"auth", "set-token", "new-token-123"}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr=%s", code, stderr.String())
+	}
+	cfg := readSavedConfig(t, path)
+	if cfg.Token != "new-token-123" {
+		t.Errorf("Token = %q, want new-token-123", cfg.Token)
+	}
+	if cfg.ServerURL != "https://prev.example.com" {
+		t.Errorf("ServerURL = %q, expected to be preserved", cfg.ServerURL)
+	}
+	if cfg.UserID != "" {
+		t.Errorf("UserID = %q, want empty (cleared)", cfg.UserID)
+	}
+	if !strings.Contains(stdout.String(), "Token saved") {
+		t.Errorf("stdout missing confirmation: %q", stdout.String())
+	}
+}
+
+func TestAuthSetTokenWithServerFlag(t *testing.T) {
+	path := withConfig(t, cliConfig{})
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"auth", "set-token", "tok", "--server", "https://new.example.com"}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr=%s", code, stderr.String())
+	}
+	cfg := readSavedConfig(t, path)
+	if cfg.ServerURL != "https://new.example.com" {
+		t.Errorf("ServerURL = %q", cfg.ServerURL)
+	}
+	if cfg.Token != "tok" {
+		t.Errorf("Token = %q", cfg.Token)
+	}
+}
+
+func TestAuthSetTokenRequiresServer(t *testing.T) {
+	withConfig(t, cliConfig{})
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"auth", "set-token", "tok"}, nil, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "server URL is required") {
+		t.Errorf("stderr missing expected message: %q", stderr.String())
+	}
+}
+
+func TestAuthSetTokenRequiresArg(t *testing.T) {
+	withConfig(t, cliConfig{ServerURL: "https://x.example.com"})
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"auth", "set-token"}, nil, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), "token argument required") {
+		t.Errorf("stderr missing expected message: %q", stderr.String())
+	}
+}
+
+func TestAuthSetTokenRejectsEmptyToken(t *testing.T) {
+	withConfig(t, cliConfig{ServerURL: "https://x.example.com"})
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"auth", "set-token", "   "}, nil, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2; stderr=%s", code, stderr.String())
+	}
+}
+
+func TestAuthHelpListsSubcommands(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"auth", "--help"}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit code = %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "set-token") {
+		t.Errorf("auth --help missing set-token: %q", stdout.String())
+	}
+}
+
+func TestAuthUnknownSubcommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"auth", "wibble"}, nil, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr.String(), `unknown subcommand "wibble"`) {
+		t.Errorf("stderr missing message: %q", stderr.String())
+	}
+}
+
 func TestTopicsListPrintsTabularByDefault(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/topics" || r.Method != http.MethodGet {

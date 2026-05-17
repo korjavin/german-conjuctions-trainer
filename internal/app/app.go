@@ -177,6 +177,11 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/auth/logout", a.handleLogout)
 	http.HandleFunc("/api/auth/is_admin", a.withOptionalAuth(a.handleIsAdmin))
 	http.HandleFunc("/api/auth/cli-exchange", a.handleCLIExchange)
+	// /api/auth/cli-tokens mints a CLI bearer token using the caller's
+	// existing web session (cookie or bearer). Admin-only because issuing a
+	// token equals long-lived programmatic write access to topics — we don't
+	// want every reader-class user minting them.
+	http.HandleFunc("/api/auth/cli-tokens", a.withAuth(a.adminOnly(a.handleCreateCLIToken)))
 
 	http.HandleFunc("/api/user/stats", a.withAuth(a.handleUserStats))
 	http.HandleFunc("/api/user/settings", a.withAuth(a.handleUserSettings))
