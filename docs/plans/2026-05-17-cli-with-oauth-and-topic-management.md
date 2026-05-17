@@ -191,13 +191,14 @@ CLI (new):
 
 ### Task 7: Implement `gct exercises generate`
 
-- [ ] in `internal/cli/exercises.go`, implement `GenerateExercises(topicID string) ([]Exercise, error)` calling `POST /api/exercises` with body `{"topic_id": "..."}`
-- [ ] in `cmd/cli/main.go`, add `gct exercises generate <topic-id> [--watch]`:
-  - default: prints summary (number of exercises returned, topic name, breakdown by type if available)
-  - `--json`: raw response
-  - `--watch`: poll the endpoint every 5s up to 5 attempts if fewer than 10 exercises returned (helps when LLM cache is cold and generation runs in background)
-- [ ] write `internal/cli/exercises_test.go`: round-trip POST with topic_id, surface 404 for unknown topic, surface 500 with body text, `--watch` polls correctly
-- [ ] run `go test ./...` — must pass before next task
+- [x] in `internal/cli/exercises.go`, implement `GenerateExercises(topicID string) ([]Exercise, error)` calling `POST /api/exercises` with body `{"topic_id": "..."}`
+- [x] in `cmd/cli/main.go`, add `gct exercises generate <topic-id> [--watch]`:
+  - default: prints summary (count + topic id). The server response carries no topic name and no exercise "type" field — exercises are `{english_hint, correct_german_sentence}` — so the type breakdown noted in the plan is omitted as "if available" rather than fabricated.
+  - `--json`: raw response (the exercises slice; `exercise_json` is preserved as a raw JSON blob via `json.RawMessage`)
+  - `--watch`: poll the endpoint every 5s up to 5 attempts if fewer than 10 exercises returned. Cadence is in package-level vars (`watchInterval`, `watchMaxAttempts`, `watchThreshold`) so unit tests can shrink them without holding 25 seconds of wall-clock.
+- [x] write `internal/cli/exercises_test.go`: round-trip POST with topic_id, surface 404, surface 500 body text, empty-slice handling. Watch-loop polling is covered in command-level tests where the cadence is controllable.
+- [x] also write command-level tests (`cmd/cli/main_test.go`): default summary, `--json`, missing id, 404, 500, 401, watch hits threshold, watch gives up, not-logged-in, unknown subcommand, --help.
+- [x] run `go test ./...` — passes; `go build ./cmd/cli` and `go vet ./...` clean.
 
 ### Task 8: Wire CLI build into Makefile / CI + add `gct --version`
 

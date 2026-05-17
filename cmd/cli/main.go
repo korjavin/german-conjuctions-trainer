@@ -1,9 +1,8 @@
 // Command gct is the German Conjunctions Trainer command-line client.
 //
 // This file holds only the subcommand router; each command's implementation
-// lives in internal/cli alongside its tests. Tasks 6–7 of the CLI plan add
-// `topics` and `exercises`; this file currently wires up `login`, `logout`,
-// `whoami` and a few stubs.
+// lives in internal/cli alongside its tests. The router covers `login`,
+// `logout`, `whoami`, `topics`, and `exercises`.
 package main
 
 import (
@@ -19,6 +18,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"german-conjunctions-trainer/internal/cli"
 )
@@ -81,11 +81,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "topics":
 		return runTopics(rest, stdin, stdout, stderr)
 	case "exercises":
-		// Task 7. Stub for now so the binary builds and `gct --help`
-		// still lists the eventual surface.
-		_ = rest
-		fmt.Fprintf(stderr, "gct %s: not implemented yet (pending Task 7 of the CLI plan)\n", cmd)
-		return 1
+		return runExercises(rest, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "gct: unknown command %q\n\n", cmd)
 		fmt.Fprint(stderr, usage)
@@ -699,6 +695,96 @@ func isFlagSet(fs *flag.FlagSet, name string) bool {
 		}
 	})
 	return seen
+}
+
+// exercisesUsage spells out the exercises surface for `gct exercises -h`.
+const exercisesUsage = `gct exercises — trigger exercise generation
+
+Usage:
+  gct exercises generate <topic-id> [--watch] [--json]
+
+Flags:
+  --watch         Poll up to 5 times (5s apart) until the server returns
+                  at least 10 exercises. Useful when the LLM cache is cold
+                  and generation needs a moment to land.
+
+Global flags (apply to every subcommand):
+  --server URL    Server base URL (overrides config)
+  --config PATH   Config file path (overrides $GCT_CONFIG)
+  --token TOKEN   Bearer token (overrides config and $GCT_TOKEN)
+  --json          Emit raw JSON instead of a human-readable summary
+`
+
+// watchInterval / watchAttempts gate how aggressively --watch retries. Vars
+// (not consts) so tests can shrink them — otherwise a unit test would block
+// for 25 seconds to exercise the polling path.
+var (
+	watchInterval     = 5 * time.Second
+	watchMaxAttempts  = 5
+	watchThreshold    = 10
+)
+
+func runExercises(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprint(stderr, exercisesUsage)
+		return 2
+	}
+	sub, rest := args[0], args[1:]
+	switch sub {
+	case "-h", "--help", "help":
+		fmt.Fprint(stdout, exercisesUsage)
+		return 0
+	case "generate":
+		return runExercisesGenerate(rest, stdout, stderr)
+	default:
+		fmt.Fprintf(stderr, "gct exercises: unknown subcommand %q\n\n", sub)
+		fmt.Fprint(stderr, exercisesUsage)
+		return 2
+	}
+}
+
+func runExercisesGenerate(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("exercises generate", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	cf := registerCommonFlags(fs)
+	watch := fs.Bool("watch", false, "Poll until at least 10 exercises are returned")
+	if err := fs.Parse(reorderArgs(args)); err != nil {
+		return 2
+	}
+	if fs.NArg() < 1 {
+		fmt.Fprintln(stderr, "gct exercises generate: topic id required")
+		return 2
+	}
+	topicID := fs.Arg(0)
+
+	client, code := resolveClient("gct exercises generate", cf, stderr)
+	if client == nil {
+		return code
+	}
+
+	exercises, err := client.GenerateExercises(topicID)
+	if err != nil {
+		return printAPIError("gct exercises generate", err, stderr)
+	}
+
+	if *watch {
+		for attempt := 1; attempt < watchMaxAttempts && len(exercises) < watchThreshold; attempt++ {
+			fmt.Fprintf(stderr, "gct exercises generate: only %d exercises so far, retrying (%d/%d) in %s…\n",
+				len(exercises), attempt, watchMaxAttempts-1, watchInterval)
+			time.Sleep(watchInterval)
+			next, err := client.GenerateExercises(topicID)
+			if err != nil {
+				return printAPIError("gct exercises generate", err, stderr)
+			}
+			exercises = next
+		}
+	}
+
+	if *cf.jsonOut {
+		return writeJSON(stdout, exercises)
+	}
+	fmt.Fprintf(stdout, "Generated %d exercises for topic %s\n", len(exercises), topicID)
+	return 0
 }
 
 // writeJSON emits v as indented JSON terminated by a newline. Returns 0 on

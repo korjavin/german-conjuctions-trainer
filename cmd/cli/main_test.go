@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // withConfig writes a minimal config.json to a temp dir, sets $GCT_CONFIG to
@@ -537,6 +539,234 @@ func TestTopicsHelp(t *testing.T) {
 		t.Errorf("code = %d, want 0", code)
 	}
 	if !strings.Contains(stdout, "gct topics") {
+		t.Errorf("help body = %q", stdout)
+	}
+}
+
+// runExercisesCmd is the exercises-subcommand counterpart to runTopicsCmd.
+func runExercisesCmd(t *testing.T, args ...string) (int, string, string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	all := append([]string{"exercises"}, args...)
+	code := run(all, nil, &stdout, &stderr)
+	return code, stdout.String(), stderr.String()
+}
+
+func TestExercisesGenerateSendsPostAndSummary(t *testing.T) {
+	var captured map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/exercises" {
+			t.Errorf("got %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer tok" {
+			t.Errorf("Authorization = %q", got)
+		}
+		_ = json.NewDecoder(r.Body).Decode(&captured)
+		_, _ = w.Write([]byte(`{"exercises":[
+			{"id":"e1","topic_id":"t1","exercise_json":{"english_hint":"hi","correct_german_sentence":"Hallo"}},
+			{"id":"e2","topic_id":"t1","exercise_json":{"english_hint":"bye","correct_german_sentence":"Tschüss"}}
+		]}`))
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, stdout, stderr := runExercisesCmd(t, "generate", "t1")
+	if code != 0 {
+		t.Fatalf("code = %d, stderr=%s", code, stderr)
+	}
+	if captured["topic_id"] != "t1" {
+		t.Errorf("body.topic_id = %v", captured["topic_id"])
+	}
+	if !strings.Contains(stdout, "Generated 2 exercises for topic t1") {
+		t.Errorf("stdout = %q", stdout)
+	}
+}
+
+func TestExercisesGenerateJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"exercises":[{"id":"e1","topic_id":"t1","exercise_json":{"english_hint":"hi"}}]}`))
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, stdout, stderr := runExercisesCmd(t, "generate", "t1", "--json")
+	if code != 0 {
+		t.Fatalf("code = %d, stderr=%s", code, stderr)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("output not valid JSON: %v\noutput=%s", err, stdout)
+	}
+	if len(got) != 1 || got[0]["id"] != "e1" {
+		t.Errorf("unexpected JSON: %+v", got)
+	}
+}
+
+func TestExercisesGenerateRequiresTopicID(t *testing.T) {
+	withConfig(t, cliConfig{ServerURL: "http://example", Token: "tok"})
+	code, _, stderr := runExercisesCmd(t, "generate")
+	if code != 2 {
+		t.Errorf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "topic id required") {
+		t.Errorf("stderr = %q", stderr)
+	}
+}
+
+func TestExercisesGenerateSurfaces404(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "TOPIC_NOT_FOUND", http.StatusNotFound)
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, _, stderr := runExercisesCmd(t, "generate", "missing")
+	if code == 0 {
+		t.Fatalf("expected non-zero exit, stderr=%s", stderr)
+	}
+	if !strings.Contains(stderr, "TOPIC_NOT_FOUND") {
+		t.Errorf("stderr = %q, want TOPIC_NOT_FOUND mention", stderr)
+	}
+}
+
+func TestExercisesGenerateSurfaces500BodyText(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "upstream exploded", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, _, stderr := runExercisesCmd(t, "generate", "t1")
+	if code == 0 {
+		t.Fatalf("expected non-zero exit")
+	}
+	if !strings.Contains(stderr, "upstream exploded") {
+		t.Errorf("stderr = %q, want body text 'upstream exploded'", stderr)
+	}
+}
+
+func TestExercisesGenerateUnauthorized(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "token revoked", http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, _, stderr := runExercisesCmd(t, "generate", "t1")
+	if code != 1 {
+		t.Errorf("code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "run gct login") {
+		t.Errorf("stderr = %q, want login hint", stderr)
+	}
+}
+
+func TestExercisesGenerateWatchPollsUntilThreshold(t *testing.T) {
+	// Shrink the polling cadence so this test runs in milliseconds rather
+	// than the production 25-second worst case. Restore after the test so
+	// later cases still see real values.
+	origInterval, origAttempts, origThresh := watchInterval, watchMaxAttempts, watchThreshold
+	watchInterval = 1 * time.Millisecond
+	watchMaxAttempts = 5
+	watchThreshold = 3
+	t.Cleanup(func() {
+		watchInterval = origInterval
+		watchMaxAttempts = origAttempts
+		watchThreshold = origThresh
+	})
+
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		// First two responses return below threshold; third hits it.
+		if n < 3 {
+			_, _ = w.Write([]byte(`{"exercises":[{"id":"e1","topic_id":"t1"}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"exercises":[
+			{"id":"e1","topic_id":"t1"},
+			{"id":"e2","topic_id":"t1"},
+			{"id":"e3","topic_id":"t1"}
+		]}`))
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, stdout, stderr := runExercisesCmd(t, "generate", "t1", "--watch")
+	if code != 0 {
+		t.Fatalf("code = %d, stderr=%s", code, stderr)
+	}
+	if got := calls.Load(); got != 3 {
+		t.Errorf("server calls = %d, want 3", got)
+	}
+	if !strings.Contains(stdout, "Generated 3 exercises") {
+		t.Errorf("stdout = %q", stdout)
+	}
+	if !strings.Contains(stderr, "retrying") {
+		t.Errorf("expected retry hint on stderr, got %q", stderr)
+	}
+}
+
+func TestExercisesGenerateWatchGivesUpAfterMaxAttempts(t *testing.T) {
+	origInterval, origAttempts, origThresh := watchInterval, watchMaxAttempts, watchThreshold
+	watchInterval = 1 * time.Millisecond
+	watchMaxAttempts = 3
+	watchThreshold = 10
+	t.Cleanup(func() {
+		watchInterval = origInterval
+		watchMaxAttempts = origAttempts
+		watchThreshold = origThresh
+	})
+
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		_, _ = w.Write([]byte(`{"exercises":[{"id":"e1","topic_id":"t1"}]}`))
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, stdout, stderr := runExercisesCmd(t, "generate", "t1", "--watch")
+	if code != 0 {
+		t.Fatalf("code = %d, stderr=%s", code, stderr)
+	}
+	if got := calls.Load(); got != int32(watchMaxAttempts) {
+		t.Errorf("server calls = %d, want %d", got, watchMaxAttempts)
+	}
+	// Final summary still printed even though threshold was never hit.
+	if !strings.Contains(stdout, "Generated 1 exercises") {
+		t.Errorf("stdout = %q", stdout)
+	}
+}
+
+func TestExercisesGenerateNotLoggedIn(t *testing.T) {
+	withConfig(t, cliConfig{ServerURL: "http://example", Token: ""})
+	code, _, stderr := runExercisesCmd(t, "generate", "t1")
+	if code != 1 {
+		t.Errorf("code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "not logged in") {
+		t.Errorf("stderr = %q", stderr)
+	}
+}
+
+func TestExercisesUnknownSubcommand(t *testing.T) {
+	withConfig(t, cliConfig{ServerURL: "http://example", Token: "tok"})
+	code, _, stderr := runExercisesCmd(t, "frobnicate")
+	if code != 2 {
+		t.Errorf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "unknown subcommand") {
+		t.Errorf("stderr = %q", stderr)
+	}
+}
+
+func TestExercisesHelp(t *testing.T) {
+	code, stdout, _ := runExercisesCmd(t, "--help")
+	if code != 0 {
+		t.Errorf("code = %d", code)
+	}
+	if !strings.Contains(stdout, "gct exercises") {
 		t.Errorf("help body = %q", stdout)
 	}
 }
