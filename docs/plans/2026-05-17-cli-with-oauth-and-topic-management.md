@@ -144,19 +144,19 @@ CLI (new):
 
 ### Task 4: Scaffold CLI binary structure
 
-- [ ] create `cmd/cli/main.go` with stdlib `flag`-based subcommand router; subcommands: `login`, `logout`, `whoami`, `topics`, `exercises`
-- [ ] create `internal/cli/config.go`:
+- [x] create `cmd/cli/main.go` with stdlib `flag`-based subcommand router; subcommands: `login`, `logout`, `whoami`, `topics`, `exercises`
+- [x] create `internal/cli/config.go`:
   - `Config struct { ServerURL, Token, UserID string }`
   - `Load() (*Config, error)` — reads `$XDG_CONFIG_HOME/gct/config.json` (fallback `~/.config/gct/config.json`); returns zero-value config if file missing
   - `Save(cfg *Config) error` — writes JSON with mode `0600`, creates parent dirs as needed
   - `Path() string` — exposed for `--config` flag override
-- [ ] create `internal/cli/client.go`:
+- [x] create `internal/cli/client.go`:
   - `Client struct { BaseURL, Token string, HTTP *http.Client }`
   - `func (c *Client) do(method, path string, body any, out any) error` — sets `Authorization: Bearer <token>`, JSON encode/decode, surfaces non-2xx as typed errors with body text
-- [ ] add a build tag `//go:build !cli` (or similar) so the server `go test` runs don't try to compile the CLI — actually skip this; both binaries can coexist in the same module. Just ensure `cmd/cli` has no server imports.
-- [ ] write `internal/cli/config_test.go`: round-trip save/load; permissions assertion; env var override; corrupt file returns error
-- [ ] write `internal/cli/client_test.go` using `httptest.Server`: GET/POST success, 401 returns a "not logged in" error, 4xx surfaces server error message, network errors are wrapped
-- [ ] run `go build ./cmd/cli` and `go test ./internal/cli/...` — must pass before next task
+- [x] add a build tag `//go:build !cli` (or similar) so the server `go test` runs don't try to compile the CLI — actually skip this; both binaries can coexist in the same module. Just ensure `cmd/cli` has no server imports.
+- [x] write `internal/cli/config_test.go`: round-trip save/load; permissions assertion; env var override; corrupt file returns error
+- [x] write `internal/cli/client_test.go` using `httptest.Server`: GET/POST success, 401 returns a "not logged in" error, 4xx surfaces server error message, network errors are wrapped
+- [x] run `go build ./cmd/cli` and `go test ./internal/cli/...` — must pass before next task
 
 ### Task 5: Implement `gct login` / `logout` / `whoami` (device flow)
 
