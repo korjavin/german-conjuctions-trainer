@@ -176,18 +176,18 @@ CLI (new):
 
 ### Task 6: Implement `gct topics` subcommands
 
-- [ ] in `internal/cli/topics.go`, implement client methods: `ListTopics()`, `GetTopic(id)`, `CreateTopic(name, prompt, parentID, sortOrder)`, `UpdateTopic(id, partial)`, `DeleteTopic(id)`, `MoveTopic(id, parentID, position)`
-- [ ] in `cmd/cli/main.go`, wire `topics` subcommands:
+- [x] in `internal/cli/topics.go`, implement client methods: `ListTopics()`, `GetTopic(id)`, `CreateTopic(name, prompt, parentID, sortOrder)`, `UpdateTopic(id, partial)`, `DeleteTopic(id)`, `MoveTopic(id, parentID, position)`
+- [x] in `cmd/cli/main.go`, wire `topics` subcommands:
   - `gct topics list [--tree]` — flat JSON list, or indented tree if `--tree`
   - `gct topics get <id>` — JSON
   - `gct topics create --name X --prompt Y [--parent ID] [--sort N] [--prompt-file PATH]` — `--prompt-file` reads body from disk (since prompts can be long); `-` reads stdin
   - `gct topics update <id> [--name X] [--prompt Y | --prompt-file PATH] [--parent ID | --no-parent] [--sort N]`
   - `gct topics delete <id> [--yes]` — confirm prompt unless `--yes`
   - `gct topics move <id> --parent ID [--position N]`
-- [ ] all commands honor `--server URL`, `--config PATH`, `--json` (raw JSON output for scripting), `--token TOKEN` (env override)
-- [ ] write `internal/cli/topics_test.go`: each method round-trips against `httptest.Server`; assert correct path, method, body shape; 401 surfaces "log in first"; 403 surfaces "admin required"
-- [ ] write command-level tests by invoking the dispatcher with `args []string` and asserting on stdout/stderr buffers
-- [ ] run `go test ./internal/cli/...` — must pass before next task
+- [x] all commands honor `--server URL`, `--config PATH`, `--json` (raw JSON output for scripting), `--token TOKEN` (env override). Positional id can appear before flags thanks to a small `reorderArgs` shim, since stdlib `flag` otherwise stops at the first non-flag token.
+- [x] write `internal/cli/topics_test.go`: each method round-trips against `httptest.Server`; assert correct path, method, body shape; 401 surfaces "log in first"; 403 surfaces "admin required"
+- [x] write command-level tests by invoking the dispatcher with `args []string` and asserting on stdout/stderr buffers (added in `cmd/cli/main_test.go`; `run` signature gained an `io.Reader` for the delete-confirmation prompt)
+- [x] run `go test ./internal/cli/...` — passes; full `go test ./...` also green
 
 ### Task 7: Implement `gct exercises generate`
 
