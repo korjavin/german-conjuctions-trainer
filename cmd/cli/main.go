@@ -201,7 +201,7 @@ func runWhoami(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	var (
 		server     = fs.String("server", "", "Server base URL (defaults to config value)")
-		token      = fs.String("token", "", "Bearer token (overrides config)")
+		token      = fs.String("token", "", "Bearer token (overrides config and $GCT_TOKEN)")
 		configPath = fs.String("config", "", "Config file path (overrides $GCT_CONFIG)")
 	)
 	if err := fs.Parse(args); err != nil {
@@ -218,6 +218,8 @@ func runWhoami(args []string, stdout, stderr io.Writer) int {
 	}
 	if *token != "" {
 		cfg.Token = *token
+	} else if env := os.Getenv(gctTokenEnvOverride); env != "" && cfg.Token == "" {
+		cfg.Token = env
 	}
 	if cfg.ServerURL == "" {
 		fmt.Fprintln(stderr, "gct whoami: server URL is not configured (run gct login --server URL)")
@@ -367,6 +369,9 @@ func resolveClient(cmdName string, cf commonFlags, stderr io.Writer) (*cli.Clien
 
 // printAPIError renders one of the typed errors from internal/cli into a
 // human-friendly message. Returns the exit code callers should propagate.
+// For *APIError, we surface the server's body (and status for non-2xx)
+// rather than the full METHOD URL prefix that APIError.Error() emits —
+// end users don't need the request line.
 func printAPIError(cmdName string, err error, stderr io.Writer) int {
 	if err == nil {
 		return 0
@@ -378,13 +383,18 @@ func printAPIError(cmdName string, err error, stderr io.Writer) int {
 	case errors.Is(err, cli.ErrForbidden):
 		fmt.Fprintf(stderr, "%s: admin permission required\n", cmdName)
 		return 1
-	case errors.Is(err, cli.ErrNotFound):
-		fmt.Fprintf(stderr, "%s: %v\n", cmdName, err)
-		return 1
-	default:
-		fmt.Fprintf(stderr, "%s: %v\n", cmdName, err)
+	}
+	var apiErr *cli.APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.Body != "" {
+			fmt.Fprintf(stderr, "%s: %s: %s\n", cmdName, apiErr.Status, apiErr.Body)
+		} else {
+			fmt.Fprintf(stderr, "%s: %s\n", cmdName, apiErr.Status)
+		}
 		return 1
 	}
+	fmt.Fprintf(stderr, "%s: %v\n", cmdName, err)
+	return 1
 }
 
 func runTopicsList(args []string, stdout, stderr io.Writer) int {

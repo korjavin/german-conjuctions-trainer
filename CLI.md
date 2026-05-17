@@ -159,9 +159,10 @@ invocation.
 must be revoked explicitly (DB update, or the web admin). Treat the token
 file as a secret; it is mode `0600` on disk for that reason.
 
-**Admin-only commands return 403** — topic CRUD and exercise generation
-require the authenticated user to be the configured `ADMIN_GOOGLE_ID`.
-Non-admin tokens can still call read-only endpoints like `gct whoami`.
+**Admin-only commands return 403** — topic CRUD (`gct topics create`,
+`update`, `delete`, `move`) requires the authenticated user to be the
+configured `ADMIN_GOOGLE_ID`. Read-only endpoints (`gct topics list`,
+`get`, `gct whoami`) and `gct exercises generate` accept any valid token.
 
 ## Environment variables
 
