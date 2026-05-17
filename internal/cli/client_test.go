@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClientDoGetSuccess(t *testing.T) {
@@ -217,5 +219,36 @@ func TestClientDoTrimsTrailingSlashOnBaseURL(t *testing.T) {
 	c := NewClient(srv.URL+"/", "")
 	if err := c.Do(http.MethodGet, "/api/topics", nil, nil); err != nil {
 		t.Fatalf("Do: %v", err)
+	}
+}
+
+// TestClientDoContextCancellationAbortsRequest pins the regression where
+// Client.Do used http.NewRequest (no context), so a Ctrl-C on a hung
+// server during /api/auth/cli-exchange could not abort the call.
+func TestClientDoContextCancellationAbortsRequest(t *testing.T) {
+	released := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+		close(released)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "")
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(25 * time.Millisecond)
+		cancel()
+	}()
+	err := c.DoContext(ctx, http.MethodGet, "/api/topics", nil, nil)
+	if err == nil {
+		t.Fatal("expected error from cancelled DoContext, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want context.Canceled", err)
+	}
+	select {
+	case <-released:
+	case <-time.After(time.Second):
+		t.Error("server handler did not observe client disconnect")
 	}
 }

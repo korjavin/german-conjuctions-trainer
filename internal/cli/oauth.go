@@ -152,7 +152,10 @@ func loginWith(ctx context.Context, opts loginOptions) (*LoginResult, error) {
 		return nil, errors.New("Google returned an empty access token")
 	}
 
-	// Exchange the Google access token for a server-issued bearer.
+	// Exchange the Google access token for a server-issued bearer. The
+	// project-side exchange runs through Client.DoContext so a hung server
+	// (or a user pressing Ctrl-C after Google has already issued the
+	// access token) aborts the request instead of blocking indefinitely.
 	client := &Client{BaseURL: opts.serverURL, HTTP: opts.httpClient}
 	exchangeReq := map[string]string{
 		"google_access_token": googleTok.AccessToken,
@@ -163,7 +166,7 @@ func loginWith(ctx context.Context, opts loginOptions) (*LoginResult, error) {
 		TokenID string `json:"token_id"`
 		UserID  string `json:"user_id"`
 	}
-	if err := client.Do(http.MethodPost, "/api/auth/cli-exchange", exchangeReq, &exchangeResp); err != nil {
+	if err := client.DoContext(ctx, http.MethodPost, "/api/auth/cli-exchange", exchangeReq, &exchangeResp); err != nil {
 		return nil, fmt.Errorf("exchange Google token with server: %w", err)
 	}
 	if exchangeResp.Token == "" || exchangeResp.UserID == "" {

@@ -463,6 +463,10 @@ func runTopicsGet(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "gct topics get: topic id required")
 		return 2
 	}
+	if fs.NArg() > 1 {
+		fmt.Fprintf(stderr, "gct topics get: expected exactly one topic id, got %d: %v\n", fs.NArg(), fs.Args())
+		return 2
+	}
 	id := fs.Arg(0)
 	client, code := resolveClient("gct topics get", cf, stderr)
 	if client == nil {
@@ -567,6 +571,10 @@ func runTopicsUpdate(args []string, stdin io.Reader, stdout, stderr io.Writer) i
 		fmt.Fprintln(stderr, "gct topics update: topic id required")
 		return 2
 	}
+	if fs.NArg() > 1 {
+		fmt.Fprintf(stderr, "gct topics update: expected exactly one topic id, got %d: %v\n", fs.NArg(), fs.Args())
+		return 2
+	}
 	id := fs.Arg(0)
 
 	update := cli.TopicUpdate{}
@@ -625,6 +633,10 @@ func runTopicsDelete(args []string, stdin io.Reader, stdout, stderr io.Writer) i
 		fmt.Fprintln(stderr, "gct topics delete: topic id required")
 		return 2
 	}
+	if fs.NArg() > 1 {
+		fmt.Fprintf(stderr, "gct topics delete: expected exactly one topic id, got %d: %v\n", fs.NArg(), fs.Args())
+		return 2
+	}
 	id := fs.Arg(0)
 
 	if !*yes {
@@ -670,6 +682,10 @@ func runTopicsMove(args []string, stdout, stderr io.Writer) int {
 	}
 	if fs.NArg() < 1 {
 		fmt.Fprintln(stderr, "gct topics move: topic id required")
+		return 2
+	}
+	if fs.NArg() > 1 {
+		fmt.Fprintf(stderr, "gct topics move: expected exactly one topic id, got %d: %v\n", fs.NArg(), fs.Args())
 		return 2
 	}
 	id := fs.Arg(0)
@@ -792,6 +808,10 @@ func runExercisesGenerate(args []string, stdout, stderr io.Writer) int {
 	}
 	if fs.NArg() < 1 {
 		fmt.Fprintln(stderr, "gct exercises generate: topic id required")
+		return 2
+	}
+	if fs.NArg() > 1 {
+		fmt.Fprintf(stderr, "gct exercises generate: expected exactly one topic id, got %d: %v\n", fs.NArg(), fs.Args())
 		return 2
 	}
 	topicID := fs.Arg(0)

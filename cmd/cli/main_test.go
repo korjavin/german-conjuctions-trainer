@@ -163,6 +163,21 @@ func TestTopicsGetRequiresID(t *testing.T) {
 	}
 }
 
+// TestTopicsUpdateRejectsExtraPositionals guards against silent
+// mis-targeting when the user mixes positionals with flags
+// ("gct topics update t1 --name X t2" used to operate on t2 because
+// reorderArgs lifted t1 to the end of the slice).
+func TestTopicsUpdateRejectsExtraPositionals(t *testing.T) {
+	withConfig(t, cliConfig{ServerURL: "http://example", Token: "tok"})
+	code, _, stderr := runTopicsCmd(t, nil, "update", "t1", "--name", "X", "t2")
+	if code != 2 {
+		t.Errorf("code = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "expected exactly one topic id") {
+		t.Errorf("stderr = %q", stderr)
+	}
+}
+
 func TestTopicsCreateSendsBody(t *testing.T) {
 	var captured map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

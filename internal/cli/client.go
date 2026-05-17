@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -82,7 +83,15 @@ func NewClient(baseURL, token string) *Client {
 	}
 }
 
-// Do executes an HTTP request against the server.
+// Do executes an HTTP request against the server. Equivalent to
+// DoContext(context.Background(), ...); prefer DoContext from any call site
+// that already has a cancelable context (e.g. one tied to SIGINT) so the
+// request can be aborted on Ctrl-C.
+func (c *Client) Do(method, path string, body, out any) error {
+	return c.DoContext(context.Background(), method, path, body, out)
+}
+
+// DoContext is the context-aware variant of Do.
 //
 // path may be a relative path ("/api/topics") or an absolute URL — relative
 // paths are joined to BaseURL. body is JSON-encoded when non-nil. out, if
@@ -91,8 +100,9 @@ func NewClient(baseURL, token string) *Client {
 //
 // Non-2xx responses return an *APIError with the raw body. Transport-level
 // failures are returned wrapped with the request method and URL for
-// context.
-func (c *Client) Do(method, path string, body, out any) error {
+// context. Context cancellation (Ctrl-C, deadline) aborts the in-flight
+// request and surfaces as the wrapped context error.
+func (c *Client) DoContext(ctx context.Context, method, path string, body, out any) error {
 	endpoint, err := c.resolve(path)
 	if err != nil {
 		return err
@@ -107,7 +117,7 @@ func (c *Client) Do(method, path string, body, out any) error {
 		reqBody = bytes.NewReader(buf)
 	}
 
-	req, err := http.NewRequest(method, endpoint, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reqBody)
 	if err != nil {
 		return fmt.Errorf("build %s %s: %w", method, endpoint, err)
 	}
