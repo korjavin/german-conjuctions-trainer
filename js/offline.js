@@ -131,6 +131,9 @@ export async function sendBatch(batch) {
     if (batch.completions && batch.completions.length > 0) {
         try {
             // client_batch_id lets the server dedupe replays of this batch.
+            // Dedupe lands with the parallel backend PR; until then a retry
+            // after a lost response can double-count that batch (which is
+            // still strictly better than today's silent data loss).
             await saveExerciseCompletionsAPI(batch.completions, batch.id);
         } catch (error) {
             console.error('Failed to save exercise completions:', error);
@@ -218,6 +221,10 @@ export async function updateOfflineCache() {
             }
         }
 
+        // limit + skip_generation are honoured by the /api/exercises change
+        // shipping in a parallel backend PR. Until that lands the server
+        // ignores them (unknown JSON fields), so a warm-up of a thin topic can
+        // still trigger generation — correct, just slower and more expensive.
         for (const topic of state.recentlyUsedTopics) {
             if (byId.size >= MAX_STASHED_EXERCISES) break;
             if (topic.id === state.currentTopicId) continue;
