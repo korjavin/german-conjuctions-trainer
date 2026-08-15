@@ -167,6 +167,14 @@ type Storage interface {
 	ToggleFavorite(userID, exerciseID string) (bool, error)
 	ToggleHideExercise(userID, exerciseID string) (bool, error)
 
+	// Completion idempotency
+	// ClaimCompletionBatch records a client-supplied batch ID for a user and
+	// reports whether this call was the one that recorded it. A false return
+	// means the batch was already processed and must not be applied again.
+	ClaimCompletionBatch(userID, batchID string) (bool, error)
+	// ReleaseCompletionBatch removes a claim whose work failed to apply.
+	ReleaseCompletionBatch(userID, batchID string) error
+
 	// CLI Tokens
 	CreateCLIToken(userID, tokenHash, label string) (*CLIToken, error)
 	GetCLITokenByHash(tokenHash string) (*CLIToken, error)

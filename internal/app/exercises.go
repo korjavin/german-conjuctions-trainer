@@ -13,6 +13,14 @@ import (
 	"german-conjunctions-trainer/pkg/storage"
 )
 
+const (
+	// maxExerciseBatchLimit is the hard cap on the "limit" field of
+	// POST /api/exercises, so an offline prefetch cannot ask for the world.
+	maxExerciseBatchLimit = 50
+	// maxClientBatchIDLen bounds the client-supplied idempotency key.
+	maxClientBatchIDLen = 64
+)
+
 func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 	requestStartedAt := time.Now()
 	if r.Method != http.MethodPost {
@@ -41,6 +49,15 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := getUserIDFromRequest(r)
+
+	// Batch size: default 10, hard cap 50 (offline prefetch asks for more).
+	limit := 10
+	if req.Limit > 0 {
+		limit = req.Limit
+		if limit > maxExerciseBatchLimit {
+			limit = maxExerciseBatchLimit
+		}
+	}
 
 	// Collect all descendant topics
 	descendants, err := a.DB.GetDescendantTopicIDs(req.TopicID)
@@ -98,7 +115,7 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[EXERCISES] Found %d user exercise views for user %s", len(userViews), userID)
 
 		eligibleExercises := getEligibleExercisesForSRS(allExercises, userViews)
-		if len(eligibleExercises) < 10 {
+		if len(eligibleExercises) < 10 && !req.SkipGeneration {
 			// Randomly select a topic from the sub-tree
 			randomTopicID := topicIDs[mrand.Intn(len(topicIDs))]
 			selectedTopic, err := a.DB.GetTopic(randomTopicID)
@@ -144,8 +161,8 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 			eligibleExercises = getEligibleExercisesForSRS(allExercises, userViews)
 		}
 
-		if len(eligibleExercises) > 10 {
-			finalExercises = eligibleExercises[:10]
+		if len(eligibleExercises) > limit {
+			finalExercises = eligibleExercises[:limit]
 		} else {
 			finalExercises = eligibleExercises
 		}
@@ -206,6 +223,9 @@ func (a *App) handleExercisesComplete(w http.ResponseWriter, r *http.Request) {
 
 	type CompletionRequest struct {
 		Completions []ExerciseCompletion `json:"completions"`
+		// ClientBatchID is an optional idempotency key: the offline queue
+		// retries batches, and a replay must not double-count attempts.
+		ClientBatchID string `json:"client_batch_id"`
 	}
 
 	var req CompletionRequest
@@ -214,10 +234,30 @@ func (a *App) handleExercisesComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[COMPLETION] User %s completing %d exercises", userID, len(req.Completions))
+	if len(req.ClientBatchID) > maxClientBatchIDLen {
+		http.Error(w, "client_batch_id too long", http.StatusBadRequest)
+		return
+	}
+
+	if req.ClientBatchID != "" {
+		claimed, err := a.DB.ClaimCompletionBatch(userID, req.ClientBatchID)
+		if err != nil {
+			log.Printf("ERROR: failed to claim completion batch %s for user %s: %v", req.ClientBatchID, userID, err)
+			http.Error(w, fmt.Sprintf("Failed to claim batch: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if !claimed {
+			log.Printf("[COMPLETION] Replay of batch %s for user %s - ignoring", req.ClientBatchID, userID)
+			writeCompletionSuccess(w)
+			return
+		}
+	}
+
+	log.Printf("[COMPLETION] User %s completing %d exercises (batch %q)", userID, len(req.Completions), req.ClientBatchID)
 
 	userViews, err := a.DB.GetUserExerciseViews(userID)
 	if err != nil {
+		a.releaseCompletionBatch(userID, req.ClientBatchID)
 		http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -264,14 +304,30 @@ func (a *App) handleExercisesComplete(w http.ResponseWriter, r *http.Request) {
 
 	if err := a.DB.UpdateUserExerciseViews(viewsToUpdate); err != nil {
 		log.Printf("ERROR: failed to update user exercise views: %v", err)
+		a.releaseCompletionBatch(userID, req.ClientBatchID)
 		http.Error(w, fmt.Sprintf("Failed to update views: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	log.Printf("[COMPLETION] Successfully updated %d exercise completions for user %s", len(viewsToUpdate), userID)
 
+	writeCompletionSuccess(w)
+}
+
+func writeCompletionSuccess(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// releaseCompletionBatch drops a claim whose work did not land, so the client's
+// retry is applied instead of being swallowed as a replay.
+func (a *App) releaseCompletionBatch(userID, batchID string) {
+	if batchID == "" {
+		return
+	}
+	if err := a.DB.ReleaseCompletionBatch(userID, batchID); err != nil {
+		log.Printf("ERROR: failed to release completion batch %s for user %s: %v", batchID, userID, err)
+	}
 }
 
 func (a *App) handleExerciseFavorite(w http.ResponseWriter, r *http.Request) {

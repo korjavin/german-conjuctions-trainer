@@ -144,6 +144,13 @@ func (s *SQLiteStorage) runMigrations() error {
 			revoked_at DATETIME
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_cli_tokens_user_id ON cli_tokens(user_id)`,
+		`CREATE TABLE IF NOT EXISTS processed_completion_batches (
+			user_id TEXT NOT NULL,
+			batch_id TEXT NOT NULL,
+			created_at DATETIME NOT NULL,
+			PRIMARY KEY(user_id, batch_id),
+			FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
 	}
 
 	for _, migration := range migrations {
@@ -1449,6 +1456,31 @@ func (s *SQLiteStorage) GetDatabaseStats(audioCacheDir, dbFilePath string) (*Dat
 	}
 
 	return stats, nil
+}
+
+// ClaimCompletionBatch inserts the (user, batch) pair and reports whether this
+// call inserted it. A false return means the batch was already processed.
+func (s *SQLiteStorage) ClaimCompletionBatch(userID, batchID string) (bool, error) {
+	res, err := s.db.Exec(
+		`INSERT OR IGNORE INTO processed_completion_batches(user_id, batch_id, created_at) VALUES(?, ?, ?)`,
+		userID, batchID, time.Now().UTC(),
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+func (s *SQLiteStorage) ReleaseCompletionBatch(userID, batchID string) error {
+	_, err := s.db.Exec(
+		`DELETE FROM processed_completion_batches WHERE user_id = ? AND batch_id = ?`,
+		userID, batchID,
+	)
+	return err
 }
 
 func (s *SQLiteStorage) CreateCLIToken(userID, tokenHash, label string) (*CLIToken, error) {
