@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "german_conjuctions_trainer",
+  "project_id": "d234c792-8d01-44b8-9bf8-d5f5e9eead83"
+}

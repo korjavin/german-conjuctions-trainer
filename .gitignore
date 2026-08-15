@@ -38,3 +38,9 @@ node_modules
 # ralphex progress logs
 .ralphex/progress/
 coverage/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
