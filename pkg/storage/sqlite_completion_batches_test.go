@@ -3,9 +3,10 @@ package storage
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
-func TestClaimCompletionBatch(t *testing.T) {
+func TestApplyCompletionBatch(t *testing.T) {
 	store, err := NewSQLiteStorage(filepath.Join(t.TempDir(), "batches.db"))
 	if err != nil {
 		t.Fatalf("failed to create sqlite storage: %v", err)
@@ -13,34 +14,49 @@ func TestClaimCompletionBatch(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 
 	user := mustCreateUser(t, store, "google-batch")
+	other := mustCreateUser(t, store, "google-batch-2")
 
-	claimed, err := store.ClaimCompletionBatch(user.ID, "b1")
-	if err != nil {
-		t.Fatalf("first claim returned error: %v", err)
-	}
-	if !claimed {
-		t.Fatal("first claim should succeed")
+	view := func(userID string, attempts int) []*UserExerciseView {
+		return []*UserExerciseView{{
+			UserID:        userID,
+			ExerciseID:    "ex1",
+			LastViewed:    time.Now().UTC(),
+			TotalAttempts: attempts,
+		}}
 	}
 
-	claimed, err = store.ClaimCompletionBatch(user.ID, "b1")
-	if err != nil {
-		t.Fatalf("replayed claim returned error: %v", err)
+	applied, err := store.ApplyCompletionBatch(user.ID, "b1", view(user.ID, 1))
+	if err != nil || !applied {
+		t.Fatalf("first apply: applied=%v err=%v", applied, err)
 	}
-	if claimed {
-		t.Error("replayed claim should report already-processed")
+
+	// Replay: reports not applied and must not write.
+	applied, err = store.ApplyCompletionBatch(user.ID, "b1", view(user.ID, 99))
+	if err != nil {
+		t.Fatalf("replay returned error: %v", err)
+	}
+	if applied {
+		t.Error("replayed batch should report already-processed")
+	}
+	views, err := store.GetUserExerciseViews(user.ID)
+	if err != nil {
+		t.Fatalf("failed to read views: %v", err)
+	}
+	if views["ex1"].TotalAttempts != 1 {
+		t.Errorf("replay overwrote stats: TotalAttempts got %d, want 1", views["ex1"].TotalAttempts)
 	}
 
 	// Batch IDs are scoped per user.
-	other := mustCreateUser(t, store, "google-batch-2")
-	if claimed, err = store.ClaimCompletionBatch(other.ID, "b1"); err != nil || !claimed {
-		t.Errorf("same batch id for another user should claim: claimed=%v err=%v", claimed, err)
+	if applied, err = store.ApplyCompletionBatch(other.ID, "b1", view(other.ID, 1)); err != nil || !applied {
+		t.Errorf("same batch id for another user should apply: applied=%v err=%v", applied, err)
 	}
 
-	// Releasing lets a retry through again.
-	if err := store.ReleaseCompletionBatch(user.ID, "b1"); err != nil {
-		t.Fatalf("release returned error: %v", err)
+	// No batch ID: always applies.
+	if applied, err = store.ApplyCompletionBatch(user.ID, "", view(user.ID, 2)); err != nil || !applied {
+		t.Errorf("empty batch id should always apply: applied=%v err=%v", applied, err)
 	}
-	if claimed, err = store.ClaimCompletionBatch(user.ID, "b1"); err != nil || !claimed {
-		t.Errorf("claim after release should succeed: claimed=%v err=%v", claimed, err)
+	views, _ = store.GetUserExerciseViews(user.ID)
+	if views["ex1"].TotalAttempts != 2 {
+		t.Errorf("unbatched apply did not write: TotalAttempts got %d, want 2", views["ex1"].TotalAttempts)
 	}
 }

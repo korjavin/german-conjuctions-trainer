@@ -239,25 +239,10 @@ func (a *App) handleExercisesComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.ClientBatchID != "" {
-		claimed, err := a.DB.ClaimCompletionBatch(userID, req.ClientBatchID)
-		if err != nil {
-			log.Printf("ERROR: failed to claim completion batch %s for user %s: %v", req.ClientBatchID, userID, err)
-			http.Error(w, fmt.Sprintf("Failed to claim batch: %v", err), http.StatusInternalServerError)
-			return
-		}
-		if !claimed {
-			log.Printf("[COMPLETION] Replay of batch %s for user %s - ignoring", req.ClientBatchID, userID)
-			writeCompletionSuccess(w)
-			return
-		}
-	}
-
 	log.Printf("[COMPLETION] User %s completing %d exercises (batch %q)", userID, len(req.Completions), req.ClientBatchID)
 
 	userViews, err := a.DB.GetUserExerciseViews(userID)
 	if err != nil {
-		a.releaseCompletionBatch(userID, req.ClientBatchID)
 		http.Error(w, fmt.Sprintf("Failed to get user views: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -302,32 +287,22 @@ func (a *App) handleExercisesComplete(w http.ResponseWriter, r *http.Request) {
 		viewsToUpdate = append(viewsToUpdate, view)
 	}
 
-	if err := a.DB.UpdateUserExerciseViews(viewsToUpdate); err != nil {
+	// The batch marker is written in the same transaction as the stats, so a
+	// replayed batch (applied == false) leaves attempts and SRS counters alone.
+	applied, err := a.DB.ApplyCompletionBatch(userID, req.ClientBatchID, viewsToUpdate)
+	if err != nil {
 		log.Printf("ERROR: failed to update user exercise views: %v", err)
-		a.releaseCompletionBatch(userID, req.ClientBatchID)
 		http.Error(w, fmt.Sprintf("Failed to update views: %v", err), http.StatusInternalServerError)
 		return
 	}
+	if !applied {
+		log.Printf("[COMPLETION] Replay of batch %s for user %s - ignored", req.ClientBatchID, userID)
+	} else {
+		log.Printf("[COMPLETION] Successfully updated %d exercise completions for user %s", len(viewsToUpdate), userID)
+	}
 
-	log.Printf("[COMPLETION] Successfully updated %d exercise completions for user %s", len(viewsToUpdate), userID)
-
-	writeCompletionSuccess(w)
-}
-
-func writeCompletionSuccess(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
-}
-
-// releaseCompletionBatch drops a claim whose work did not land, so the client's
-// retry is applied instead of being swallowed as a replay.
-func (a *App) releaseCompletionBatch(userID, batchID string) {
-	if batchID == "" {
-		return
-	}
-	if err := a.DB.ReleaseCompletionBatch(userID, batchID); err != nil {
-		log.Printf("ERROR: failed to release completion batch %s for user %s: %v", batchID, userID, err)
-	}
 }
 
 func (a *App) handleExerciseFavorite(w http.ResponseWriter, r *http.Request) {

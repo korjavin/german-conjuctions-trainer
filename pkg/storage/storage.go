@@ -167,13 +167,11 @@ type Storage interface {
 	ToggleFavorite(userID, exerciseID string) (bool, error)
 	ToggleHideExercise(userID, exerciseID string) (bool, error)
 
-	// Completion idempotency
-	// ClaimCompletionBatch records a client-supplied batch ID for a user and
-	// reports whether this call was the one that recorded it. A false return
-	// means the batch was already processed and must not be applied again.
-	ClaimCompletionBatch(userID, batchID string) (bool, error)
-	// ReleaseCompletionBatch removes a claim whose work failed to apply.
-	ReleaseCompletionBatch(userID, batchID string) error
+	// ApplyCompletionBatch writes view updates and records the client-supplied
+	// batchID atomically. It reports false (writing nothing) when the batch was
+	// already recorded, i.e. the client replayed it. An empty batchID always
+	// applies, matching the pre-idempotency behavior.
+	ApplyCompletionBatch(userID, batchID string, viewsToUpdate []*UserExerciseView) (bool, error)
 
 	// CLI Tokens
 	CreateCLIToken(userID, tokenHash, label string) (*CLIToken, error)

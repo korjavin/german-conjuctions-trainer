@@ -1026,6 +1026,48 @@ func (s *SQLiteStorage) UpdateUserExerciseViews(viewsToUpdate []*UserExerciseVie
 	}
 	defer tx.Rollback()
 
+	if err := upsertUserExerciseViews(tx, viewsToUpdate); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ApplyCompletionBatch writes the view updates and records batchID in a single
+// transaction, so an idempotency marker can never outlive a failed write.
+// It reports false (and writes nothing) when batchID was already recorded —
+// i.e. the client replayed a batch that has already been applied. An empty
+// batchID skips the marker and always applies.
+func (s *SQLiteStorage) ApplyCompletionBatch(userID, batchID string, viewsToUpdate []*UserExerciseView) (bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	if batchID != "" {
+		res, err := tx.Exec(
+			`INSERT OR IGNORE INTO processed_completion_batches(user_id, batch_id, created_at) VALUES(?, ?, ?)`,
+			userID, batchID, time.Now().UTC(),
+		)
+		if err != nil {
+			return false, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return false, err
+		}
+		if n == 0 {
+			return false, nil
+		}
+	}
+
+	if err := upsertUserExerciseViews(tx, viewsToUpdate); err != nil {
+		return false, err
+	}
+	return true, tx.Commit()
+}
+
+func upsertUserExerciseViews(tx *sql.Tx, viewsToUpdate []*UserExerciseView) error {
 	stmt, err := tx.Prepare(`
 		INSERT INTO user_exercise_views(id, user_id, exercise_id, last_viewed, repetition_counter,
 		                                 total_attempts, successful_attempts, failed_attempts, hints_used, mistakes_made, is_favorite)
@@ -1055,8 +1097,7 @@ func (s *SQLiteStorage) UpdateUserExerciseViews(viewsToUpdate []*UserExerciseVie
 			return err
 		}
 	}
-
-	return tx.Commit()
+	return nil
 }
 
 func (s *SQLiteStorage) GetUserByGoogleID(googleID string) (*User, error) {
@@ -1456,31 +1497,6 @@ func (s *SQLiteStorage) GetDatabaseStats(audioCacheDir, dbFilePath string) (*Dat
 	}
 
 	return stats, nil
-}
-
-// ClaimCompletionBatch inserts the (user, batch) pair and reports whether this
-// call inserted it. A false return means the batch was already processed.
-func (s *SQLiteStorage) ClaimCompletionBatch(userID, batchID string) (bool, error) {
-	res, err := s.db.Exec(
-		`INSERT OR IGNORE INTO processed_completion_batches(user_id, batch_id, created_at) VALUES(?, ?, ?)`,
-		userID, batchID, time.Now().UTC(),
-	)
-	if err != nil {
-		return false, err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	return n > 0, nil
-}
-
-func (s *SQLiteStorage) ReleaseCompletionBatch(userID, batchID string) error {
-	_, err := s.db.Exec(
-		`DELETE FROM processed_completion_batches WHERE user_id = ? AND batch_id = ?`,
-		userID, batchID,
-	)
-	return err
 }
 
 func (s *SQLiteStorage) CreateCLIToken(userID, tokenHash, label string) (*CLIToken, error) {
