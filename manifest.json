@@ -1,0 +1,18 @@
+{
+  "name": "German Grammar Trainer",
+  "short_name": "Grammar",
+  "description": "Practice German grammar with word-scramble exercises, online or offline.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FDF8F0",
+  "theme_color": "#A33F11",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

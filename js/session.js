@@ -1,7 +1,8 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { fetchExercisesFromAPI, saveUserStatsAPI, saveExerciseCompletionsAPI } from './api.js';
+import { fetchExercisesFromAPI } from './api.js';
 import { showExerciseHistory } from './history.js';
+import { flattenExercise, takeStashedExercises, makeBatch, sendBatch, enqueueBatch, SESSION_SIZE } from './offline.js';
 
 let _renderExercise = () => {};
 
@@ -29,18 +30,27 @@ export async function fetchExercises() {
     }, 1000);
 
     try {
-        const data = await fetchExercisesFromAPI(state.currentTopicId);
+        let exercises;
+        if (navigator.onLine === false) {
+            // Known offline: don't even try the network, serve the stash.
+            exercises = takeStashedExercises(SESSION_SIZE, state.currentTopicId);
+        } else {
+            try {
+                const data = await fetchExercisesFromAPI(state.currentTopicId);
+                exercises = (data.exercises || []).map(flattenExercise);
+            } catch (error) {
+                // Network (or server) failure: fall back to the offline stash.
+                // With an empty stash there is nothing to serve, so let the
+                // original error reporting below handle it.
+                exercises = takeStashedExercises(SESSION_SIZE, state.currentTopicId);
+                if (exercises.length === 0) throw error;
+                console.warn('Serving exercises from the offline cache:', error);
+            }
+        }
 
-        if (data.exercises && data.exercises.length > 0) {
-            state.exercises = data.exercises.map(ex => ({
-                ...ex.exercise_json,
-                id: ex.id,
-                audio_file_path: ex.audio_file_path,
-                is_favorite: ex.is_favorite || false,
-                topic_id: ex.topic_id,
-                repetition_counter: ex.repetition_counter || 0
-            }));
-            state.exerciseIds = data.exercises.map(ex => ex.id);
+        if (exercises.length > 0) {
+            state.exercises = exercises;
+            state.exerciseIds = exercises.map(ex => ex.id);
             state.currentExerciseIndex = 0;
             state.mistakes = 0;
             state.hintsUsed = 0;
@@ -59,6 +69,9 @@ export async function fetchExercises() {
 
             state.startTime = Date.now();
             _renderExercise();
+        } else if (navigator.onLine === false) {
+            alert('You are offline and no exercises are cached for offline practice.\nReconnect and press "Update offline cache" to download some.');
+            _renderExercise(); // Render empty state
         } else {
             // This can happen if generation fails or cache is empty and generation is disabled
             alert('No exercises could be retrieved for this topic. Please try another topic or contact support.');
@@ -271,26 +284,29 @@ export function resetForSameExercises() {
 }
 
 export async function saveUserStats() {
-    try {
-        await saveUserStatsAPI({
-            total_exercises: state.exercises.length,
-            total_mistakes: state.mistakes,
-            total_hints: state.hintsUsed,
-            total_time: state.sessionTime,
-        });
+    const stats = {
+        total_exercises: state.exercises.length,
+        total_mistakes: state.mistakes,
+        total_hints: state.hintsUsed,
+        total_time: state.sessionTime,
+    };
 
-        // Save per-exercise completion data — only exercises actually finished by the user
-        const completions = [];
-        state.completedExerciseIds.forEach((exerciseId) => {
-            const perf = state.exercisePerformance.get(exerciseId) || { hints: 0, mistakes: 0 };
-            completions.push({
-                exercise_id: exerciseId,
-                hints_used: perf.hints,
-                mistakes: perf.mistakes
-            });
+    // Per-exercise completion data — only exercises actually finished by the user
+    const completions = [];
+    state.completedExerciseIds.forEach((exerciseId) => {
+        const perf = state.exercisePerformance.get(exerciseId) || { hints: 0, mistakes: 0 };
+        completions.push({
+            exercise_id: exerciseId,
+            hints_used: perf.hints,
+            mistakes: perf.mistakes
         });
-        await saveExerciseCompletionsAPI(completions);
-    } catch (error) {
-        console.error('Error saving user stats:', error);
+    });
+
+    // Anything that doesn't land (offline, server error) is queued and retried
+    // later instead of being dropped. sendBatch clears the parts that landed.
+    const batch = makeBatch(stats, completions);
+    const delivered = await sendBatch(batch);
+    if (!delivered) {
+        enqueueBatch(batch);
     }
 }

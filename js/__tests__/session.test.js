@@ -3,11 +3,14 @@ import { fetchExercises, saveUserStats } from '../session.js';
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 import * as api from '../api.js';
+import { OFFLINE_STASH_KEY, readQueue } from '../offline.js';
 
 vi.mock('../api.js', () => ({
     fetchExercisesFromAPI: vi.fn(),
     saveUserStatsAPI: vi.fn(),
-    saveExerciseCompletionsAPI: vi.fn()
+    saveExerciseCompletionsAPI: vi.fn(),
+    // session.js -> offline.js -> audio.js needs this export to exist
+    fetchTTSFilePathAPI: vi.fn()
 }));
 
 // Mock exercise methods called by fetchExercises
@@ -44,6 +47,8 @@ describe('session.js', () => {
         dom.timer.textContent = '';
 
         globalThis.alert.mockClear();
+        localStorage.clear();
+        Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
         vi.useFakeTimers();
     });
 
@@ -133,6 +138,52 @@ describe('session.js', () => {
         });
     });
 
+    describe('offline fallback', () => {
+        const stashOne = () => localStorage.setItem(OFFLINE_STASH_KEY, JSON.stringify({
+            updatedAt: 1,
+            exercises: [{ id: 'stashed1', topic_id: 't1', correct_german_sentence: 'Hallo Welt' }]
+        }));
+
+        it('serves stashed exercises when the network fetch fails', async () => {
+            stashOne();
+            api.fetchExercisesFromAPI.mockRejectedValueOnce(new Error('Failed to fetch'));
+
+            await fetchExercises();
+
+            expect(state.exercises.map(e => e.id)).toEqual(['stashed1']);
+            expect(globalThis.alert).not.toHaveBeenCalled();
+            // Served exercises are consumed from the stash
+            expect(JSON.parse(localStorage.getItem(OFFLINE_STASH_KEY)).exercises).toEqual([]);
+        });
+
+        it('skips the network entirely when navigator reports offline', async () => {
+            stashOne();
+            Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+
+            await fetchExercises();
+
+            expect(api.fetchExercisesFromAPI).not.toHaveBeenCalled();
+            expect(state.exercises.map(e => e.id)).toEqual(['stashed1']);
+        });
+
+        it('alerts with an offline-specific message when the stash is empty', async () => {
+            Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+
+            await fetchExercises();
+
+            expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('no exercises are cached'));
+        });
+
+        it('still reports the original error when online and the stash is empty', async () => {
+            const error = new Error('Generic error');
+            api.fetchExercisesFromAPI.mockRejectedValueOnce(error);
+
+            await fetchExercises();
+
+            expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('Failed to fetch new exercises'));
+        });
+    });
+
     describe('saveUserStats', () => {
         it('saves general stats and individual completion stats', async () => {
             state.exercises = [{}, {}];
@@ -158,7 +209,22 @@ describe('session.js', () => {
             expect(api.saveExerciseCompletionsAPI).toHaveBeenCalledWith([
                 { exercise_id: 'ex1', hints_used: 1, mistakes: 0 },
                 { exercise_id: 'ex2', hints_used: 0, mistakes: 2 }
-            ]);
+            ], expect.any(String));
+        });
+
+        it('queues the session results instead of dropping them when the POST fails', async () => {
+            state.exercises = [{}];
+            state.completedExerciseIds.add('ex1');
+            state.exercisePerformance.set('ex1', { hints: 0, mistakes: 1 });
+            api.saveUserStatsAPI.mockRejectedValueOnce(new Error('offline'));
+
+            await saveUserStats();
+
+            const queue = readQueue();
+            expect(queue).toHaveLength(1);
+            expect(queue[0].id).toBeTruthy();
+            expect(queue[0].stats.total_exercises).toBe(1);
+            expect(queue[0].completions).toEqual([{ exercise_id: 'ex1', hints_used: 0, mistakes: 1 }]);
         });
     });
 });

@@ -11,6 +11,7 @@
     <link rel="shortcut icon" href="favicon.svg">
     <link rel="apple-touch-icon" href="favicon.svg">
     <meta name="theme-color" content="#A33F11">
+    <link rel="manifest" href="/manifest.json">
     <link href="style.css?v=202604121600" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -47,6 +48,11 @@
                     <span class="desktop-only">Logout</span>
                     <span class="mobile-only">👋</span>
                 </button>
+                <button id="offline-cache-btn" class="btn-primary header-btn hidden" title="Download exercises and audio for offline practice">
+                    <span class="desktop-only">Update offline cache</span>
+                    <span class="mobile-only">📥</span>
+                </button>
+                <span id="offline-cache-status" class="hidden text-sm text-white/60"></span>
                 <button id="settings-btn" class="btn-primary header-btn">
                     <span class="desktop-only">Settings</span>
                     <span class="mobile-only">⚙️</span>

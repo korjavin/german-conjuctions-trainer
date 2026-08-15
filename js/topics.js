@@ -326,9 +326,44 @@ export function getFileIcon() {
     </svg>`;
 }
 
-export async function loadTopics() {
+export const TOPICS_CACHE_KEY = 'topicsCacheV1';
+
+function cacheTopicsPayload(data) {
     try {
-        const data = await fetchTopicsAPI();
+        localStorage.setItem(TOPICS_CACHE_KEY, JSON.stringify(data));
+    } catch (error) {
+        console.error('Failed to cache topics:', error);
+    }
+}
+
+function readCachedTopicsPayload() {
+    try {
+        const raw = localStorage.getItem(TOPICS_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && Array.isArray(parsed.topics) ? parsed : null;
+    } catch (error) {
+        console.error('Failed to read cached topics:', error);
+        return null;
+    }
+}
+
+export async function loadTopics() {
+    let data;
+    try {
+        data = await fetchTopicsAPI();
+        cacheTopicsPayload(data);
+    } catch (error) {
+        console.error('Error loading topics:', error);
+        // Offline / server down: the last good topic tree keeps the UI usable.
+        data = readCachedTopicsPayload();
+        if (!data) {
+            alert('Failed to load topics. Please refresh the page.');
+            return;
+        }
+    }
+
+    try {
         state.topics = data.topics || [];
 
         renderTopicsList();
@@ -352,8 +387,7 @@ export async function loadTopics() {
             dom.topicSearch.value = getTopicPath(currentTopic.id, state.topics);
         }
     } catch (error) {
-        console.error('Error loading topics:', error);
-        alert('Failed to load topics. Please refresh the page.');
+        console.error('Error rendering topics:', error);
     }
 }
 

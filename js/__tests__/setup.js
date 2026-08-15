@@ -109,6 +109,16 @@ vi.mock('../dom.js', () => {
       historySortErrors: createMockElement('button'),
       historySortDate: createMockElement('button'),
 
+      // Auth / header DOM
+      loginBtn: createMockElement('button'),
+      logoutBtn: createMockElement('button'),
+      historyBtn: createMockElement('button'),
+      settingsBtn: createMockElement('button'),
+      skipRemoveBtn: createMockElement('button'),
+      offlineCacheBtn: createMockElement('button'),
+      offlineCacheStatus: createMockElement('span'),
+      topicSearch: createMockElement('input'),
+
       // Additional elements can be added here as needed by tests
       constructedSentenceEl: createMockElement('div'),
       answerPrompt: createMockElement('div'),
