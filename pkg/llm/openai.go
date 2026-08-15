@@ -25,6 +25,14 @@ import (
 
 type GenerateRequest struct {
 	TopicID string `json:"topic_id"`
+	// Limit caps how many exercises the batch endpoint returns to a signed-in
+	// user. 0 means the default of 10; values above 50 are clamped by the
+	// handler. Guests always get the fixed 10.
+	Limit int `json:"limit,omitempty"`
+	// SkipGeneration tells the batch endpoint to serve only what is already
+	// cached instead of calling the LLM to top the batch up. Used by the
+	// offline prefetch, which must never block on the provider.
+	SkipGeneration bool `json:"skip_generation,omitempty"`
 }
 
 type ResponseFormat struct {

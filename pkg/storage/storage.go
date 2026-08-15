@@ -167,6 +167,12 @@ type Storage interface {
 	ToggleFavorite(userID, exerciseID string) (bool, error)
 	ToggleHideExercise(userID, exerciseID string) (bool, error)
 
+	// ApplyCompletionBatch writes view updates and records the client-supplied
+	// batchID atomically. It reports false (writing nothing) when the batch was
+	// already recorded, i.e. the client replayed it. An empty batchID always
+	// applies, matching the pre-idempotency behavior.
+	ApplyCompletionBatch(userID, batchID string, viewsToUpdate []*UserExerciseView) (bool, error)
+
 	// CLI Tokens
 	CreateCLIToken(userID, tokenHash, label string) (*CLIToken, error)
 	GetCLITokenByHash(tokenHash string) (*CLIToken, error)
