@@ -40,7 +40,7 @@ func TestExerciseBatchLimit(t *testing.T) {
 	topic := &storage.Topic{ID: "t1", Prompt: "my prompt"}
 	mock.topics["t1"] = topic
 	hash := storage.GetPromptHash(topic.Prompt)
-	for i := 0; i < 60; i++ {
+	for i := 0; i < maxExerciseBatchLimit+10; i++ {
 		mock.exercises = append(mock.exercises, &storage.Exercise{
 			ID: fmt.Sprintf("ex%d", i), TopicID: "t1", PromptHash: hash, ExerciseJSON: `{"test":"test"}`,
 		})
@@ -53,7 +53,8 @@ func TestExerciseBatchLimit(t *testing.T) {
 	}{
 		{"default is 10", 0, 10},
 		{"explicit limit honoured", 25, 25},
-		{"limit above cap clamps to 50", 100, 50},
+		{"large limit honoured", 150, 150},
+		{"limit above cap clamps", 1000, maxExerciseBatchLimit},
 	}
 
 	for _, tc := range tests {

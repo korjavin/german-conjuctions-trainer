@@ -199,8 +199,8 @@ describe('offline.js', () => {
 
             await updateOfflineCache();
 
-            expect(api.fetchExercisesFromAPI).toHaveBeenNthCalledWith(1, 't1', {});
-            expect(api.fetchExercisesFromAPI).toHaveBeenNthCalledWith(2, 't2', { limit: 25, skip_generation: true });
+            expect(api.fetchExercisesFromAPI).toHaveBeenNthCalledWith(1, 't1', { limit: 200 });
+            expect(api.fetchExercisesFromAPI).toHaveBeenNthCalledWith(2, 't2', { limit: 50, skip_generation: true });
             expect(readStash().exercises.map(e => e.id)).toEqual(['a', 'b', 'c']);
         });
 

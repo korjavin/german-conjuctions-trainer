@@ -105,7 +105,7 @@ func TestExerciseIntegration_ChangingPromptFiltersOutOldExercises(t *testing.T) 
 	// Request exercises. Since none match newHash, it should trigger generation.
 	// We'll use an unauthenticated user, wait, guest user gets randomly selected from the filtered list.
 	// If the list is empty, guest user gets empty list? Let's check handleExercises logic:
-	// "if userID == "" { ... finalExercises = getRandomExercises(allExercises, 10) }"
+	// "if userID == "" { ... finalExercises = getRandomExercises(allExercises, limit) }"
 	// So for guest user, it will return 0 exercises.
 
 	reqBody, _ := json.Marshal(llm.GenerateRequest{TopicID: topic.ID})
