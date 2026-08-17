@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, showLocalStorageError } from './state.js';
 import { dom } from './dom.js';
 import { fetchTTSFilePathAPI } from './api.js';
 
@@ -6,15 +6,6 @@ const AUDIO_ENABLED_STORAGE_KEY = 'audioEnabled';
 const WORD_AUDIO_CACHE_STORAGE_KEY = 'wordAudioCacheV1';
 const MAX_WORD_AUDIO_CACHE_ENTRIES = 2000;
 const WORD_AUDIO_PRELOAD_CONCURRENCY = 3;
-
-let localStorageErrorShown = false; // Prevent multiple notifications for localStorage errors
-
-function _showLocalStorageError(context) {
-    if (!localStorageErrorShown) {
-        localStorageErrorShown = true;
-        alert(`Warning: Unable to save your preferences to local storage. Your changes may not persist after closing the browser.\n\nContext: ${context}`);
-    }
-}
 
 export function isPunctuation(token) {
     return /^[^\p{L}\p{N}]+$/u.test(token);
@@ -197,15 +188,18 @@ export async function playWordAudio(word) {
     await playAudioFile(generatedFilePath);
 }
 
+// Returns a promise that settles when preloading finishes; callers that just
+// want fire-and-forget (renderExercise) can ignore it, the offline cache
+// warm-up awaits it to keep TTS load sequential across exercises.
 export function preloadExerciseWordAudio(exercise) {
-    if (!state.isAudioEnabled) return;
-    if (!exercise || !exercise.correct_german_sentence) return;
+    if (!state.isAudioEnabled) return Promise.resolve();
+    if (!exercise || !exercise.correct_german_sentence) return Promise.resolve();
 
     const allTokens = exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [];
     const uniqueWords = [...new Set(allTokens.filter(token => !isPunctuation(token)).map(w => w.trim()))].filter(Boolean);
     const wordsToPreload = uniqueWords.filter(word => !peekWordAudioPathFromCache(word));
 
-    if (wordsToPreload.length === 0) return;
+    if (wordsToPreload.length === 0) return Promise.resolve();
 
     let currentIndex = 0;
     const workerCount = Math.min(WORD_AUDIO_PRELOAD_CONCURRENCY, wordsToPreload.length);
@@ -216,9 +210,8 @@ export function preloadExerciseWordAudio(exercise) {
         }
     });
 
-    Promise.allSettled(workers).catch(() => {
-        // Ignore preload errors; on-demand playback remains available.
-    });
+    // Ignore preload errors; on-demand playback remains available.
+    return Promise.allSettled(workers).catch(() => {});
 }
 
 export function updateAudioToggleUI() {
@@ -246,7 +239,7 @@ export function setAudioEnabled(isEnabled) {
         localStorage.setItem(AUDIO_ENABLED_STORAGE_KEY, String(state.isAudioEnabled));
     } catch (error) {
         console.error('Failed to save audio enabled state:', error);
-        _showLocalStorageError('audio preferences');
+        showLocalStorageError('audio preferences');
     }
 
     if (!state.isAudioEnabled && state.activeAudio) {

@@ -117,11 +117,13 @@ export async function moveTopicAPI(topicId, parentId, position = null) {
     return response.json();
 }
 
-export async function fetchExercisesFromAPI(topicId) {
+// options may carry { limit, skip_generation } for offline pre-caching.
+// Older servers ignore unknown JSON fields, so sending them is always safe.
+export async function fetchExercisesFromAPI(topicId, options = {}) {
     const response = await apiFetch('/api/exercises', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_id: topicId })
+        body: JSON.stringify({ topic_id: topicId, ...options })
     });
     return response.json();
 }
@@ -163,21 +165,29 @@ export async function toggleHideExerciseAPI(exerciseId) {
     return response.json();
 }
 
+// Both save* helpers throw on a non-2xx response so the caller can queue the
+// payload for a later retry instead of silently dropping the session results.
 export async function saveUserStatsAPI(data) {
-    await fetch('/api/user/stats', {
+    const response = await fetch('/api/user/stats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
     });
+    if (!response.ok) throw Object.assign(new Error('Failed to save user stats'), { status: response.status });
 }
 
-export async function saveExerciseCompletionsAPI(completions) {
+// clientBatchId is an idempotency key: the server dedupes replays of the same
+// batch, which makes retrying a queued offline batch safe.
+export async function saveExerciseCompletionsAPI(completions, clientBatchId) {
     if (completions.length === 0) return;
-    await fetch('/api/exercises/complete', {
+    const payload = { completions };
+    if (clientBatchId) payload.client_batch_id = clientBatchId;
+    const response = await fetch('/api/exercises/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ completions })
+        body: JSON.stringify(payload)
     });
+    if (!response.ok) throw Object.assign(new Error('Failed to save exercise completions'), { status: response.status });
     console.log('Saved completion data for', completions.length, 'exercises');
 }
 

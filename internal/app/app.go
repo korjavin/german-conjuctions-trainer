@@ -158,6 +158,8 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/favicon.svg", a.handleFavicon)
 	http.HandleFunc("/favicon-32x32.svg", a.handleFavicon32)
 	http.HandleFunc("/favicon.ico", a.handleFaviconICO)
+	http.HandleFunc("/sw.js", a.handleServiceWorker)
+	http.HandleFunc("/manifest.json", a.handleManifest)
 
 	http.HandleFunc("/api/exercises", a.withOptionalAuth(a.handleExercises))
 	http.HandleFunc("/api/exercises/complete", a.withAuth(a.handleExercisesComplete))

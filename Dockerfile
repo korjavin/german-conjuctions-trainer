@@ -32,7 +32,7 @@ COPY --from=builder /app/main .
 
 # Create static directory and copy frontend files
 # These files are also present in the build context.
-COPY index.html app.js privacy.html style.css favicon.svg favicon-32x32.svg ./static/
+COPY index.html app.js privacy.html style.css favicon.svg favicon-32x32.svg sw.js manifest.json ./static/
 COPY js/ ./static/js/
 
 # Make the binary executable and change ownership

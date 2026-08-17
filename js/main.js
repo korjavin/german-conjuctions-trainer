@@ -55,6 +55,7 @@ import {
     checkAuthStatus,
 } from './auth.js';
 import { fetchDatabaseStatsAPI, createCLITokenAPI } from './api.js';
+import { updateOfflineCache, flushOfflineQueue, renderOfflineCacheStatus } from './offline.js';
 import {
     showExerciseHistory,
     renderHistoryPage,
@@ -353,6 +354,14 @@ dom.logoutBtn.addEventListener('click', () => {
     window.location.href = '/auth/logout';
 });
 
+// Offline cache (logged-in users only; visibility handled by updateAuthUI)
+if (dom.offlineCacheBtn) {
+    dom.offlineCacheBtn.addEventListener('click', updateOfflineCache);
+}
+
+// Retry queued session results as soon as connectivity is back.
+window.addEventListener('online', () => { flushOfflineQueue(); });
+
 // History
 dom.historyBtn.addEventListener('click', showExerciseHistory);
 
@@ -491,6 +500,16 @@ function init() {
     updateAudioToggleUI();
     checkAuthStatus();
     loadTopics();
+
+    // Service worker: caches the app shell + audio so sessions work offline.
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch((error) => {
+            console.error('Service worker registration failed:', error);
+        });
+    }
+
+    renderOfflineCacheStatus();
+    flushOfflineQueue();
 
     // Start with sample exercises for testing
     state.exercises = sampleExercises.exercises;

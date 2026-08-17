@@ -108,6 +108,36 @@ func (a *App) handleFavicon32(w http.ResponseWriter, r *http.Request) {
 	w.Write(content)
 }
 
+// handleServiceWorker serves sw.js from the root path so the worker's scope
+// covers the whole site. It must not be cached for long: a stale worker keeps
+// serving a stale shell cache.
+func (a *App) handleServiceWorker(w http.ResponseWriter, r *http.Request) {
+	content, err := os.ReadFile(getFilePath("sw.js"))
+	if err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Service-Worker-Allowed", "/")
+
+	w.Write(content)
+}
+
+func (a *App) handleManifest(w http.ResponseWriter, r *http.Request) {
+	content, err := os.ReadFile(getFilePath("manifest.json"))
+	if err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/manifest+json")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+
+	w.Write(content)
+}
+
 func (a *App) handleFaviconICO(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/favicon.svg", http.StatusMovedPermanently)
 }

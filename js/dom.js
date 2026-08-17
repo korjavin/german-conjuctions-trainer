@@ -77,6 +77,8 @@ export const dom = {
     loginBtn: document.getElementById('login-btn'),
     logoutBtn: document.getElementById('logout-btn'),
     historyBtn: document.getElementById('history-btn'),
+    offlineCacheBtn: document.getElementById('offline-cache-btn'),
+    offlineCacheStatus: document.getElementById('offline-cache-status'),
     replayAudioBtn: document.getElementById('replay-audio-btn'),
     nextExerciseBtn: document.getElementById('next-exercise-btn'),
     toggleFavoriteBtn: document.getElementById('toggle-favorite-btn'),
