@@ -16,7 +16,7 @@ import (
 const (
 	// maxExerciseBatchLimit is the hard cap on the "limit" field of
 	// POST /api/exercises, so an offline prefetch cannot ask for the world.
-	maxExerciseBatchLimit = 50
+	maxExerciseBatchLimit = 200
 	// maxClientBatchIDLen bounds the client-supplied idempotency key.
 	maxClientBatchIDLen = 64
 )
@@ -50,7 +50,7 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromRequest(r)
 
-	// Batch size: default 10, hard cap 50 (offline prefetch asks for more).
+	// Batch size: default 10, hard cap maxExerciseBatchLimit (offline prefetch asks for more).
 	limit := 10
 	if req.Limit > 0 {
 		limit = req.Limit
@@ -103,7 +103,7 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 	userViews := make(map[string]*storage.UserExerciseView)
 	if userID == "" {
 		log.Printf("[EXERCISES] Guest user mode - serving random exercises from cache")
-		finalExercises = getRandomExercises(allExercises, 10)
+		finalExercises = getRandomExercises(allExercises, limit)
 	} else {
 		log.Printf("[EXERCISES] Authenticated user %s - applying SRS logic", userID)
 		var err error

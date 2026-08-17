@@ -9,10 +9,12 @@ import { preloadExerciseWordAudio } from './audio.js';
 export const OFFLINE_STASH_KEY = 'offlineStashV1';
 export const OFFLINE_QUEUE_KEY = 'offlineQueueV1';
 
-const MAX_STASHED_EXERCISES = 100;
-const PER_TOPIC_STASH_LIMIT = 25;
+const MAX_STASHED_EXERCISES = 500;
+const PER_TOPIC_STASH_LIMIT = 50;
+// Current topic gets the server's hard cap (internal/app/exercises.go).
+const CURRENT_TOPIC_STASH_LIMIT = 200;
 
-// Server-side session size (internal/app/exercises.go returns at most 10).
+// Server-side session size (internal/app/exercises.go default batch is 10).
 export const SESSION_SIZE = 10;
 
 function newBatchId() {
@@ -216,15 +218,12 @@ export async function updateOfflineCache() {
         const byId = new Map();
 
         if (state.currentTopicId) {
-            for (const ex of await fetchForStash(state.currentTopicId, {})) {
+            // No skip_generation here: the current topic is worth generating for.
+            for (const ex of await fetchForStash(state.currentTopicId, { limit: CURRENT_TOPIC_STASH_LIMIT })) {
                 byId.set(ex.id, ex);
             }
         }
 
-        // limit + skip_generation are honoured by the /api/exercises change
-        // shipping in a parallel backend PR. Until that lands the server
-        // ignores them (unknown JSON fields), so a warm-up of a thin topic can
-        // still trigger generation — correct, just slower and more expensive.
         for (const topic of state.recentlyUsedTopics) {
             if (byId.size >= MAX_STASHED_EXERCISES) break;
             if (topic.id === state.currentTopicId) continue;

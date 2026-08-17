@@ -266,22 +266,32 @@ func TestExerciseSelection_GuestUserPath(t *testing.T) {
 		mock.exercises = append(mock.exercises, &storage.Exercise{ID: string(rune(i)), TopicID: "t1", PromptHash: currentHash, ExerciseJSON: `{"test":"test"}`})
 	}
 
-	reqBody, _ := json.Marshal(llm.GenerateRequest{TopicID: "t1"})
-	req := httptest.NewRequest("POST", "/api/exercises", bytes.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
+	guestCount := func(limit int) int {
+		t.Helper()
+		reqBody, _ := json.Marshal(llm.GenerateRequest{TopicID: "t1", Limit: limit})
+		req := httptest.NewRequest("POST", "/api/exercises", bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
 
-	rr := httptest.NewRecorder()
-	app.handleExercises(rr, req)
+		rr := httptest.NewRecorder()
+		app.handleExercises(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rr.Code)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rr.Code)
+		}
+
+		var resp map[string][]map[string]interface{}
+		json.Unmarshal(rr.Body.Bytes(), &resp)
+		return len(resp["exercises"])
 	}
 
-	var resp map[string][]map[string]interface{}
-	json.Unmarshal(rr.Body.Bytes(), &resp)
-
-	exercises := resp["exercises"]
-	if len(exercises) != 10 { // capped at 10
-		t.Errorf("expected 10 exercises, got %d", len(exercises))
+	if got := guestCount(0); got != 10 { // default batch size
+		t.Errorf("expected 10 exercises, got %d", got)
+	}
+	// The offline prefetch asks for more than the default; guests get it too.
+	if got := guestCount(15); got != 15 {
+		t.Errorf("expected 15 exercises for limit=15, got %d", got)
+	}
+	if got := guestCount(maxExerciseBatchLimit + 1); got != 15 { // clamped, then content-bound
+		t.Errorf("expected all 15 cached exercises, got %d", got)
 	}
 }
