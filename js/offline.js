@@ -187,14 +187,14 @@ function setStatus(text) {
     dom.offlineCacheStatus.classList.toggle('hidden', !text);
 }
 
-// renderOfflineCacheStatus shows the stored stash summary (count + timestamp).
+// renderOfflineCacheStatus shows the stored stash size.
 export function renderOfflineCacheStatus() {
     const stash = readStash();
     if (stash.exercises.length === 0 || !stash.updatedAt) {
         setStatus('');
         return;
     }
-    setStatus(`${stash.exercises.length} offline · ${new Date(stash.updatedAt).toLocaleString()}`);
+    setStatus(`${stash.exercises.length} offline`);
 }
 
 async function fetchForStash(topicId, extraOptions) {
