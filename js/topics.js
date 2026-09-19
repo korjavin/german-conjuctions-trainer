@@ -29,6 +29,8 @@ export const FOCUSOUT_TIMEOUT_MS = 50; // Timeout for search focusout handler
 
 // Module-level state for topic dropdown collapse (not persisted, separate from settings modal tree)
 const dropdownCollapsedTopicIds = new Set();
+// Query the dropdown was last rendered with (focus renders '', the input still holds the canonical path)
+let lastDropdownQuery = '';
 
 // Timestamp of the last collapse/expand button click
 // Used to suppress dropdown close from blur/focusout handlers for a short duration
@@ -42,6 +44,7 @@ const SUPPRESS_CLOSE_DURATION_MS = 250;
 // Reset dropdown collapse state (for testing)
 export function resetDropdownCollapseState() {
     dropdownCollapsedTopicIds.clear();
+    lastDropdownQuery = '';
     lastCollapseClickTime = 0;
 }
 
@@ -571,19 +574,8 @@ function flattenTopicTree(roots, nodesById, searchExpandedIds = new Set()) {
         }
     }
 
-    // Visit any orphaned nodes (nodes without parents that weren't in roots)
-    for (const node of nodesById.values()) {
-        if (!visited.has(node.id)) {
-            flattened.push({
-                topic: node,
-                depth: 0,
-                parentId: node.parent_id || '',
-                indexInParent: 0,
-                totalSiblings: 1,
-            });
-        }
-    }
-
+    // ponytail: no orphan pass — buildTopicTree already promotes orphans to roots,
+    // and the old pass leaked every collapsed descendant to depth 0 at the end of the list.
     return flattened;
 }
 
@@ -1864,6 +1856,7 @@ export async function showLastRefinedPrompt() {
 }
 
 export function renderTopicDropdown(searchQuery = '') {
+    lastDropdownQuery = searchQuery;
     dom.topicDropdown.innerHTML = '';
 
     // Check if topics are loaded
@@ -1960,8 +1953,8 @@ export function renderTopicDropdown(searchQuery = '') {
                 }
                 // Set flag to prevent blur/focusout from closing the dropdown
                 setSuppressDropdownClose();
-                // Re-render the dropdown with current search value
-                renderTopicDropdown(dom.topicSearch.value);
+                // Re-render with the query actually in effect, not the canonical path sitting in the input
+                renderTopicDropdown(lastDropdownQuery);
             });
             item.appendChild(collapseBtn);
         }

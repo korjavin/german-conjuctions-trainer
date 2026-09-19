@@ -53,3 +53,47 @@ describe('topics.js offline fallback', () => {
         expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('Failed to load topics'));
     });
 });
+
+describe('topic tree collapse', () => {
+    const tree = [
+        { id: 'p', name: 'Parent', parent_id: null, sort_order: 0 },
+        { id: 'c', name: 'Child', parent_id: 'p', sort_order: 0 },
+        { id: 'g', name: 'Grandchild', parent_id: 'c', sort_order: 0 },
+    ];
+
+    beforeEach(async () => {
+        localStorage.clear();
+        const dom = (await import('../dom.js')).dom;
+        dom.topicsList = document.createElement('div');
+        dom.topicDropdown = document.createElement('div');
+        dom.topicSearch = document.createElement('input');
+        state.topics = tree;
+        state.topicsSearchQuery = '';
+        state.collapsedTopicIds.clear();
+        const { resetDropdownCollapseState } = await import('../topics.js');
+        resetDropdownCollapseState();
+    });
+
+    it('settings tree hides descendants of a collapsed topic instead of leaking them as roots', async () => {
+        const { renderTopicsList } = await import('../topics.js');
+        const dom = (await import('../dom.js')).dom;
+        state.collapsedTopicIds.add('p');
+
+        renderTopicsList();
+
+        expect(dom.topicsList.querySelectorAll('[role="treeitem"]')).toHaveLength(1);
+    });
+
+    it('dropdown collapse keeps the tree when the input holds the canonical path', async () => {
+        const { renderTopicDropdown } = await import('../topics.js');
+        const dom = (await import('../dom.js')).dom;
+        dom.topicSearch.value = 'Parent > Child > Grandchild';
+
+        renderTopicDropdown('');
+        dom.topicDropdown.querySelector('.topic-dropdown-collapse-btn').click();
+
+        const items = dom.topicDropdown.querySelectorAll('.topic-dropdown-tree-item');
+        expect(items).toHaveLength(1);
+        expect(dom.topicDropdown.textContent).not.toContain('No topics found');
+    });
+});
