@@ -19,8 +19,6 @@ const MIN_PROMPT_LENGTH = 10;
 const MAX_PROMPT_LENGTH = 10000;
 
 // Performance optimization constants
-const VIRTUAL_SCROLL_THRESHOLD = 100; // Enable virtual scrolling above this many topics
-const VIRTUAL_SCROLL_ITEM_HEIGHT = 80; // Estimated height of each topic item in pixels
 const SEARCH_DEBOUNCE_MS = 300; // Debounce delay for search input in milliseconds
 
 // UI timing constants (milliseconds)
@@ -290,7 +288,6 @@ let draggedTopicId = null;
 let isMoveInProgress = false;
 let parentElement = null;
 let dragGhostElement = null;
-let virtualScrollHandler = null; // Store handler reference for proper cleanup
 
 /**
  * Disables dragging on all topic items to prevent concurrent drag operations
@@ -577,116 +574,6 @@ function flattenTopicTree(roots, nodesById, searchExpandedIds = new Set()) {
     // ponytail: no orphan pass — buildTopicTree already promotes orphans to roots,
     // and the old pass leaked every collapsed descendant to depth 0 at the end of the list.
     return flattened;
-}
-
-// Virtual scrolling helper functions
-function calculateVisibleRange(containerHeight, scrollTop) {
-    const visibleStart = Math.floor(scrollTop / VIRTUAL_SCROLL_ITEM_HEIGHT);
-    const visibleEnd = Math.ceil((scrollTop + containerHeight) / VIRTUAL_SCROLL_ITEM_HEIGHT);
-
-    // Add buffer for smoother scrolling (render extra items above and below viewport)
-    const buffer = 3;
-    return {
-        startIndex: Math.max(0, visibleStart - buffer),
-        endIndex: visibleEnd + buffer
-    };
-}
-
-function setupVirtualScroll() {
-    // Remove existing scroll event listener if any to prevent memory leak
-    if (virtualScrollHandler) {
-        dom.topicsList.removeEventListener('scroll', virtualScrollHandler);
-    }
-
-    // Add scroll event listener for virtual scrolling
-    virtualScrollHandler = function() {
-        if (!state.virtualScrollEnabled) return;
-
-        const scrollTop = dom.topicsList.scrollTop;
-        const containerHeight = dom.topicsList.clientHeight;
-
-        const { startIndex, endIndex } = calculateVisibleRange(containerHeight, scrollTop);
-
-        // Only re-render if the visible range has changed
-        if (startIndex !== state.virtualScrollStartIndex || endIndex !== state.virtualScrollEndIndex) {
-            state.virtualScrollStartIndex = startIndex;
-            state.virtualScrollEndIndex = endIndex;
-            renderVirtualScrollItems();
-        }
-    };
-
-    dom.topicsList.addEventListener('scroll', virtualScrollHandler);
-}
-
-function renderVirtualScrollItems() {
-    // Clear current items but keep the container
-    const container = dom.topicsList;
-    container.innerHTML = '';
-
-    // Validate that flattenedTopicNodes exists and is a valid array
-    if (!state.flattenedTopicNodes || !Array.isArray(state.flattenedTopicNodes) || state.flattenedTopicNodes.length === 0) {
-        console.error('Invalid flattenedTopicNodes state:', state.flattenedTopicNodes);
-        return;
-    }
-
-    // Only render items in the visible range
-    const start = state.virtualScrollStartIndex;
-    const end = Math.min(state.virtualScrollEndIndex, state.flattenedTopicNodes.length);
-
-    // Use DocumentFragment for better performance when adding multiple nodes
-    const fragment = document.createDocumentFragment();
-
-    for (let i = start; i < end; i++) {
-        const nodeData = state.flattenedTopicNodes[i];
-        if (!nodeData) continue;
-
-        // Add drop zone before each item (for sibling reordering).
-        // Allocate the top 12px of each slot for the drop zone; item fills the remainder.
-        const DROP_ZONE_HEIGHT = 12;
-        const beforeZone = createSiblingDropZone(nodeData.depth, nodeData.parentId, nodeData.indexInParent, state.nodesById);
-        beforeZone.style.position = 'absolute';
-        beforeZone.style.top = `${i * VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
-        beforeZone.style.left = '0';
-        beforeZone.style.width = '100%';
-        // Use CSS default height (0.75rem ≈ 12px); do not override to full slot height
-        fragment.appendChild(beforeZone);
-
-        const item = createTopicItem(nodeData.topic, nodeData.depth, nodeData.parentId,
-                                     nodeData.indexInParent, nodeData.totalSiblings, state.nodesById);
-        // Position item below the drop zone within the same slot
-        item.style.position = 'absolute';
-        item.style.top = `${i * VIRTUAL_SCROLL_ITEM_HEIGHT + DROP_ZONE_HEIGHT}px`;
-        item.style.left = '0';
-        item.style.width = '100%';
-        item.style.height = `${VIRTUAL_SCROLL_ITEM_HEIGHT - DROP_ZONE_HEIGHT}px`;
-        fragment.appendChild(item);
-
-        // Add afterZone if this is the last sibling (to allow dropping after it)
-        if (nodeData.indexInParent === nodeData.totalSiblings - 1) {
-            const afterZone = createSiblingDropZone(nodeData.depth, nodeData.parentId, nodeData.totalSiblings, state.nodesById);
-            afterZone.style.position = 'absolute';
-            afterZone.style.top = `${(i + 1) * VIRTUAL_SCROLL_ITEM_HEIGHT}px`;
-            afterZone.style.left = '0';
-            afterZone.style.width = '100%';
-            fragment.appendChild(afterZone);
-        }
-    }
-
-    container.appendChild(fragment);
-
-    // Set container height to accommodate all items (for scroll bar)
-    // Use a spacer element to create scrollable area while keeping container at viewport height
-    const totalHeight = state.flattenedTopicNodes.length * VIRTUAL_SCROLL_ITEM_HEIGHT;
-    const spacer = document.createElement('div');
-    spacer.className = 'virtual-scroll-spacer';
-    spacer.style.height = `${totalHeight}px`;
-    spacer.style.position = 'absolute';
-    spacer.style.top = '0';
-    spacer.style.left = '0';
-    spacer.style.width = '100%';
-    spacer.style.pointerEvents = 'none';
-    container.appendChild(spacer);
-    container.style.position = 'relative';
 }
 
 function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, nodesById) {
@@ -1139,7 +1026,6 @@ function handleTopicKeyboard(event) {
  * - Tree building from flat data
  * - Search filtering and highlighting
  * - Collapse state management
- * - Virtual scrolling for large trees
  * - ARIA accessibility attributes
  *
  * Rendering flow:
@@ -1147,14 +1033,13 @@ function handleTopicKeyboard(event) {
  * 2. Build hierarchical tree structure
  * 3. Apply search filter if active (auto-expand parents of matches)
  * 4. Flatten tree respecting collapse state
- * 5. Choose rendering strategy (virtual scroll vs. full render)
+ * 5. Render all items
  * 6. Render topic items with all features (tree lines, icons, actions)
  *
  * State dependencies:
  * - state.topics: Array of all topic objects
  * - state.topicsSearchQuery: Current search filter text
  * - state.topicSortOrder: Sort order for top-level topics
- * - state.flattenedTopicNodes: Cached flattened tree (for virtual scroll)
  */
 export function renderTopicsList() {
     dom.topicsList.innerHTML = '';
@@ -1236,47 +1121,9 @@ export function renderTopicsList() {
         return;
     }
 
-    // Cache flattened nodes for virtual scrolling
-    state.flattenedTopicNodes = flattenedNodes;
-
-    // Check if virtual scrolling should be enabled (use filtered/flattened count, not total topics)
-    const shouldUseVirtualScroll = flattenedNodes.length >= VIRTUAL_SCROLL_THRESHOLD;
-
-    if (shouldUseVirtualScroll) {
-        // Enable virtual scrolling mode
-        state.virtualScrollEnabled = true;
-        dom.topicsList.classList.add('virtual-scroll-enabled');
-
-        // Setup scroll handler if not already set up
-        if (!dom.topicsList.hasAttribute('data-virtual-scroll-setup')) {
-            setupVirtualScroll();
-            dom.topicsList.setAttribute('data-virtual-scroll-setup', 'true');
-        }
-
-        // Reset scroll position and render initial visible items
-        dom.topicsList.scrollTop = 0;
-        state.virtualScrollStartIndex = 0;
-
-        // Calculate initial visible range
-        const containerHeight = dom.topicsList.clientHeight || 600;
-        const { endIndex } = calculateVisibleRange(containerHeight, 0);
-        state.virtualScrollEndIndex = endIndex;
-
-        // Render initial visible items
-        renderVirtualScrollItems();
-
-    } else {
-        // Disable virtual scrolling mode and render all items
-        state.virtualScrollEnabled = false;
-        dom.topicsList.classList.remove('virtual-scroll-enabled');
-        // Remove scroll event listener to prevent memory leak
-        if (virtualScrollHandler) {
-            dom.topicsList.removeEventListener('scroll', virtualScrollHandler);
-            virtualScrollHandler = null;
-        }
-        dom.topicsList.removeAttribute('data-virtual-scroll-setup');
-        renderAllTopics(flattenedNodes, nodesById);
-    }
+    // ponytail: no virtual scroll — a few hundred DOM rows render fine, and the 80px
+    // height estimate broke layout (fixed 400px box, clipped tree lines) once topics passed 100.
+    renderAllTopics(flattenedNodes, nodesById);
 }
 
 function renderAllTopics(flattenedNodes, nodesById) {

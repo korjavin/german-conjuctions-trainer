@@ -194,11 +194,6 @@ export const state = {
     historyFilterTrained: false,
     historyFilterIgnored: false,
     historySortDimension: 'sooner', // sooner, later, most_errors, fewest_errors, newest, oldest
-    // Virtual scrolling state
-    virtualScrollEnabled: false,
-    virtualScrollStartIndex: 0,
-    virtualScrollEndIndex: 0,
-    flattenedTopicNodes: [], // Cached flattened nodes for virtual scrolling
     nodesById: new Map(), // Cached nodes by ID for tree operations
     preSearchCollapsedTopicIds: undefined, // Saved collapse state before search began
 };
