@@ -260,6 +260,15 @@ textarea:focus-visible,
     padding: 0.625rem 0.75rem;
 }
 
+.voice-active {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.6);
+    animation: voice-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+    50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.25); }
+}
+
 .btn-sm {
     padding: 0.25rem 0.75rem;
     font-size: 0.875rem;
@@ -1926,7 +1935,7 @@ button:disabled.is-audio-off {
     }
 
     .generate-btn {
-        flex: 1 1 calc(100% - 3.4rem);
+        flex: 1 1 calc(100% - 6.8rem);
     }
 
     .audio-toggle-btn {

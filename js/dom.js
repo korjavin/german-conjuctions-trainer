@@ -8,6 +8,7 @@ export const dom = {
     generateBtn: document.getElementById('generate-btn'),
     audioToggleBtn: document.getElementById('audio-toggle-btn'),
     audioToggleIcon: document.getElementById('audio-toggle-icon'),
+    voiceToggleBtn: document.getElementById('voice-toggle-btn'),
     hintBtn: document.getElementById('hint-btn'),
     loadingSpinner: document.getElementById('loading-spinner'),
     timer: document.getElementById('timer'),

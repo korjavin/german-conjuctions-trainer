@@ -9,7 +9,7 @@
  * IMPORTANT: bump CACHE_VERSION whenever a shell file changes, otherwise
  * returning visitors keep the old cached copy until the cache is evicted.
  */
-const CACHE_VERSION = 'gct-shell-v3';
+const CACHE_VERSION = 'gct-shell-v4';
 
 const SHELL_ASSETS = [
     '/',
@@ -28,6 +28,7 @@ const SHELL_ASSETS = [
     '/js/offline.js',
     '/js/session.js',
     '/js/topics.js',
+    '/js/voice.js',
     // Third-party shell dependencies — best effort, a failure here is fine.
     'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js',
     'https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap',

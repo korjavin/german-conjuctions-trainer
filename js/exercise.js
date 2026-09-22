@@ -207,17 +207,23 @@ export function renderExercise() {
     preloadExerciseWordAudio(exercise);
 }
 
+// Raw next word the learner has to pick ('' when the sentence is complete).
+export function nextCorrectWord() {
+    const exercise = state.exercises[state.currentExerciseIndex];
+    if (!exercise) return '';
+    const words = (exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [])
+        .filter(token => !isPunctuation(token));
+    const done = state.userSentence.filter(token => !isPunctuation(token)).length;
+    return words[done] || '';
+}
+
 export function handleWordClick(word, button) {
     if (state.isLocked) return;
 
     const exercise = state.exercises[state.currentExerciseIndex];
     const correctWordArray = exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [];
-    const nonPunctuationWords = correctWordArray.filter(token => !isPunctuation(token));
 
-    const userWords = state.userSentence.filter(token => !isPunctuation(token));
-    const nextCorrectWord = nonPunctuationWords[userWords.length];
-
-    if (word === nextCorrectWord) {
+    if (word === nextCorrectWord()) {
         // Correct word
         state.userSentence.push(word);
         addPunctuationIfNeeded(exercise, state.userSentence);
