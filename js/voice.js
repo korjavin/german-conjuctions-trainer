@@ -118,7 +118,9 @@ export function applyTokens(tokens, final, skip = new Set()) {
         const candidates = state.isLocked ? [] : availableCandidates(nextRaw);
         const inSentence = sentenceWords().has(tok);
         if (!inSentence && NEXT_CMDS.has(tok)) {
-            if (final && !dom.exerciseControls.classList.contains('hidden')) { handleNextExercise(); applied.add(i); }
+            // Acts on interim results too: Chrome only finalises after a pause, and once the
+            // sentence is complete there is nothing a misheard 'next' could break.
+            if (!dom.exerciseControls.classList.contains('hidden')) { handleNextExercise(); applied.add(i); }
             return;
         }
         if (!inSentence && HINT_CMDS.has(tok)) {

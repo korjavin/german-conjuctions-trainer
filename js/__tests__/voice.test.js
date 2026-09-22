@@ -86,7 +86,10 @@ describe('voice.js', () => {
             dom.exerciseControls.classList.remove('hidden');
             applyTokens(['weiter'], true);
             expect(next).not.toHaveBeenCalled();
-            applyTokens(['next'], true);
+            applyTokens(['next'], false); // interim is enough once the sentence is complete
+            expect(next).toHaveBeenCalledTimes(1);
+            dom.exerciseControls.classList.add('hidden');
+            applyTokens(['next'], true); // sentence not complete: ignored
             expect(next).toHaveBeenCalledTimes(1);
             next.mockRestore();
         });
