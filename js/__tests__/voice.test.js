@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { normalize, tokenize, levenshtein, matchCandidate, applyTokens } from '../voice.js';
+import { normalize, tokenize, levenshtein, matchCandidate, applyTokens, bestAlternative } from '../voice.js';
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 
@@ -61,13 +61,20 @@ describe('voice.js', () => {
             expect(state.userSentence).toEqual(['Das', 'ist']);
         });
 
-        it('reports applied indices and re-runs skipped tokens on final', () => {
+        it('reports applied indices and only penalizes single-word finals', () => {
             const first = applyTokens(['gut', 'das'], false); // interim: gut skipped, das clicked
             expect([...first]).toEqual([1]);
+            const second = applyTokens(['gut', 'das'], true, first); // final phrase: gut still not punished
+            expect([...second]).toEqual([]);
             expect(state.mistakes).toBe(0);
-            const second = applyTokens(['gut', 'das'], true, first); // final: gut now penalized
-            expect([...second]).toEqual([0]);
+            applyTokens(['gut'], true); // single word: punished
             expect(state.mistakes).toBe(1);
+        });
+
+        it('picks the alternative that follows the expected order', () => {
+            const alts = ['zum Termin', 'zu einem Termin', 'zu einen Termin'];
+            expect(bestAlternative(alts, ['zu', 'einem', 'Termin', 'gehen'])).toBe('zu einem Termin');
+            expect(bestAlternative(['Termin'], ['zu', 'einem', 'Termin'])).toBe('Termin');
         });
 
         it('skip command skips the exercise when the word is not in the bank', async () => {

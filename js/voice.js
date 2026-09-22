@@ -2,7 +2,7 @@
 // Web Speech API only (Chrome / Android Chrome), no external models.
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { handleWordClick, handleHintClick, handleNextExercise, handleSkipExercise, nextCorrectWord } from './exercise.js';
+import { handleWordClick, handleHintClick, handleNextExercise, handleSkipExercise, nextCorrectWord, remainingCorrectWords } from './exercise.js';
 
 // ponytail: STT returns digits, sentences spell numbers out; extend when a miss shows up
 const NUMBERS = {
@@ -51,6 +51,26 @@ export function matchCandidate(spoken, candidates) {
     return distinct.size === 1 ? fuzzy[0] : null;
 }
 
+function similar(spoken, key) {
+    return spoken === key || (spoken.length >= FUZZY_MIN_LEN && levenshtein(spoken, key) <= 1);
+}
+
+// STT merges/drops function words ("zu einem Termin" -> "zum Termin"); pick the
+// alternative that follows the expected word order the furthest.
+export function bestAlternative(alternatives, expectedRaw) {
+    const expected = expectedRaw.map(normalize);
+    let best = alternatives[0] || '';
+    let bestScore = -1;
+    for (const alt of alternatives) {
+        let j = 0;
+        for (const tok of tokenize(alt)) {
+            if (j < expected.length && similar(tok, expected[j])) j++;
+        }
+        if (j > bestScore) { bestScore = j; best = alt; }
+    }
+    return best;
+}
+
 // Buttons still in the bank; the one holding the raw expected word (Sie vs sie) sorts first.
 function availableCandidates(nextRaw) {
     return Array.from(dom.scrambledWordsContainer.querySelectorAll('.btn-word:not(.word-collected)'))
@@ -73,10 +93,13 @@ function buzz() {
     } catch (e) { /* no audio, fine */ }
 }
 
-// Returns the set of token indices that were acted on. penalize=false for interim
-// results: only exact expected-word hits count, never a mistake. `skip` = indices
-// already acted on by an earlier (interim) pass of the same result.
-export function applyTokens(tokens, penalize, skip = new Set()) {
+// Returns the set of token indices that were acted on. Interim results only accept
+// expected-word hits. Commands run on final results. A mistake is recorded only for
+// a final single-word utterance: inside a longer phrase a mismatch is more likely the
+// recogniser merging/dropping words than the learner, so we just stop there.
+// `skip` = indices already acted on by an earlier (interim) pass of the same result.
+export function applyTokens(tokens, final, skip = new Set()) {
+    const penalize = final && tokens.length === 1;
     const applied = new Set();
     tokens.forEach((tok, i) => {
         if (skip.has(i)) return;
@@ -85,21 +108,21 @@ export function applyTokens(tokens, penalize, skip = new Set()) {
         const candidates = state.isLocked ? [] : availableCandidates(nextRaw);
         const inBank = candidates.some(c => c.key === tok);
         if (!inBank && NEXT_CMDS.has(tok)) {
-            if (penalize && !dom.exerciseControls.classList.contains('hidden')) { handleNextExercise(); applied.add(i); }
+            if (final && !dom.exerciseControls.classList.contains('hidden')) { handleNextExercise(); applied.add(i); }
             return;
         }
         if (!inBank && HINT_CMDS.has(tok)) {
-            if (penalize) { handleHintClick(); applied.add(i); }
+            if (final) { handleHintClick(); applied.add(i); }
             return;
         }
         if (!inBank && SKIP_CMDS.has(tok)) {
-            if (penalize && !state.isLocked) { handleSkipExercise(); applied.add(i); }
+            if (final && !state.isLocked) { handleSkipExercise(); applied.add(i); }
             return;
         }
         const hit = matchCandidate(tok, candidates);
         if (!hit) return; // not in the bank: STT noise, not the learner's fault
         if (hit.key !== expected) {
-            if (!penalize) return; // interim guess: don't punish
+            if (!penalize) return; // interim guess or mid-phrase mismatch: don't punish
             buzz();
         }
         handleWordClick(hit.button.dataset.word, hit.button);
@@ -127,7 +150,8 @@ function onResult(event) {
     if (state.activeAudio && !state.activeAudio.paused) return; // don't listen to our own TTS
     for (let i = event.resultIndex; i < event.results.length; i++) {
         const r = event.results[i];
-        const tokens = tokenize(r[0].transcript);
+        const alternatives = Array.from({ length: r.length }, (_, k) => r[k].transcript);
+        const tokens = tokenize(r.isFinal ? bestAlternative(alternatives, remainingCorrectWords()) : r[0].transcript);
         const seen = consumed.get(i) || new Set();
         for (const idx of applyTokens(tokens, r.isFinal, seen)) seen.add(idx);
         consumed.set(i, seen);
@@ -161,6 +185,7 @@ function start() {
     recognition.lang = 'de-DE';
     recognition.continuous = true;
     recognition.interimResults = true;
+    recognition.maxAlternatives = 5;
     recognition.onresult = onResult;
     recognition.onspeechstart = () => setPhase('speaking', dom.voiceTranscript.textContent);
     recognition.onspeechend = () => setPhase('thinking', dom.voiceTranscript.textContent);

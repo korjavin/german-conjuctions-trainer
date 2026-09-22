@@ -207,14 +207,18 @@ export function renderExercise() {
     preloadExerciseWordAudio(exercise);
 }
 
-// Raw next word the learner has to pick ('' when the sentence is complete).
-export function nextCorrectWord() {
+// Raw words the learner still has to pick, in order ([] when the sentence is complete).
+export function remainingCorrectWords() {
     const exercise = state.exercises[state.currentExerciseIndex];
-    if (!exercise) return '';
+    if (!exercise) return [];
     const words = (exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [])
         .filter(token => !isPunctuation(token));
     const done = state.userSentence.filter(token => !isPunctuation(token)).length;
-    return words[done] || '';
+    return words.slice(done);
+}
+
+export function nextCorrectWord() {
+    return remainingCorrectWords()[0] || '';
 }
 
 export function handleWordClick(word, button) {
