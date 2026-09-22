@@ -1857,9 +1857,14 @@ export function selectTopic(topicId, fullPath) {
 
 export function positionDropdown() {
     const searchRect = dom.topicSearch.getBoundingClientRect();
-    dom.topicDropdown.style.left = searchRect.left + 'px';
+    // The tree is deep and names are long: at least 40rem wide (viewport permitting),
+    // anchored to the input but never past the right edge.
+    const margin = 16;
+    const width = Math.min(window.innerWidth - 2 * margin, Math.max(searchRect.width, 640));
+    const left = Math.max(margin, Math.min(searchRect.left, window.innerWidth - margin - width));
+    dom.topicDropdown.style.left = left + 'px';
     dom.topicDropdown.style.top = (searchRect.bottom + 4) + 'px';
-    dom.topicDropdown.style.width = searchRect.width + 'px';
+    dom.topicDropdown.style.width = width + 'px';
 }
 
 export function saveTopic() {

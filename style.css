@@ -1062,7 +1062,7 @@ button .loading-spinner {
     border-radius: var(--radius-md);
     box-shadow: 0 10px 36px rgba(73, 27, 8, 0.2);
     z-index: 9999 !important;
-    max-height: 24rem;
+    max-height: min(70vh, 44rem);
     overflow-y: auto;
 }
 
