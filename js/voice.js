@@ -2,7 +2,7 @@
 // Web Speech API only (Chrome / Android Chrome), no external models.
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { handleWordClick, handleHintClick, handleNextExercise, nextCorrectWord } from './exercise.js';
+import { handleWordClick, handleHintClick, handleNextExercise, handleSkipExercise, nextCorrectWord } from './exercise.js';
 
 // ponytail: STT returns digits, sentences spell numbers out; extend when a miss shows up
 const NUMBERS = {
@@ -15,6 +15,7 @@ const NUMBERS = {
 };
 const NEXT_CMDS = new Set(['weiter', 'next', 'nächste', 'nächstes']);
 const HINT_CMDS = new Set(['hinweis', 'hint', 'tipp']);
+const SKIP_CMDS = new Set(['skip', 'überspringen', 'auslassen']);
 const FUZZY_MIN_LEN = 4; // im/in, er/es, das/was: too close to fuzzy-match safely
 
 export function normalize(token) {
@@ -89,6 +90,10 @@ export function applyTokens(tokens, penalize, skip = new Set()) {
         }
         if (!inBank && HINT_CMDS.has(tok)) {
             if (penalize) { handleHintClick(); applied.add(i); }
+            return;
+        }
+        if (!inBank && SKIP_CMDS.has(tok)) {
+            if (penalize && !state.isLocked) { handleSkipExercise(); applied.add(i); }
             return;
         }
         const hit = matchCandidate(tok, candidates);

@@ -70,6 +70,16 @@ describe('voice.js', () => {
             expect(state.mistakes).toBe(1);
         });
 
+        it('skip command skips the exercise when the word is not in the bank', async () => {
+            const exercise = await import('../exercise.js');
+            const spy = vi.spyOn(exercise, 'handleSkipExercise').mockImplementation(() => {});
+            applyTokens(['skip'], false); // interim: never act
+            expect(spy).not.toHaveBeenCalled();
+            applyTokens(['skip'], true);
+            expect(spy).toHaveBeenCalledTimes(1);
+            spy.mockRestore();
+        });
+
         it('prefers the button whose raw word matches (Sie vs sie) and treats bank words as words, not commands', () => {
             state.exercises = [{ correct_german_sentence: 'Sie sagt, dass sie weiter macht.' }];
             dom.scrambledWordsContainer.innerHTML = '';

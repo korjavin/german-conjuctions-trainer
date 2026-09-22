@@ -411,6 +411,10 @@ export function handleHintClick() {
 }
 
 export function handleKeyPress(event) {
+    if (event.key === 'Enter' && !dom.exerciseControls.classList.contains('hidden')) {
+        handleNextExercise();
+        return;
+    }
     if (state.isLocked) return;
 
     const key = event.key.toLowerCase();
