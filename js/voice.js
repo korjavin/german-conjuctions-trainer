@@ -107,7 +107,18 @@ let recognition = null;
 let active = false;
 const consumed = new Map(); // result index -> Set of token indices already acted on
 
+// phase: 'listening' (mic open, silence) | 'speaking' (voice detected) | 'thinking' (speech ended, waiting for final)
+function setPhase(phase, transcript = '') {
+    if (!dom.voiceStatus) return;
+    dom.voiceStatus.classList.remove('speaking', 'thinking');
+    if (phase !== 'listening') dom.voiceStatus.classList.add(phase);
+    dom.voiceStatusLabel.textContent = { listening: 'Listening…', speaking: 'Hearing you…', thinking: 'Recognizing…' }[phase];
+    dom.voiceTranscript.textContent = transcript;
+}
+
 function onResult(event) {
+    const last = event.results[event.results.length - 1];
+    setPhase(last.isFinal ? 'listening' : 'speaking', last.isFinal ? '' : last[0].transcript.trim());
     if (state.activeAudio && !state.activeAudio.paused) return; // don't listen to our own TTS
     for (let i = event.resultIndex; i < event.results.length; i++) {
         const r = event.results[i];
@@ -123,10 +134,13 @@ function updateUI() {
     dom.voiceToggleBtn.classList.toggle('voice-active', active);
     dom.voiceToggleBtn.title = active ? 'Voice input: on' : 'Voice input: off';
     dom.voiceToggleBtn.setAttribute('aria-pressed', String(active));
+    if (dom.voiceStatus) dom.voiceStatus.classList.toggle('hidden', !active);
+    if (active) setPhase('listening');
 }
 
 function stop() {
     active = false;
+    state.voiceActive = false;
     if (recognition) {
         recognition.onend = null;
         recognition.onresult = null;
@@ -143,7 +157,9 @@ function start() {
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.onresult = onResult;
-    recognition.onstart = () => consumed.clear();
+    recognition.onspeechstart = () => setPhase('speaking', dom.voiceTranscript.textContent);
+    recognition.onspeechend = () => setPhase('thinking', dom.voiceTranscript.textContent);
+    recognition.onstart = () => { consumed.clear(); setPhase('listening'); };
     recognition.onend = () => { if (active) try { recognition.start(); } catch (e) { /* already running */ } };
     recognition.onerror = (e) => {
         // no-speech / aborted are routine; anything else (no mic, offline, denied) must not restart-loop
@@ -151,6 +167,7 @@ function start() {
     };
     recognition.start();
     active = true;
+    state.voiceActive = true;
     updateUI();
 }
 

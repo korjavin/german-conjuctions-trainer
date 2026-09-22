@@ -167,6 +167,7 @@ async function ensureWordAudioCached(word) {
 }
 
 export async function playWordAudio(word) {
+    if (state.voiceActive) return; // per-word TTS echoes back into the mic
     if (!state.isAudioEnabled) return;
 
     const normalizedWord = normalizeWordForCache(word);

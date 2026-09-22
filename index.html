@@ -113,6 +113,11 @@
                         <p id="answer-prompt" class="answer-prompt">Click the words below to form the sentence.</p>
                         <div id="constructed-sentence" class="constructed-sentence flex flex-wrap gap-3"></div>
                     </div>
+                    <div id="voice-status" class="voice-status hidden" aria-live="polite">
+                        <span class="voice-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                        <span id="voice-status-label" class="voice-status-label">Listening…</span>
+                        <span id="voice-transcript" class="voice-transcript"></span>
+                    </div>
 
                     <div id="scrambled-words-header" class="scrambled-words-header flex justify-between items-center w-full gap-3 mb-6">
                         <span id="exercise-topic-label" class="exercise-topic-label invisible flex-1 min-w-0 truncate"></span>

@@ -141,6 +141,7 @@ export const state = {
     lastAudioUrl: '',
     lastAudioText: '',
     isAudioEnabled: _loadAudioEnabled(),
+    voiceActive: false,
     wordAudioCache: _loadWordAudioCache(),
     wordAudioInflight: new Map(),
     activeAudio: null,
