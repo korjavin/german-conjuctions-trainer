@@ -16,6 +16,14 @@ const NUMBERS = {
 const NEXT_CMDS = new Set(['weiter', 'next', 'nächste', 'nächstes']);
 const HINT_CMDS = new Set(['hinweis', 'hint', 'tipp']);
 const SKIP_CMDS = new Set(['skip', 'überspringen', 'auslassen']);
+const isCommand = tok => NEXT_CMDS.has(tok) || HINT_CMDS.has(tok) || SKIP_CMDS.has(tok);
+
+// A command word that also occurs in the current sentence is never a command for that
+// exercise (so the sentence TTS echo can't trigger it either); say the English one instead.
+function sentenceWords() {
+    const exercise = state.exercises[state.currentExerciseIndex];
+    return new Set(tokenize(exercise ? exercise.correct_german_sentence : ''));
+}
 const FUZZY_MIN_LEN = 4; // im/in, er/es, das/was: too close to fuzzy-match safely
 
 export function normalize(token) {
@@ -62,11 +70,13 @@ export function bestAlternative(alternatives, expectedRaw) {
     let best = alternatives[0] || '';
     let bestScore = -1;
     for (const alt of alternatives) {
+        const toks = tokenize(alt);
         let j = 0;
-        for (const tok of tokenize(alt)) {
+        for (const tok of toks) {
             if (j < expected.length && similar(tok, expected[j])) j++;
         }
-        if (j > bestScore) { bestScore = j; best = alt; }
+        const score = j + (toks.some(isCommand) ? 0.5 : 0); // tie-break towards a command word
+        if (score > bestScore) { bestScore = score; best = alt; }
     }
     return best;
 }
@@ -106,16 +116,16 @@ export function applyTokens(tokens, final, skip = new Set()) {
         const nextRaw = nextCorrectWord();
         const expected = normalize(nextRaw);
         const candidates = state.isLocked ? [] : availableCandidates(nextRaw);
-        const inBank = candidates.some(c => c.key === tok);
-        if (!inBank && NEXT_CMDS.has(tok)) {
+        const inSentence = sentenceWords().has(tok);
+        if (!inSentence && NEXT_CMDS.has(tok)) {
             if (final && !dom.exerciseControls.classList.contains('hidden')) { handleNextExercise(); applied.add(i); }
             return;
         }
-        if (!inBank && HINT_CMDS.has(tok)) {
+        if (!inSentence && HINT_CMDS.has(tok)) {
             if (final) { handleHintClick(); applied.add(i); }
             return;
         }
-        if (!inBank && SKIP_CMDS.has(tok)) {
+        if (!inSentence && SKIP_CMDS.has(tok)) {
             if (final && !state.isLocked) { handleSkipExercise(); applied.add(i); }
             return;
         }
@@ -147,7 +157,7 @@ function setPhase(phase, transcript = '') {
 function onResult(event) {
     const last = event.results[event.results.length - 1];
     setPhase(last.isFinal ? 'listening' : 'speaking', last.isFinal ? '' : last[0].transcript.trim());
-    if (state.activeAudio && !state.activeAudio.paused) return; // don't listen to our own TTS
+    // Sentence TTS echo is harmless: the bank is empty while it plays, and its words are never commands.
     for (let i = event.resultIndex; i < event.results.length; i++) {
         const r = event.results[i];
         const alternatives = Array.from({ length: r.length }, (_, k) => r[k].transcript);

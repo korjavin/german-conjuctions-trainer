@@ -75,6 +75,20 @@ describe('voice.js', () => {
             const alts = ['zum Termin', 'zu einem Termin', 'zu einen Termin'];
             expect(bestAlternative(alts, ['zu', 'einem', 'Termin', 'gehen'])).toBe('zu einem Termin');
             expect(bestAlternative(['Termin'], ['zu', 'einem', 'Termin'])).toBe('Termin');
+            expect(bestAlternative(['Nix', 'next'], [])).toBe('next'); // sentence done: prefer the command
+        });
+
+        it('next works after completion while a sentence word never acts as a command', async () => {
+            const exercise = await import('../exercise.js');
+            const next = vi.spyOn(exercise, 'handleNextExercise').mockImplementation(() => {});
+            state.exercises = [{ correct_german_sentence: 'Wir machen weiter.' }];
+            state.isLocked = true;
+            dom.exerciseControls.classList.remove('hidden');
+            applyTokens(['weiter'], true);
+            expect(next).not.toHaveBeenCalled();
+            applyTokens(['next'], true);
+            expect(next).toHaveBeenCalledTimes(1);
+            next.mockRestore();
         });
 
         it('skip command skips the exercise when the word is not in the bank', async () => {
