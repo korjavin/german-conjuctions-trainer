@@ -156,9 +156,35 @@ function setPhase(phase, transcript = '') {
     dom.voiceTranscript.textContent = transcript;
 }
 
+// Chrome sometimes freezes continuous recognition on an interim result: no final, no
+// further events, no onend. If the interim transcript hasn't changed for this long,
+// abort; onend then restarts a fresh session.
+export const STALL_MS = 4000;
+let stallTimer = null;
+let stallTranscript = '';
+
+function armStallWatchdog(transcript) {
+    if (transcript === stallTranscript && stallTimer) return; // same interim repeated: keep the old deadline
+    clearTimeout(stallTimer);
+    stallTranscript = transcript;
+    stallTimer = setTimeout(() => {
+        stallTimer = null;
+        stallTranscript = '';
+        if (active && recognition) recognition.abort();
+    }, STALL_MS);
+}
+
+function disarmStallWatchdog() {
+    clearTimeout(stallTimer);
+    stallTimer = null;
+    stallTranscript = '';
+}
+
 function onResult(event) {
     const last = event.results[event.results.length - 1];
-    setPhase(last.isFinal ? 'listening' : 'speaking', last.isFinal ? '' : last[0].transcript.trim());
+    const interim = last.isFinal ? '' : last[0].transcript.trim();
+    setPhase(last.isFinal ? 'listening' : 'speaking', interim);
+    if (last.isFinal) disarmStallWatchdog(); else armStallWatchdog(interim);
     // Sentence TTS echo is harmless: the bank is empty while it plays, and its words are never commands.
     for (let i = event.resultIndex; i < event.results.length; i++) {
         const r = event.results[i];
@@ -182,6 +208,7 @@ function updateUI() {
 function stop() {
     active = false;
     state.voiceActive = false;
+    disarmStallWatchdog();
     if (recognition) {
         recognition.onend = null;
         recognition.onresult = null;
@@ -202,7 +229,7 @@ function start() {
     recognition.onspeechstart = () => setPhase('speaking', dom.voiceTranscript.textContent);
     recognition.onspeechend = () => setPhase('thinking', dom.voiceTranscript.textContent);
     recognition.onstart = () => { consumed.clear(); setPhase('listening'); };
-    recognition.onend = () => { if (active) try { recognition.start(); } catch (e) { /* already running */ } };
+    recognition.onend = () => { disarmStallWatchdog(); if (active) try { recognition.start(); } catch (e) { /* already running */ } };
     recognition.onerror = (e) => {
         // no-speech / aborted are routine; anything else (no mic, offline, denied) must not restart-loop
         if (e.error !== 'no-speech' && e.error !== 'aborted') stop();

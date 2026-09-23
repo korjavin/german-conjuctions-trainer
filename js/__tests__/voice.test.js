@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { normalize, tokenize, levenshtein, matchCandidate, applyTokens, bestAlternative } from '../voice.js';
+import { normalize, tokenize, levenshtein, matchCandidate, applyTokens, bestAlternative, handleVoiceToggle, STALL_MS } from '../voice.js';
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 
@@ -117,5 +117,36 @@ describe('voice.js', () => {
             expect(state.mistakes).toBe(0);
             expect(state.userSentence.filter(w => /\w/.test(w))).toEqual(['Sie', 'sagt', 'dass', 'sie', 'weiter']);
         });
+    });
+
+    it('restarts recognition when stuck on an unchanged interim result', () => {
+        vi.useFakeTimers();
+        const instances = [];
+        window.webkitSpeechRecognition = class {
+            constructor() { this.aborted = 0; this.starts = 0; instances.push(this); }
+            start() { this.starts++; }
+            abort() { this.aborted++; this.onend?.(); }
+        };
+        const interim = t => ({ resultIndex: 0, results: [Object.assign([{ transcript: t }], { isFinal: false })] });
+        try {
+            handleVoiceToggle();
+            const rec = instances[0];
+            rec.onresult(interim('ich'));
+            vi.advanceTimersByTime(STALL_MS - 100);
+            rec.onresult(interim('ich')); // same interim again must not extend the deadline
+            vi.advanceTimersByTime(200);
+            expect(rec.aborted).toBe(1);
+            expect(rec.starts).toBe(2); // onend restarted it
+
+            rec.onresult(interim('ich möchte'));
+            vi.advanceTimersByTime(STALL_MS - 100);
+            rec.onresult(interim('ich möchte gern')); // progress resets the deadline
+            vi.advanceTimersByTime(STALL_MS - 100);
+            expect(rec.aborted).toBe(1);
+        } finally {
+            handleVoiceToggle();
+            delete window.webkitSpeechRecognition;
+            vi.useRealTimers();
+        }
     });
 });
