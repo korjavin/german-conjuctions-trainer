@@ -25,8 +25,24 @@ const SEARCH_DEBOUNCE_MS = 300; // Debounce delay for search input in millisecon
 export const BLUR_TIMEOUT_MS = 200; // Timeout for search blur handler
 export const FOCUSOUT_TIMEOUT_MS = 50; // Timeout for search focusout handler
 
-// Module-level state for topic dropdown collapse (not persisted, separate from settings modal tree)
-const dropdownCollapsedTopicIds = new Set();
+// Topic dropdown collapse state, persisted separately from the settings modal tree
+const DROPDOWN_COLLAPSE_STORAGE_KEY = 'dropdownTopicCollapseState';
+const dropdownCollapsedTopicIds = new Set((() => {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(DROPDOWN_COLLAPSE_STORAGE_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string') : [];
+    } catch {
+        return [];
+    }
+})());
+
+function saveDropdownCollapseState() {
+    try {
+        localStorage.setItem(DROPDOWN_COLLAPSE_STORAGE_KEY, JSON.stringify([...dropdownCollapsedTopicIds]));
+    } catch (error) {
+        console.error('Failed to save dropdown collapse state:', error);
+    }
+}
 // Query the dropdown was last rendered with (focus renders '', the input still holds the canonical path)
 let lastDropdownQuery = '';
 
@@ -42,6 +58,7 @@ const SUPPRESS_CLOSE_DURATION_MS = 250;
 // Reset dropdown collapse state (for testing)
 export function resetDropdownCollapseState() {
     dropdownCollapsedTopicIds.clear();
+    saveDropdownCollapseState();
     lastDropdownQuery = '';
     lastCollapseClickTime = 0;
 }
@@ -1798,6 +1815,7 @@ export function renderTopicDropdown(searchQuery = '') {
                 } else {
                     dropdownCollapsedTopicIds.add(node.id);
                 }
+                saveDropdownCollapseState();
                 // Set flag to prevent blur/focusout from closing the dropdown
                 setSuppressDropdownClose();
                 // Re-render with the query actually in effect, not the canonical path sitting in the input
