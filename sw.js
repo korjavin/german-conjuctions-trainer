@@ -9,7 +9,7 @@
  * IMPORTANT: bump CACHE_VERSION whenever a shell file changes, otherwise
  * returning visitors keep the old cached copy until the cache is evicted.
  */
-const CACHE_VERSION = 'gct-shell-v10';
+const CACHE_VERSION = 'gct-shell-v11';
 
 const SHELL_ASSETS = [
     '/',

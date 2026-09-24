@@ -77,18 +77,17 @@ export function updateAuthUI() {
         dom.logoutBtn.classList.remove('hidden');
         dom.historyBtn.classList.remove('hidden');
         dom.skipRemoveBtn.classList.remove('hidden');
-        dom.offlineCacheBtn?.classList.remove('hidden');
+        dom.offlineCacheSection?.classList.remove('hidden');
     } else {
         dom.loginBtn.classList.remove('hidden');
         dom.logoutBtn.classList.add('hidden');
         dom.historyBtn.classList.add('hidden');
         dom.skipRemoveBtn.classList.add('hidden');
-        dom.offlineCacheBtn?.classList.add('hidden');
+        dom.offlineCacheSection?.classList.add('hidden');
     }
 
-    if (state.isAdmin) {
-        dom.settingsBtn.classList.remove('hidden');
-    } else {
-        dom.settingsBtn.classList.add('hidden');
-    }
+    // Settings holds offline practice (any logged-in user) plus the
+    // admin-only topics management / stats / CLI sections.
+    dom.settingsBtn.classList.toggle('hidden', !(state.isLoggedIn || state.isAdmin));
+    dom.topicsAdminSection?.classList.toggle('hidden', !state.isAdmin);
 }

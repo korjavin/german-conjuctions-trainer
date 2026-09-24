@@ -184,17 +184,18 @@ async function drainQueue() {
 function setStatus(text) {
     if (!dom.offlineCacheStatus) return;
     dom.offlineCacheStatus.textContent = text;
-    dom.offlineCacheStatus.classList.toggle('hidden', !text);
 }
 
-// renderOfflineCacheStatus shows the stored stash size.
+// renderOfflineCacheStatus shows the stored stash size and age.
 export function renderOfflineCacheStatus() {
     const stash = readStash();
     if (stash.exercises.length === 0 || !stash.updatedAt) {
-        setStatus('');
+        setStatus('Nothing cached yet.');
         return;
     }
-    setStatus(`${stash.exercises.length} offline`);
+    const count = stash.exercises.length;
+    const updated = new Date(stash.updatedAt).toLocaleString();
+    setStatus(`${count} exercise${count === 1 ? '' : 's'} cached · updated ${updated}`);
 }
 
 async function fetchForStash(topicId, extraOptions) {
@@ -253,7 +254,7 @@ export async function updateOfflineCache() {
                 // Same: per-word TTS failures are non-fatal.
             }
             done++;
-            setStatus(`${done}/${exercises.length}…`);
+            setStatus(`Caching audio ${done}/${exercises.length}…`);
         }
 
         renderOfflineCacheStatus();

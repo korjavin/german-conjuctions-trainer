@@ -89,7 +89,8 @@ initSession({ renderExercise });
 
 // Settings modal
 dom.settingsBtn.addEventListener('click', () => {
-    loadTopics(); // Refresh topics when opening settings
+    if (state.isAdmin) loadTopics(); // Refresh topics when opening settings
+    renderOfflineCacheStatus();
     dom.settingsModal.showModal();
     loadDatabaseStats();
     toggleCLIAccessSection();
@@ -334,7 +335,7 @@ dom.topicDropdown.addEventListener('focusout', (e) => {
 
 // Keyboard shortcut for topics search (Ctrl+F / Cmd+F)
 document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    if (state.isAdmin && (e.ctrlKey || e.metaKey) && e.key === 'f') {
         // Prevent default browser find dialog
         e.preventDefault();
         // Open settings modal if not already open
@@ -356,7 +357,7 @@ dom.logoutBtn.addEventListener('click', () => {
     window.location.href = '/auth/logout';
 });
 
-// Offline cache (logged-in users only; visibility handled by updateAuthUI)
+// Offline cache (settings modal, logged-in users only; visibility handled by updateAuthUI)
 if (dom.offlineCacheBtn) {
     dom.offlineCacheBtn.addEventListener('click', updateOfflineCache);
 }

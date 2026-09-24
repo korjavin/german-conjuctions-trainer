@@ -1,6 +1,7 @@
 export const dom = {
     settingsBtn: document.getElementById('settings-btn'),
     settingsModal: document.getElementById('settings-modal'),
+    topicsAdminSection: document.getElementById('topics-admin-section'),
     settingsCloseBtn: document.getElementById('settings-close-btn'),
     topicSearch: document.getElementById('topic-search'),
     topicDropdown: document.getElementById('topic-dropdown'),
@@ -81,6 +82,7 @@ export const dom = {
     loginBtn: document.getElementById('login-btn'),
     logoutBtn: document.getElementById('logout-btn'),
     historyBtn: document.getElementById('history-btn'),
+    offlineCacheSection: document.getElementById('offline-cache-section'),
     offlineCacheBtn: document.getElementById('offline-cache-btn'),
     offlineCacheStatus: document.getElementById('offline-cache-status'),
     replayAudioBtn: document.getElementById('replay-audio-btn'),
