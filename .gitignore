@@ -45,3 +45,6 @@ coverage/
 .beads-credential-key
 .beads/proxieddb/
 .beads.gate.lock
+
+# local scratch (contains personal data)
+tmp/
