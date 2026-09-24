@@ -145,14 +145,17 @@ export function applyTokens(tokens, final, skip = new Set()) {
 
 let recognition = null;
 let active = false;
+let muted = false; // TTS playing: recognition aborted until it ends
+let local = false; // on-device recognition available (Chrome 139+): no network round trip
+const sentenceDone = () => !dom.exerciseControls.classList.contains('hidden');
 const consumed = new Map(); // result index -> Set of token indices already acted on
 
 // phase: 'listening' (mic open, silence) | 'speaking' (voice detected) | 'thinking' (speech ended, waiting for final)
 function setPhase(phase, transcript = '') {
     if (!dom.voiceStatus) return;
-    dom.voiceStatus.classList.remove('speaking', 'thinking');
+    dom.voiceStatus.classList.remove('speaking', 'thinking', 'muted');
     if (phase !== 'listening') dom.voiceStatus.classList.add(phase);
-    dom.voiceStatusLabel.textContent = { listening: 'Listening…', speaking: 'Hearing you…', thinking: 'Recognizing…' }[phase];
+    dom.voiceStatusLabel.textContent = { listening: 'Listening…', speaking: 'Hearing you…', thinking: 'Recognizing…', muted: 'Paused while audio plays…' }[phase];
     dom.voiceTranscript.textContent = transcript;
 }
 
@@ -181,15 +184,21 @@ function disarmStallWatchdog() {
 }
 
 function onResult(event) {
+    if (muted) return;
     const last = event.results[event.results.length - 1];
     const interim = last.isFinal ? '' : last[0].transcript.trim();
     setPhase(last.isFinal ? 'listening' : 'speaking', interim);
     if (last.isFinal) disarmStallWatchdog(); else armStallWatchdog(interim);
-    // Sentence TTS echo is harmless: the bank is empty while it plays, and its words are never commands.
     for (let i = event.resultIndex; i < event.results.length; i++) {
         const r = event.results[i];
         const alternatives = Array.from({ length: r.length }, (_, k) => r[k].transcript);
         const tokens = tokenize(r.isFinal ? bestAlternative(alternatives, remainingCorrectWords()) : r[0].transcript);
+        // Sentence done: whatever the learner says next means "next". Only utterances that
+        // began after completion, so the tail of the phrase that finished it can't skip ahead.
+        if (!consumed.has(i) && sentenceDone()) {
+            if (tokens.length) { handleNextExercise(); consumed.set(i, new Set(tokens.keys())); }
+            continue;
+        }
         const seen = consumed.get(i) || new Set();
         for (const idx of applyTokens(tokens, r.isFinal, seen)) seen.add(idx);
         consumed.set(i, seen);
@@ -205,8 +214,42 @@ function updateUI() {
     if (active) setPhase('listening');
 }
 
+function listen() {
+    if ('processLocally' in recognition) recognition.processLocally = local;
+    try { recognition.start(); } catch (e) { /* already running */ }
+}
+
+function onTTSStart() {
+    if (!active || muted) return;
+    muted = true;
+    disarmStallWatchdog();
+    recognition.abort(); // onend won't restart while muted
+    setPhase('muted');
+}
+
+function onTTSEnd() {
+    if (!muted) return;
+    muted = false;
+    if (active) { setPhase('listening'); listen(); }
+}
+
+window.addEventListener('tts-start', onTTSStart);
+window.addEventListener('tts-end', onTTSEnd);
+
+async function detectLocal(SR) {
+    if (!SR.available) return;
+    const opts = { langs: ['de-DE'], processLocally: true };
+    try {
+        const status = await SR.available(opts);
+        if (status === 'available') local = true;
+        // still inside the toggle click's user activation window; used from the next restart on
+        else if (status === 'downloadable' && SR.install) local = await SR.install(opts);
+    } catch (e) { /* cloud recognition it is */ }
+}
+
 function stop() {
     active = false;
+    muted = false;
     state.voiceActive = false;
     disarmStallWatchdog();
     if (recognition) {
@@ -229,15 +272,17 @@ function start() {
     recognition.onspeechstart = () => setPhase('speaking', dom.voiceTranscript.textContent);
     recognition.onspeechend = () => setPhase('thinking', dom.voiceTranscript.textContent);
     recognition.onstart = () => { consumed.clear(); setPhase('listening'); };
-    recognition.onend = () => { disarmStallWatchdog(); if (active) try { recognition.start(); } catch (e) { /* already running */ } };
+    recognition.onend = () => { disarmStallWatchdog(); if (active && !muted) listen(); };
     recognition.onerror = (e) => {
+        if (local && e.error === 'language-not-supported') { local = false; return; } // onend retries in the cloud
         // no-speech / aborted are routine; anything else (no mic, offline, denied) must not restart-loop
         if (e.error !== 'no-speech' && e.error !== 'aborted') stop();
     };
-    recognition.start();
+    listen();
     active = true;
     state.voiceActive = true;
     updateUI();
+    detectLocal(SR);
 }
 
 export function handleVoiceToggle() {

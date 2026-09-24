@@ -149,4 +149,40 @@ describe('voice.js', () => {
             vi.useRealTimers();
         }
     });
+
+    it('stops listening while TTS plays and treats any new utterance after completion as next', async () => {
+        const exercise = await import('../exercise.js');
+        const next = vi.spyOn(exercise, 'handleNextExercise').mockImplementation(() => {});
+        const instances = [];
+        window.webkitSpeechRecognition = class {
+            constructor() { this.aborted = 0; this.starts = 0; instances.push(this); }
+            start() { this.starts++; this.onstart?.(); }
+            abort() { this.aborted++; this.onend?.(); }
+        };
+        const res = (i, t, isFinal = false) => ({ resultIndex: i, results: Object.assign(Array.from({ length: i + 1 }, () => Object.assign([{ transcript: t }], { isFinal })), {}) });
+        try {
+            state.exercises = [{ correct_german_sentence: 'Das ist gut.' }];
+            dom.exerciseControls.classList.add('hidden');
+            handleVoiceToggle();
+            const rec = instances[0];
+            rec.onresult(res(0, 'gut')); // phrase seen before completion
+            dom.exerciseControls.classList.remove('hidden'); // sentence completed
+            rec.onresult(res(0, 'gut blah', true)); // tail of the finishing phrase: not a next
+            expect(next).not.toHaveBeenCalled();
+
+            window.dispatchEvent(new Event('tts-start'));
+            expect(rec.aborted).toBe(1);
+            expect(rec.starts).toBe(1); // no restart while muted
+            window.dispatchEvent(new Event('tts-end'));
+            expect(rec.starts).toBe(2);
+
+            rec.onresult(res(0, 'nächst')); // garbled, but a fresh utterance after completion
+            expect(next).toHaveBeenCalledTimes(1);
+        } finally {
+            handleVoiceToggle();
+            delete window.webkitSpeechRecognition;
+            dom.exerciseControls.classList.add('hidden');
+            next.mockRestore();
+        }
+    });
 });

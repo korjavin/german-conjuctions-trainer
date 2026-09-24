@@ -95,6 +95,11 @@ export async function playAudioFile(filePath) {
                 state.activeAudio = null;
             }
         });
+        // voice.js stops listening while we speak, otherwise the mic hears the TTS
+        audio.addEventListener('playing', () => window.dispatchEvent(new Event('tts-start')));
+        for (const ev of ['ended', 'pause', 'error']) {
+            audio.addEventListener(ev, () => window.dispatchEvent(new Event('tts-end')));
+        }
 
         await audio.play();
         return true;
