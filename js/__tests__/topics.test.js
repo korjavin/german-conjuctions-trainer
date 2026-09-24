@@ -95,5 +95,6 @@ describe('topic tree collapse', () => {
         const items = dom.topicDropdown.querySelectorAll('.topic-dropdown-tree-item');
         expect(items).toHaveLength(1);
         expect(dom.topicDropdown.textContent).not.toContain('No topics found');
+        expect(JSON.parse(localStorage.getItem('dropdownTopicCollapseState'))).toHaveLength(1);
     });
 });
