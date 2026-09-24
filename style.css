@@ -29,8 +29,8 @@
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
     --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 
-    --container-max-width: 1024px;
-    --app-wrapper-width: 48rem;
+    --container-max-width: 90rem;
+    --app-wrapper-width: 64rem;
     --spacing-1: 0.25rem;
     --spacing-2: 0.5rem;
     --spacing-3: 0.75rem;
@@ -167,7 +167,7 @@ ul {
 
 .topic-selector-container {
     flex: 1;
-    max-width: 28rem;
+    min-width: 16rem;
     position: relative;
 }
 
@@ -1514,6 +1514,11 @@ button:disabled.is-audio-off {
     padding-bottom: 1rem;
 }
 
+.px-4 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
 .py-8 {
     padding-top: 2rem;
     padding-bottom: 2rem;
@@ -1955,6 +1960,10 @@ button:disabled.is-audio-off {
         gap: 0.5rem;
     }
 
+    #topic-selection-section {
+        flex-wrap: wrap;
+    }
+
     .topic-selector-container {
         flex: 1 1 100%;
         max-width: none;
@@ -1991,7 +2000,8 @@ button:disabled.is-audio-off {
     }
 
     .generate-btn {
-        flex: 1 1 calc(100% - 6.8rem);
+        flex: 1 1 0;
+        min-width: 0;
     }
 
     .audio-toggle-btn {
@@ -2131,6 +2141,29 @@ button:disabled.is-audio-off {
     color: var(--mr-text-muted);
     line-height: 1;
     text-align: center;
+}
+
+/* ==========================================================================
+   Offline Practice Section (settings modal)
+   ========================================================================== */
+.offline-cache-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-4);
+}
+
+.offline-cache-status {
+    margin-top: var(--spacing-1);
+    font-size: 0.8125rem;
+    color: var(--mr-text-muted);
+}
+
+@media (max-width: 640px) {
+    .offline-cache-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
 
 /* ==========================================================================

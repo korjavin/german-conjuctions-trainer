@@ -12,7 +12,7 @@
     <link rel="apple-touch-icon" href="favicon.svg">
     <meta name="theme-color" content="#A33F11">
     <link rel="manifest" href="/manifest.json">
-    <link href="style.css?v=202604121600" rel="stylesheet">
+    <link href="style.css?v=202609240001" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -51,12 +51,7 @@
                     <span class="desktop-only">Logout</span>
                     <span class="mobile-only">👋</span>
                 </button>
-                <button id="offline-cache-btn" class="btn-primary header-btn hidden" title="Download exercises and audio for offline practice">
-                    <span class="desktop-only">Update offline cache</span>
-                    <span class="mobile-only">📥</span>
-                </button>
-                <span id="offline-cache-status" class="hidden text-sm text-white/60"></span>
-                <button id="settings-btn" class="btn-primary header-btn">
+                <button id="settings-btn" class="btn-primary header-btn hidden">
                     <span class="desktop-only">Settings</span>
                     <span class="mobile-only">⚙️</span>
                 </button>
@@ -173,7 +168,23 @@
     <!-- Settings Modal -->
     <dialog id="settings-modal" class="modal-backdrop">
         <div class="card modal-content modal-lg">
-            <h2 class="modal-title mb-6">Topics Management</h2>
+            <h2 class="modal-title mb-6">Settings</h2>
+
+            <!-- Offline practice (any logged-in user) -->
+            <div id="offline-cache-section" class="offline-cache-section mb-6 hidden">
+                <h3 class="section-title mb-2">Offline Practice</h3>
+                <div class="offline-cache-row">
+                    <div class="min-w-0">
+                        <p class="section-desc">Download exercises and audio for the current and recently used topics.</p>
+                        <p id="offline-cache-status" class="offline-cache-status">Nothing cached yet.</p>
+                    </div>
+                    <button id="offline-cache-btn" class="btn-secondary btn-sm whitespace-nowrap">Update offline cache</button>
+                </div>
+            </div>
+
+            <!-- Topics management (admin only) -->
+            <div id="topics-admin-section" class="hidden">
+            <div class="db-stats-separator"></div>
 
             <!-- Observability -->
             <div class="observability-section mb-6">
@@ -337,6 +348,8 @@ Situations: [contexts, e.g. explaining reasons, expressing goals, giving instruc
                         <span class="loading-spinner hidden" style="width: 16px; height: 16px; border-width: 2px;"></span>
                     </button>
                 </div>
+            </div>
+
             </div>
 
             <!-- Database Stats (admin only) -->
