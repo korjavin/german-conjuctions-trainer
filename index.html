@@ -12,7 +12,7 @@
     <link rel="apple-touch-icon" href="favicon.svg">
     <meta name="theme-color" content="#A33F11">
     <link rel="manifest" href="/manifest.json">
-    <link href="style.css?v=202609240001" rel="stylesheet">
+    <link href="style.css?v=202609250001" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -35,6 +35,9 @@
                 </button>
                 <button id="voice-toggle-btn" class="btn-primary audio-toggle-btn whitespace-nowrap" title="Voice input: off" aria-pressed="false" aria-label="Toggle voice input">
                     <span aria-hidden="true">🎤</span>
+                </button>
+                <button id="podcast-btn" class="btn-primary audio-toggle-btn whitespace-nowrap" title="Podcast mode" aria-label="Podcast mode">
+                    <span aria-hidden="true">🎧</span>
                 </button>
             </div>
 
@@ -442,6 +445,45 @@ gct whoami</pre>
                 <button id="skip-session-btn" class="btn-secondary w-full">Skip for this session</button>
                 <button id="skip-remove-btn" class="btn-secondary action-danger text-red-600 w-full hidden">Remove completely</button>
                 <button id="skip-cancel-btn" class="btn-primary w-full mt-2">Cancel</button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- Podcast Modal -->
+    <dialog id="podcast-modal" class="modal-backdrop">
+        <div class="card modal-content modal-podcast">
+            <div class="flex justify-between items-start gap-3 mb-4">
+                <div class="min-w-0">
+                    <h2 class="modal-title">Podcast</h2>
+                    <p id="podcast-topic-name" class="modal-subtitle truncate"></p>
+                </div>
+                <button id="podcast-close-btn" class="close-btn" aria-label="Close">&times;</button>
+            </div>
+
+            <p class="section-desc mb-2">An audio lesson of 25 phrases from this topic and its subtopics, for when you can't look at the screen.</p>
+            <ol class="podcast-format section-desc mb-6">
+                <li><strong>Listen:</strong> English, then German twice.</li>
+                <li><strong>Recall:</strong> English, a pause to say it in German yourself, then the answer.</li>
+            </ol>
+
+            <button id="podcast-generate-btn" class="btn-primary w-full">Generate podcast</button>
+
+            <div id="podcast-status" class="podcast-status hidden" aria-live="polite">
+                <div class="loading-spinner podcast-spinner animate-spin rounded-full"></div>
+                <span id="podcast-status-text">Building your episode…</span>
+            </div>
+            <p id="podcast-error" class="text-error text-sm mt-3 hidden" role="alert"></p>
+
+            <div id="podcast-result" class="podcast-result hidden">
+                <audio id="podcast-audio" class="podcast-audio" controls preload="metadata"></audio>
+                <div class="podcast-result-row">
+                    <span id="podcast-meta" class="section-desc"></span>
+                    <a id="podcast-download-link" class="btn-secondary btn-sm" href="#" download>Download MP3</a>
+                </div>
+                <details class="podcast-transcript">
+                    <summary id="podcast-transcript-summary">Phrases</summary>
+                    <ol id="podcast-phrase-list" class="podcast-phrase-list"></ol>
+                </details>
             </div>
         </div>
     </dialog>

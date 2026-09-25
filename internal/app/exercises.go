@@ -59,43 +59,10 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Collect all descendant topics
-	descendants, err := a.DB.GetDescendantTopicIDs(req.TopicID)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "TOPIC_LOOKUP_FAILED", "Failed to get descendant topics", err.Error(), false)
-		return
-	}
-
-	topicIDs := append([]string{req.TopicID}, descendants...)
-	log.Printf("[EXERCISES] Fetching exercises from %d topics: %v, userID='%s'", len(topicIDs), topicIDs, userID)
-
-	// Since we are fetching exercises across the subtree, we need to ensure each topic's exercises
-	// correspond to that topic's *current* prompt. We map topic IDs to their current prompt hashes.
-	// Since GetExercisesForTopics only accepts a single prompt hash filter, we will fetch all exercises
-	// for the topics, and then manually filter out stale exercises based on each topic's current prompt hash.
-	topicHashFilters := make(map[string]string)
-	topicHashFilters[req.TopicID] = storage.GetPromptHash(topic.Prompt)
-
-	for _, descID := range descendants {
-		descTopic, err := a.DB.GetTopic(descID)
-		if err == nil {
-			topicHashFilters[descID] = storage.GetPromptHash(descTopic.Prompt)
-		}
-	}
-
-	// Fetch all exercises for these topics without filtering by hash in SQL
-	rawExercises, err := a.DB.GetExercisesForTopics(topicIDs, "")
+	topicIDs, allExercises, err := a.loadSubtreeExercises(topic)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "EXERCISE_LOOKUP_FAILED", "Failed to get exercises", err.Error(), false)
 		return
-	}
-
-	// Apply hash filtering in memory to ensure we only use exercises matching current prompts
-	var allExercises []*storage.Exercise
-	for _, ex := range rawExercises {
-		if expectedHash, ok := topicHashFilters[ex.TopicID]; ok && ex.PromptHash == expectedHash {
-			allExercises = append(allExercises, ex)
-		}
 	}
 	log.Printf("[EXERCISES] Found %d exercises in cache for topics %v", len(allExercises), topicIDs)
 
@@ -116,33 +83,7 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 
 		eligibleExercises := getEligibleExercisesForSRS(allExercises, userViews)
 		if len(eligibleExercises) < 10 && !req.SkipGeneration {
-			// Randomly select a topic from the sub-tree
-			randomTopicID := topicIDs[mrand.Intn(len(topicIDs))]
-			selectedTopic, err := a.DB.GetTopic(randomTopicID)
-			if err != nil {
-				writeJSONError(w, http.StatusInternalServerError, "TOPIC_LOOKUP_FAILED", "Failed to get selected topic for generation", err.Error(), false)
-				return
-			}
-
-			// Build coverage section if key terms exist for this topic
-			coverageSection := ""
-			promptHash := storage.GetPromptHash(selectedTopic.Prompt)
-			keyTerms, ktErr := a.DB.GetTopicKeyTerms(selectedTopic.ID, promptHash)
-			if ktErr == nil && keyTerms != nil && len(keyTerms.Terms) > 0 {
-				// Filter exercises for this specific topic
-				var topicExercises []*storage.Exercise
-				for _, ex := range allExercises {
-					if ex.TopicID == selectedTopic.ID && ex.PromptHash == promptHash {
-						topicExercises = append(topicExercises, ex)
-					}
-				}
-				termCounts := llm.ComputeTermCoverage(topicExercises, keyTerms.Terms)
-				coverageSection = llm.BuildCoverageSection(keyTerms.Terms, termCounts)
-				log.Printf("[EXERCISES] Coverage stats for topic %s: %d terms, %d existing exercises", selectedTopic.ID, len(keyTerms.Terms), len(topicExercises))
-			}
-
-			log.Printf("[EXERCISES] Generating new exercises for randomly selected sub-tree topic %s", randomTopicID)
-			newlyGenerated, err := llm.GenerateAndCacheExercises(selectedTopic, true, coverageSection)
+			newlyGenerated, err := a.generateForSubtree(topicIDs, allExercises)
 			if err != nil {
 				status := http.StatusBadGateway
 				code := "EXERCISE_GENERATION_FAILED"
@@ -152,11 +93,10 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 					code = "UPSTREAM_TIMEOUT"
 					message = "Exercise generation timed out while waiting for AI provider. Please try again."
 				}
-				log.Printf("[EXERCISES] ERROR generating exercises for topic %s user %s: %v", selectedTopic.ID, userID, err)
+				log.Printf("[EXERCISES] ERROR generating exercises for topic subtree %s user %s: %v", req.TopicID, userID, err)
 				writeJSONError(w, status, code, message, err.Error(), true)
 				return
 			}
-			log.Printf("[EXERCISES] Generated and cached %d new exercises for topic %s", len(newlyGenerated), selectedTopic.ID)
 			allExercises = append(allExercises, newlyGenerated...)
 			eligibleExercises = getEligibleExercisesForSRS(allExercises, userViews)
 		}
@@ -201,6 +141,83 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[EXERCISES] ERROR encoding response for topic %s user %s: %v", req.TopicID, userID, err)
 	}
 	log.Printf("[EXERCISES] Completed request for topic %s userID='%s' with %d exercises in %s", req.TopicID, userID, len(responseExercises), time.Since(requestStartedAt).Round(time.Millisecond))
+}
+
+// loadSubtreeExercises returns the IDs of topic and all its descendants, plus
+// the cached exercises of that subtree that match each topic's *current*
+// prompt (stale exercises from older prompt versions are dropped).
+func (a *App) loadSubtreeExercises(topic *storage.Topic) ([]string, []*storage.Exercise, error) {
+	descendants, err := a.DB.GetDescendantTopicIDs(topic.ID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get descendant topics: %w", err)
+	}
+
+	topicIDs := append([]string{topic.ID}, descendants...)
+	log.Printf("[EXERCISES] Fetching exercises from %d topics: %v", len(topicIDs), topicIDs)
+
+	// GetExercisesForTopics only accepts a single prompt hash filter, so fetch
+	// everything and filter per topic in memory.
+	topicHashFilters := map[string]string{topic.ID: storage.GetPromptHash(topic.Prompt)}
+	for _, descID := range descendants {
+		descTopic, err := a.DB.GetTopic(descID)
+		if err == nil {
+			topicHashFilters[descID] = storage.GetPromptHash(descTopic.Prompt)
+		}
+	}
+
+	rawExercises, err := a.DB.GetExercisesForTopics(topicIDs, "")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get exercises: %w", err)
+	}
+
+	var exercises []*storage.Exercise
+	for _, ex := range rawExercises {
+		if expectedHash, ok := topicHashFilters[ex.TopicID]; ok && ex.PromptHash == expectedHash {
+			exercises = append(exercises, ex)
+		}
+	}
+	return topicIDs, exercises, nil
+}
+
+// generateForSubtree generates and caches a new batch of exercises for a
+// randomly chosen topic of the subtree. existing are the subtree's current
+// exercises, used for key-term coverage hints.
+func (a *App) generateForSubtree(topicIDs []string, existing []*storage.Exercise) ([]*storage.Exercise, error) {
+	randomTopicID := topicIDs[mrand.Intn(len(topicIDs))]
+	selectedTopic, err := a.DB.GetTopic(randomTopicID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get selected topic for generation: %w", err)
+	}
+
+	// Build coverage section if key terms exist for this topic
+	coverageSection := ""
+	promptHash := storage.GetPromptHash(selectedTopic.Prompt)
+	keyTerms, ktErr := a.DB.GetTopicKeyTerms(selectedTopic.ID, promptHash)
+	if ktErr == nil && keyTerms != nil && len(keyTerms.Terms) > 0 {
+		var topicExercises []*storage.Exercise
+		for _, ex := range existing {
+			if ex.TopicID == selectedTopic.ID && ex.PromptHash == promptHash {
+				topicExercises = append(topicExercises, ex)
+			}
+		}
+		termCounts := llm.ComputeTermCoverage(topicExercises, keyTerms.Terms)
+		coverageSection = llm.BuildCoverageSection(keyTerms.Terms, termCounts)
+		log.Printf("[EXERCISES] Coverage stats for topic %s: %d terms, %d existing exercises", selectedTopic.ID, len(keyTerms.Terms), len(topicExercises))
+	}
+
+	log.Printf("[EXERCISES] Generating new exercises for randomly selected sub-tree topic %s", randomTopicID)
+	generate := a.generateExercises
+	if generate == nil {
+		generate = func(t *storage.Topic, coverage string) ([]*storage.Exercise, error) {
+			return llm.GenerateAndCacheExercises(t, true, coverage)
+		}
+	}
+	generated, err := generate(selectedTopic, coverageSection)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("[EXERCISES] Generated and cached %d new exercises for topic %s", len(generated), selectedTopic.ID)
+	return generated, nil
 }
 
 func (a *App) handleExercisesComplete(w http.ResponseWriter, r *http.Request) {

@@ -2,14 +2,17 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -35,12 +38,50 @@ func (a *App) handleTTS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hasher := sha256.New()
-	hasher.Write([]byte(req.Text))
-	hash := hex.EncodeToString(hasher.Sum(nil))
-	filename := fmt.Sprintf("audio_cache/%s.mp3", hash)
+	_, statErr := os.Stat(ttsCachePath(req.Text, "de"))
+	wasCached := statErr == nil
 
-	// Check cache first, regardless of API key
+	filename, err := a.ensureTTSAudio(r.Context(), req.Text, "de")
+	if err != nil {
+		if errors.Is(err, errTTSNotConfigured) {
+			http.Error(w, "TTS service is not configured and audio is not cached", http.StatusServiceUnavailable)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if !wasCached {
+		// Try to update any legacy exercises that match this text
+		go a.DB.UpdateLegacyExercisesWithAudio(req.Text, filename)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
+}
+
+var errTTSNotConfigured = errors.New("TTS service is not configured")
+
+// ttsHTTPClient bounds every ElevenLabs call even when the caller's context
+// has no deadline.
+var ttsHTTPClient = &http.Client{Timeout: 60 * time.Second}
+
+// ttsCachePath returns the audio cache file for text spoken in lang. German
+// keeps the historical text-only key so already cached exercise audio stays
+// valid; other languages are namespaced by their code.
+func ttsCachePath(text, lang string) string {
+	key := text
+	if lang != "de" {
+		key = lang + ":" + text
+	}
+	sum := sha256.Sum256([]byte(key))
+	return fmt.Sprintf("audio_cache/%s.mp3", hex.EncodeToString(sum[:]))
+}
+
+// ensureTTSAudio returns the cached audio file for text in lang ("de" or
+// "en"), generating it with ElevenLabs on a cache miss.
+func (a *App) ensureTTSAudio(ctx context.Context, text, lang string) (string, error) {
+	filename := ttsCachePath(text, lang)
 	if _, err := os.Stat(filename); err == nil {
 		log.Printf("Using cached audio file: %s", filename)
 		// Update modification time for LRU eviction logic
@@ -48,49 +89,26 @@ func (a *App) handleTTS(w http.ResponseWriter, r *http.Request) {
 		if err := os.Chtimes(filename, now, now); err != nil {
 			log.Printf("Warning: failed to update times for %s: %v", filename, err)
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
-		return
+		return filename, nil
 	}
-
-	if a.ElevenLabs.APIKey == "" {
-		http.Error(w, "TTS service is not configured and audio is not cached", http.StatusServiceUnavailable)
-		return
-	}
-
-	filename, err := a.generateAndSaveAudio(req.Text, filename)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Try to update any legacy exercises that match this text
-	go a.DB.UpdateLegacyExercisesWithAudio(req.Text, filename)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
+	return a.generateAndSaveAudio(ctx, text, lang, filename)
 }
 
-func (a *App) generateAndSaveAudio(text string, filename string) (string, error) {
+func (a *App) generateAndSaveAudio(ctx context.Context, text, lang, filename string) (string, error) {
 	if a.ElevenLabs.APIKey == "" {
-		return "", fmt.Errorf("TTS service is not configured")
+		return "", errTTSNotConfigured
 	}
 
-	log.Printf("Generating new audio file for text: %s", text)
+	log.Printf("Generating new %s audio file for text: %s", lang, text)
 
-	voiceID, err := a.getVoiceIDByName(a.ElevenLabs.VoiceName)
-	if err != nil {
-		log.Printf("Failed to get voice ID for '%s': %v. Using default voice.", a.ElevenLabs.VoiceName, err)
-		voiceID = "21m00Tcm4TlvDq8ikWAM" // Default voice ID for "Rachel"
-	}
+	voiceID := a.cachedVoiceID(ctx)
 
 	apiURL := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
 
 	requestBody, err := json.Marshal(map[string]interface{}{
 		"text":          text,
 		"model_id":      a.ElevenLabs.ModelID,
-		"language_code": "de",
+		"language_code": lang,
 		"voice_settings": map[string]interface{}{
 			"stability":         0.5,
 			"similarity_boost":  0.75,
@@ -103,8 +121,7 @@ func (a *App) generateAndSaveAudio(text string, filename string) (string, error)
 		return "", fmt.Errorf("failed to create request body for ElevenLabs: %w", err)
 	}
 
-	client := &http.Client{}
-	apiReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(requestBody))
+	apiReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return "", fmt.Errorf("failed to create API request for ElevenLabs: %w", err)
 	}
@@ -113,7 +130,7 @@ func (a *App) generateAndSaveAudio(text string, filename string) (string, error)
 	apiReq.Header.Set("xi-api-key", a.ElevenLabs.APIKey)
 	apiReq.Header.Set("Accept", "audio/mpeg")
 
-	resp, err := client.Do(apiReq)
+	resp, err := ttsHTTPClient.Do(apiReq)
 	if err != nil {
 		return "", fmt.Errorf("failed to call ElevenLabs API: %w", err)
 	}
@@ -125,14 +142,23 @@ func (a *App) generateAndSaveAudio(text string, filename string) (string, error)
 		return "", fmt.Errorf("ElevenLabs API error: %s", resp.Status)
 	}
 
-	outFile, err := os.Create(filename)
+	// Write to a temp file and rename, so a concurrent reader (the podcast
+	// builder fetches clips in parallel) never sees a half-written file.
+	outFile, err := os.CreateTemp(filepath.Dir(filename), ".tts-*.tmp")
 	if err != nil {
 		return "", fmt.Errorf("failed to create audio file: %w", err)
 	}
-	defer outFile.Close()
-
+	tmpName := outFile.Name()
 	_, err = io.Copy(outFile, resp.Body)
+	if closeErr := outFile.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
+		os.Remove(tmpName)
+		return "", fmt.Errorf("failed to save audio file: %w", err)
+	}
+	if err := os.Rename(tmpName, filename); err != nil {
+		os.Remove(tmpName)
 		return "", fmt.Errorf("failed to save audio file: %w", err)
 	}
 
@@ -140,12 +166,27 @@ func (a *App) generateAndSaveAudio(text string, filename string) (string, error)
 	return filename, nil
 }
 
-func (a *App) getVoiceIDByName(voiceName string) (string, error) {
-	client := &http.Client{}
+// cachedVoiceID resolves the configured voice name once and reuses the ID, so
+// a podcast with dozens of new clips does not list voices for each of them.
+func (a *App) cachedVoiceID(ctx context.Context) string {
+	a.voiceMu.Lock()
+	defer a.voiceMu.Unlock()
+	if a.voiceID != "" {
+		return a.voiceID
+	}
+	voiceID, err := a.getVoiceIDByName(ctx, a.ElevenLabs.VoiceName)
+	if err != nil {
+		log.Printf("Failed to get voice ID for '%s': %v. Using default voice.", a.ElevenLabs.VoiceName, err)
+		return "21m00Tcm4TlvDq8ikWAM" // Default voice ID for "Rachel"
+	}
+	a.voiceID = voiceID
+	return voiceID
+}
 
+func (a *App) getVoiceIDByName(ctx context.Context, voiceName string) (string, error) {
 	apiURL := "https://api.elevenlabs.io/v1/voices"
 
-	req, err := http.NewRequest("GET", apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %v", err)
 	}
@@ -153,7 +194,7 @@ func (a *App) getVoiceIDByName(voiceName string) (string, error) {
 	req.Header.Set("xi-api-key", a.ElevenLabs.APIKey)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := client.Do(req)
+	resp, err := ttsHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to call ElevenLabs API: %v", err)
 	}

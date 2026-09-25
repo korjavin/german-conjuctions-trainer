@@ -25,11 +25,30 @@ An interactive German language learning application that helps B1-level students
 - **Database Statistics** (Admin): View total exercises, topics, audio cache size/file count, database size, and per-topic exercise counts from the settings modal.
 - **Legacy Airtable Integration**: Support for Airtable (Deprecated).
 - **Optional Google Login**: Allows users to log in with their Google account to enable the SRS feature and save settings.
+- **Podcast Mode**: Turns the selected topic (with its subtopics) into a listen-only MP3 episode for commuting or walking. See [Podcast Mode](#podcast-mode).
 
 ## Optional Google Login
 This application provides an optional login feature using Google OAuth 2.0. When a user logs in, the application will store their statistics and settings, allowing them to track their progress across sessions. This feature is entirely optional and the application is fully functional without logging in.
 
 For more information on the data we store, please see our [Privacy Policy](privacy.html).
+
+## Podcast Mode
+
+The 🎧 button in the header builds a Glossika-style audio lesson from the selected topic and its subtopics — the same selection as a practice session. The episode plays in the browser (it keeps playing when the dialog is closed) or downloads as an MP3 for any player.
+
+- **25 phrases.** If the subtree has fewer, new exercises are generated first (up to three LLM rounds).
+- **Part 1, listen:** English, then German twice, for every phrase.
+- **Part 2, recall:** the phrases reshuffled; English, then a silence long enough to say the German yourself (1.5× the German clip + 1.5 s), then the German.
+- **Selection:** logged-in users get a weighted pick — phrases with many mistakes come up more often, well-learned ones less often, hidden ones never — and up to five of their weakest phrases are recalled a second time. Guests get a uniform random pick. Listening does not change SRS statistics.
+
+Audio uses the configured ElevenLabs voice; English clips are cached in `audio_cache` next to the German ones. The server stitches the MP3 frames itself (no ffmpeg) and serves episodes from `GET /api/podcast/<id>.mp3` (built by `POST /api/podcast` with `{"topic_id": "..."}`).
+
+Builds are the most expensive request, so they are bounded:
+
+- **Concurrency:** at most 2 builds run at once server-wide; further requests get `429 PODCAST_BUSY` immediately.
+- **Rate:** 10 builds/hour per logged-in user (burst 3), 4/hour per guest IP (burst 2), and 20/hour across all guests (burst 5); over the limit returns `429 PODCAST_RATE_LIMITED` with `Retry-After`.
+- **Deadline:** a build gives up after 4 minutes (`504`), each TTS clip after 45 s; TTS calls are cancelled when the deadline passes or the client disconnects.
+- **Retention:** episodes are kept in `audio_cache/podcasts/` for exactly seven days (`expires_at` in the response). The TTS cache cleanup never touches them. The episode store is capped at 1 GiB; when it is full, new builds get `503 PODCAST_STORAGE_FULL` instead of evicting episodes whose links were already handed out.
 
 ## Prompt Refinement
 
