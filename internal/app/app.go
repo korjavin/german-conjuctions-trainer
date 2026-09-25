@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"sync"
@@ -38,8 +39,9 @@ type App struct {
 	UserInfo           UserInfoFetcher
 	// ttsAudio and generateExercises are seams for the podcast builder;
 	// nil means the real ElevenLabs / LLM implementations.
-	ttsAudio           func(text, lang string) (string, error)
+	ttsAudio           func(ctx context.Context, text, lang string) (string, error)
 	generateExercises  func(topic *storage.Topic, coverageSection string) ([]*storage.Exercise, error)
+	podcast            podcastLimits
 	voiceMu            sync.Mutex
 	voiceID            string
 	clients            map[string]*rateclient
@@ -128,6 +130,7 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 					}
 				}
 				a.mu.Unlock()
+				podcastStoreSize() // prune expired podcast episodes
 			case <-a.shutdown:
 				return // Exit goroutine on shutdown signal
 			}

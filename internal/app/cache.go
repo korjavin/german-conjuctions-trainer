@@ -25,6 +25,11 @@ func (a *App) cleanupAudioCache() {
 		if err != nil {
 			return err
 		}
+		// Podcast episodes have their own retention (podcast_limits.go);
+		// evicting them here would break links before they expire.
+		if info.IsDir() && path == podcastDir {
+			return filepath.SkipDir
+		}
 		if !info.IsDir() {
 			files = append(files, FileInfo{
 				Path:    path,

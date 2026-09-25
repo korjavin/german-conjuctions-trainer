@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -219,8 +220,10 @@ func recallPause(germanClip time.Duration) time.Duration {
 type podcastClipKey struct{ text, lang string }
 
 // fetchPodcastClips resolves and parses the EN and DE audio of every phrase,
-// a few at a time. Clips that fail are left out of the map.
-func (a *App) fetchPodcastClips(phrases []podcastPhrase) (map[podcastClipKey]*mp3Clip, error) {
+// a few at a time. Clips that fail are left out of the map; once ctx is done
+// no new TTS call starts, in-flight ones are cancelled, and ctx's error is
+// returned.
+func (a *App) fetchPodcastClips(ctx context.Context, phrases []podcastPhrase) (map[podcastClipKey]*mp3Clip, error) {
 	tts := a.ttsAudio
 	if tts == nil {
 		tts = a.ensureTTSAudio
@@ -242,10 +245,19 @@ func (a *App) fetchPodcastClips(phrases []podcastPhrase) (map[podcastClipKey]*mp
 		wg.Add(1)
 		go func(k podcastClipKey) {
 			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				return
+			}
+			if ctx.Err() != nil {
+				return
+			}
 
-			path, err := tts(k.text, k.lang)
+			clipCtx, cancel := context.WithTimeout(ctx, podcastTTSTimeout)
+			defer cancel()
+			path, err := tts(clipCtx, k.text, k.lang)
 			var clip *mp3Clip
 			if err == nil {
 				var data []byte
@@ -267,6 +279,9 @@ func (a *App) fetchPodcastClips(phrases []podcastPhrase) (map[podcastClipKey]*mp
 		}(k)
 	}
 	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(clips) == 0 && firstErr != nil {
 		return nil, firstErr
 	}
@@ -319,20 +334,6 @@ func newPodcastID() string {
 	return hex.EncodeToString(buf[:])
 }
 
-// cleanupOldPodcasts removes episodes older than podcastMaxAge.
-func cleanupOldPodcasts() {
-	entries, err := os.ReadDir(podcastDir)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		info, err := e.Info()
-		if err == nil && time.Since(info.ModTime()) > podcastMaxAge {
-			os.Remove(filepath.Join(podcastDir, e.Name()))
-		}
-	}
-}
-
 // podcastFileSlug makes an ASCII file name fragment ("verben-mit-praepositionen")
 // from a topic name, or a download name the client passed back.
 func podcastFileSlug(name string) string {
@@ -353,6 +354,7 @@ type podcastResponse struct {
 	DownloadURL     string          `json:"download_url"`
 	TopicName       string          `json:"topic_name"`
 	DurationSeconds int             `json:"duration_seconds"`
+	ExpiresAt       time.Time       `json:"expires_at"`
 	Phrases         []podcastPhrase `json:"phrases"`
 	RecallRepeats   int             `json:"recall_repeats"`
 }
@@ -378,13 +380,33 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID := getUserIDFromRequest(r)
+	if !a.podcast.tryAcquireSlot() {
+		writeRetryAfter(w, 30*time.Second)
+		writeJSONError(w, http.StatusTooManyRequests, "PODCAST_BUSY", "Other podcasts are being built right now. Please try again in a minute.", "", true)
+		return
+	}
+	defer a.podcast.releaseSlot()
+	if ok, wait := a.podcast.allowBuild(userID, r); !ok {
+		writeRetryAfter(w, wait)
+		writeJSONError(w, http.StatusTooManyRequests, "PODCAST_RATE_LIMITED",
+			fmt.Sprintf("Too many podcasts requested. Please try again in %d minutes.", int(math.Ceil(wait.Minutes()))), "", true)
+		return
+	}
+	if podcastStoreSize()+podcastEstimatedBytes > a.podcast.maxStoreBytes() {
+		writeJSONError(w, http.StatusServiceUnavailable, "PODCAST_STORAGE_FULL", "Podcast storage is full. Please try again later.", "", true)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), a.podcast.timeout())
+	defer cancel()
+
 	topicIDs, exercises, err := a.loadSubtreeExercises(topic)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "EXERCISE_LOOKUP_FAILED", "Failed to get exercises", err.Error(), false)
 		return
 	}
 
-	userID := getUserIDFromRequest(r)
 	var views map[string]*storage.UserExerciseView
 	if userID != "" {
 		views, err = a.DB.GetUserExerciseViews(userID)
@@ -395,7 +417,9 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pool, poolViews := podcastPool(exercises, views)
-	for round := 0; len(pool) < podcastPhraseCount && round < podcastMaxGenerationRounds; round++ {
+	// The LLM call itself cannot be cancelled (it has its own
+	// OPENAI_TIMEOUT_SECONDS); the deadline stops further rounds.
+	for round := 0; len(pool) < podcastPhraseCount && round < podcastMaxGenerationRounds && ctx.Err() == nil; round++ {
 		log.Printf("[PODCAST] Topic %s has %d phrases, generating more (round %d)", topic.ID, len(pool), round+1)
 		generated, genErr := a.generateForSubtree(topicIDs, exercises)
 		if genErr != nil {
@@ -427,11 +451,18 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	rng := mrand.New(mrand.NewSource(time.Now().UnixNano()))
 	phrases := selectPodcastPhrases(pool, poolViews, podcastPhraseCount, rng)
 
-	clips, err := a.fetchPodcastClips(phrases)
+	clips, err := a.fetchPodcastClips(ctx, phrases)
 	if err != nil {
 		status := http.StatusBadGateway
-		if errors.Is(err, errTTSNotConfigured) {
+		switch {
+		case errors.Is(err, errTTSNotConfigured):
 			status = http.StatusServiceUnavailable
+		case errors.Is(err, context.DeadlineExceeded):
+			writeJSONError(w, http.StatusGatewayTimeout, "UPSTREAM_TIMEOUT", "Building the podcast took too long. Please try again.", err.Error(), true)
+			return
+		case errors.Is(err, context.Canceled):
+			log.Printf("[PODCAST] Client went away, build for topic %s cancelled", topic.ID)
+			return
 		}
 		writeJSONError(w, status, "TTS_FAILED", "Failed to synthesize podcast audio.", err.Error(), true)
 		return
@@ -453,7 +484,10 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "PODCAST_SAVE_FAILED", "Failed to save podcast.", err.Error(), false)
 		return
 	}
-	cleanupOldPodcasts()
+	if podcastStoreSize()+int64(len(audio)) > a.podcast.maxStoreBytes() {
+		writeJSONError(w, http.StatusServiceUnavailable, "PODCAST_STORAGE_FULL", "Podcast storage is full. Please try again later.", "", true)
+		return
+	}
 	id := newPodcastID()
 	if err := os.WriteFile(filepath.Join(podcastDir, id+".mp3"), audio, 0o644); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "PODCAST_SAVE_FAILED", "Failed to save podcast.", err.Error(), false)
@@ -475,6 +509,7 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		DownloadURL:     "/api/podcast/" + id + ".mp3?download=" + url.QueryEscape(name),
 		TopicName:       topic.Name,
 		DurationSeconds: int(duration.Round(time.Second).Seconds()),
+		ExpiresAt:       podcastExpiry(time.Now()).UTC(),
 		Phrases:         phrases,
 		RecallRepeats:   repeats,
 	}
@@ -485,7 +520,7 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// handlePodcastFile serves a built episode: GET /api/podcast/<id>.mp3,
+// handlePodcastFile serves a built episode until it expires: GET /api/podcast/<id>.mp3,
 // with ?download=<name> to save it as a file. Served under /api/ so the
 // service worker leaves it alone and Range requests reach http.ServeContent.
 func (a *App) handlePodcastFile(w http.ResponseWriter, r *http.Request) {
@@ -509,12 +544,17 @@ func (a *App) handlePodcastFile(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	remaining := time.Until(podcastExpiry(info.ModTime()))
+	if remaining <= 0 {
+		http.NotFound(w, r)
+		return
+	}
 
 	if name := r.URL.Query().Get("download"); name != "" {
 		name = podcastFileSlug(name) + ".mp3"
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
 	}
 	w.Header().Set("Content-Type", "audio/mpeg")
-	w.Header().Set("Cache-Control", "private, max-age=604800, immutable")
+	w.Header().Set("Cache-Control", fmt.Sprintf("private, max-age=%d, immutable", int(remaining.Seconds())))
 	http.ServeContent(w, r, id+".mp3", info.ModTime(), f)
 }

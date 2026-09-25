@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -309,9 +310,9 @@ func setupPodcastTest(t *testing.T, cached int) (*App, *mockStorage, *int) {
 	}
 
 	clip := fakeMP3(20, true)
-	app.ttsAudio = func(text, lang string) (string, error) {
+	app.ttsAudio = func(_ context.Context, text, lang string) (string, error) {
 		path := filepath.Join("audio_cache", fmt.Sprintf("%x.mp3", []byte(lang+text)))
-		return path, os.WriteFile(path, clip, 0o644)
+		return path, writeFileAtomic(path, clip)
 	}
 	generated := 0
 	app.generateExercises = func(topic *storage.Topic, _ string) ([]*storage.Exercise, error) {
@@ -327,9 +328,26 @@ func setupPodcastTest(t *testing.T, cached int) (*App, *mockStorage, *int) {
 	return app, mock, &generated
 }
 
+// writeFileAtomic lets parallel fake builds share clip files safely.
+func writeFileAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".fake-*")
+	if err != nil {
+		return err
+	}
+	tmp.Write(data)
+	tmp.Close()
+	return os.Rename(tmp.Name(), path)
+}
+
 func postPodcast(t *testing.T, app *App, userID string) (*httptest.ResponseRecorder, podcastResponse) {
 	t.Helper()
+	return postPodcastFrom(t, app, userID, "192.0.2.1:1234")
+}
+
+func postPodcastFrom(t *testing.T, app *App, userID, remoteAddr string) (*httptest.ResponseRecorder, podcastResponse) {
+	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/api/podcast", strings.NewReader(`{"topic_id":"t1"}`))
+	req.RemoteAddr = remoteAddr
 	if userID != "" {
 		req = req.WithContext(context.WithValue(req.Context(), userContextKey, userID))
 	}
@@ -414,5 +432,216 @@ func TestHandlePodcastFileRejectsBadIDs(t *testing.T) {
 		if rr.Code != http.StatusNotFound {
 			t.Errorf("%s: status %d, want 404", path, rr.Code)
 		}
+	}
+}
+
+func TestPodcastRateLimitsRepeatedRequests(t *testing.T) {
+	app, _, _ := setupPodcastTest(t, 30)
+
+	// Guests: podcastGuestBurst builds per IP, then 429 with Retry-After.
+	for i := 0; i < podcastGuestBurst; i++ {
+		if rr, _ := postPodcastFrom(t, app, "", "198.51.100.7:5000"); rr.Code != http.StatusOK {
+			t.Fatalf("guest build %d: status %d: %s", i+1, rr.Code, rr.Body.String())
+		}
+	}
+	rr, _ := postPodcastFrom(t, app, "", "198.51.100.7:5001")
+	if rr.Code != http.StatusTooManyRequests || !strings.Contains(rr.Body.String(), "PODCAST_RATE_LIMITED") {
+		t.Fatalf("guest over limit: status %d: %s", rr.Code, rr.Body.String())
+	}
+	if rr.Header().Get("Retry-After") == "" {
+		t.Error("429 without Retry-After")
+	}
+
+	// A spoofed X-Forwarded-For first hop does not buy a fresh bucket: the
+	// proxy-appended last hop is what counts.
+	req := httptest.NewRequest(http.MethodPost, "/api/podcast", strings.NewReader(`{"topic_id":"t1"}`))
+	req.Header.Set("X-Forwarded-For", "203.0.113.99, 198.51.100.7")
+	spoofed := httptest.NewRecorder()
+	app.handlePodcast(spoofed, req)
+	if spoofed.Code != http.StatusTooManyRequests {
+		t.Errorf("spoofed XFF: status %d, want 429", spoofed.Code)
+	}
+
+	// Another guest still gets through, until the shared guest bucket runs dry.
+	if rr, _ := postPodcastFrom(t, app, "", "198.51.100.8:5000"); rr.Code != http.StatusOK {
+		t.Errorf("other guest: status %d", rr.Code)
+	}
+	guestBuilds := podcastGuestBurst + 1
+	for ip := 9; guestBuilds < podcastAllGuestsBurst; ip++ {
+		if rr, _ := postPodcastFrom(t, app, "", fmt.Sprintf("198.51.100.%d:5000", ip)); rr.Code == http.StatusOK {
+			guestBuilds++
+		}
+	}
+	if rr, _ := postPodcastFrom(t, app, "", "198.51.100.200:5000"); rr.Code != http.StatusTooManyRequests {
+		t.Errorf("fresh IP after all-guests bucket is empty: status %d, want 429", rr.Code)
+	}
+
+	// Logged-in users have their own, larger bucket.
+	for i := 0; i < podcastUserBurst; i++ {
+		if rr, _ := postPodcast(t, app, "user1"); rr.Code != http.StatusOK {
+			t.Fatalf("user build %d: status %d", i+1, rr.Code)
+		}
+	}
+	if rr, _ := postPodcast(t, app, "user1"); rr.Code != http.StatusTooManyRequests {
+		t.Errorf("user over limit: status %d, want 429", rr.Code)
+	}
+	if rr, _ := postPodcast(t, app, "user2"); rr.Code != http.StatusOK {
+		t.Errorf("other user: status %d", rr.Code)
+	}
+}
+
+func TestPodcastConcurrentBuildsAreCapped(t *testing.T) {
+	app, _, _ := setupPodcastTest(t, 30)
+	realTTS := app.ttsAudio
+	release := make(chan struct{})
+	app.ttsAudio = func(ctx context.Context, text, lang string) (string, error) {
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+		return realTTS(ctx, text, lang)
+	}
+
+	codes := make(chan int, podcastMaxConcurrentBuilds)
+	for i := 0; i < podcastMaxConcurrentBuilds; i++ {
+		go func(i int) {
+			rr, _ := postPodcast(t, app, fmt.Sprint("busy", i))
+			codes <- rr.Code
+		}(i)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for app.podcast.inFlight() < podcastMaxConcurrentBuilds {
+		if time.Now().After(deadline) {
+			t.Fatal("builds never took their slots")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	rr, _ := postPodcast(t, app, "late")
+	if rr.Code != http.StatusTooManyRequests || !strings.Contains(rr.Body.String(), "PODCAST_BUSY") {
+		t.Fatalf("build over capacity: status %d: %s", rr.Code, rr.Body.String())
+	}
+
+	close(release)
+	for i := 0; i < podcastMaxConcurrentBuilds; i++ {
+		if code := <-codes; code != http.StatusOK {
+			t.Errorf("blocked build finished with %d", code)
+		}
+	}
+	if n := app.podcast.inFlight(); n != 0 {
+		t.Errorf("%d slots still held after builds finished", n)
+	}
+	// The late user was turned away before spending a token, so a retry works.
+	if rr, _ := postPodcast(t, app, "late"); rr.Code != http.StatusOK {
+		t.Errorf("retry after capacity freed: status %d", rr.Code)
+	}
+}
+
+func TestPodcastStalledTTSReleasesSlot(t *testing.T) {
+	app, _, _ := setupPodcastTest(t, 30)
+	app.podcast.buildTimeout = 100 * time.Millisecond
+	var cancelled int32
+	var mu sync.Mutex
+	app.ttsAudio = func(ctx context.Context, text, lang string) (string, error) {
+		<-ctx.Done() // a stalled upstream
+		mu.Lock()
+		cancelled++
+		mu.Unlock()
+		return "", ctx.Err()
+	}
+
+	started := time.Now()
+	rr, _ := postPodcast(t, app, "user1")
+	if rr.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status %d, want 504: %s", rr.Code, rr.Body.String())
+	}
+	if elapsed := time.Since(started); elapsed > 3*time.Second {
+		t.Errorf("stalled build took %v to give up", elapsed)
+	}
+	if cancelled == 0 {
+		t.Error("TTS calls never saw the cancellation")
+	}
+	if cancelled > podcastTTSConcurrency {
+		t.Errorf("%d TTS calls started after the deadline, want at most %d in flight", cancelled, podcastTTSConcurrency)
+	}
+	if n := app.podcast.inFlight(); n != 0 {
+		t.Errorf("%d slots still held after timeout", n)
+	}
+}
+
+func TestPodcastSurvivesAudioCacheCleanup(t *testing.T) {
+	app, _, _ := setupPodcastTest(t, 30)
+	rr, resp := postPodcast(t, app, "user1")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rr.Code, rr.Body.String())
+	}
+	if time.Until(resp.ExpiresAt) < podcastMaxAge-time.Minute {
+		t.Errorf("expires_at %v, want ~%v from now", resp.ExpiresAt, podcastMaxAge)
+	}
+
+	// Push the TTS cache over its cap with older clips, so LRU eviction runs.
+	old := time.Now().Add(-time.Hour)
+	for i := 0; i < 3; i++ {
+		path := filepath.Join("audio_cache", fmt.Sprintf("filler%d.mp3", i))
+		os.WriteFile(path, make([]byte, 1<<20), 0o644)
+		os.Chtimes(path, old, old)
+	}
+	episode := filepath.Join(podcastDir, resp.ID+".mp3")
+	os.Chtimes(episode, old.Add(-time.Hour), old.Add(-time.Hour)) // oldest file of all
+	app.ElevenLabs.AudioCacheMaxSizeMB = 1
+	app.cleanupAudioCache()
+
+	if _, err := os.Stat(filepath.Join("audio_cache", "filler0.mp3")); err == nil {
+		t.Fatal("cleanup did not run: filler clip still present")
+	}
+	fileRR := httptest.NewRecorder()
+	app.handlePodcastFile(fileRR, httptest.NewRequest(http.MethodGet, resp.URL, nil))
+	if fileRR.Code != http.StatusOK {
+		t.Fatalf("episode after cache cleanup: status %d", fileRR.Code)
+	}
+	cc := fileRR.Header().Get("Cache-Control")
+	if !strings.Contains(cc, "max-age=") || strings.Contains(cc, "max-age=604800") {
+		t.Errorf("Cache-Control %q should carry the remaining lifetime", cc)
+	}
+}
+
+func TestPodcastExpiresAfterRetention(t *testing.T) {
+	app, _, _ := setupPodcastTest(t, 30)
+	rr, resp := postPodcast(t, app, "user1")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d", rr.Code)
+	}
+	episode := filepath.Join(podcastDir, resp.ID+".mp3")
+	expired := time.Now().Add(-podcastMaxAge - time.Minute)
+	os.Chtimes(episode, expired, expired)
+
+	fileRR := httptest.NewRecorder()
+	app.handlePodcastFile(fileRR, httptest.NewRequest(http.MethodGet, resp.URL, nil))
+	if fileRR.Code != http.StatusNotFound {
+		t.Errorf("expired episode: status %d, want 404", fileRR.Code)
+	}
+	podcastStoreSize()
+	if _, err := os.Stat(episode); !os.IsNotExist(err) {
+		t.Error("expired episode was not pruned")
+	}
+}
+
+func TestPodcastRefusedWhenStoreIsFull(t *testing.T) {
+	app, _, generated := setupPodcastTest(t, 4)
+	app.podcast.storeMaxBytes = podcastEstimatedBytes + 1<<20
+	os.MkdirAll(podcastDir, 0o755)
+	os.WriteFile(filepath.Join(podcastDir, "0123456789abcdef0123456789abcdef.mp3"), make([]byte, 2<<20), 0o644)
+
+	rr, _ := postPodcast(t, app, "user1")
+	if rr.Code != http.StatusServiceUnavailable || !strings.Contains(rr.Body.String(), "PODCAST_STORAGE_FULL") {
+		t.Fatalf("status %d: %s", rr.Code, rr.Body.String())
+	}
+	if *generated != 0 {
+		t.Errorf("generated %d exercises for a build that was refused", *generated)
+	}
+	// Existing episodes are kept, not evicted to make room.
+	if _, err := os.Stat(filepath.Join(podcastDir, "0123456789abcdef0123456789abcdef.mp3")); err != nil {
+		t.Error("existing episode was evicted")
 	}
 }
