@@ -128,6 +128,17 @@ export async function fetchExercisesFromAPI(topicId, options = {}) {
     return response.json();
 }
 
+// Builds a podcast episode for a topic subtree. Slow: may generate phrases
+// and synthesize audio server-side.
+export async function generatePodcastAPI(topicId) {
+    const response = await apiFetch('/api/podcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic_id: topicId })
+    });
+    return response.json();
+}
+
 export async function fetchExplainAPI(topic, correctSentence, mistakes) {
     const response = await fetch('/api/explain', {
         method: 'POST',

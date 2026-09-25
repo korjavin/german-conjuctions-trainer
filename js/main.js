@@ -2,6 +2,7 @@ import { state, toggleTopicCollapse, isTopicCollapsed, collapseAllTopics, expand
 import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
 import { initVoice } from './voice.js';
+import { initPodcast } from './podcast.js';
 import {
     initExercise,
     renderExercise,
@@ -225,6 +226,7 @@ dom.closeVersionsBtn.addEventListener('click', () => {
 dom.generateBtn.addEventListener('click', fetchExercises);
 dom.audioToggleBtn.addEventListener('click', handleAudioToggle);
 initVoice();
+initPodcast();
 dom.hintBtn.addEventListener('click', handleHintClick);
 dom.replayAudioBtn.addEventListener('click', handleReplayAudio);
 dom.toggleFavoriteBtn.addEventListener('click', handleToggleFavorite);

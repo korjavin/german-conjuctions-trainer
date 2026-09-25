@@ -36,6 +36,12 @@ type App struct {
 	// inside the oauth2v2 SDK, so this interface seam is the only practical way
 	// to test the handler in isolation.
 	UserInfo           UserInfoFetcher
+	// ttsAudio and generateExercises are seams for the podcast builder;
+	// nil means the real ElevenLabs / LLM implementations.
+	ttsAudio           func(text, lang string) (string, error)
+	generateExercises  func(topic *storage.Topic, coverageSection string) ([]*storage.Exercise, error)
+	voiceMu            sync.Mutex
+	voiceID            string
 	clients            map[string]*rateclient
 	mu                 sync.Mutex
 	shutdown           chan struct{} // Channel to signal goroutine shutdown
@@ -192,6 +198,8 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/api/db/stats", a.withAuth(a.adminOnly(a.handleDatabaseStats)))
 
 	http.HandleFunc("/api/tts", a.handleTTS)
+	http.HandleFunc("/api/podcast", a.withOptionalAuth(a.handlePodcast))
+	http.HandleFunc("/api/podcast/", a.handlePodcastFile)
 	http.Handle("/audio_cache/", http.StripPrefix("/audio_cache/", http.FileServer(http.Dir("./audio_cache"))))
 	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir(getJSDir()))))
 

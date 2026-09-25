@@ -122,6 +122,22 @@ vi.mock('../dom.js', () => {
       // Additional elements can be added here as needed by tests
       constructedSentenceEl: createMockElement('div'),
       answerPrompt: createMockElement('div'),
+
+      // Podcast DOM
+      podcastBtn: createMockElement('button'),
+      podcastModal: createMockDialog(),
+      podcastCloseBtn: createMockElement('button'),
+      podcastTopicName: createMockElement('p'),
+      podcastGenerateBtn: createMockElement('button'),
+      podcastStatus: createMockElement('div'),
+      podcastStatusText: createMockElement('span'),
+      podcastError: createMockElement('p'),
+      podcastResult: createMockElement('div'),
+      podcastAudio: createMockElement('audio'),
+      podcastMeta: createMockElement('span'),
+      podcastDownloadLink: createMockElement('a'),
+      podcastTranscriptSummary: createMockElement('summary'),
+      podcastPhraseList: createMockElement('ol'),
     }
   };
 });
