@@ -137,17 +137,16 @@ func podcastPool(exercises []*storage.Exercise, views map[string]*storage.UserEx
 	return phrases, phraseViews
 }
 
-// onlyFavorites keeps the pool entries the user starred.
-func onlyFavorites(phrases []podcastPhrase, views []*storage.UserExerciseView) ([]podcastPhrase, []*storage.UserExerciseView) {
-	var keptPhrases []podcastPhrase
-	var keptViews []*storage.UserExerciseView
-	for i, view := range views {
-		if view != nil && view.IsFavorite {
-			keptPhrases = append(keptPhrases, phrases[i])
-			keptViews = append(keptViews, view)
+// favoriteExercises keeps the exercises the user starred. It runs before
+// podcastPool so a starred duplicate is not dropped in favor of an unstarred one.
+func favoriteExercises(exercises []*storage.Exercise, views map[string]*storage.UserExerciseView) []*storage.Exercise {
+	var kept []*storage.Exercise
+	for _, ex := range exercises {
+		if view := views[ex.ID]; view != nil && view.IsFavorite {
+			kept = append(kept, ex)
 		}
 	}
-	return keptPhrases, keptViews
+	return kept
 }
 
 // selectPodcastPhrases picks up to n phrases. Without user stats (guests)
@@ -435,9 +434,11 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.FavoritesOnly {
+		exercises = favoriteExercises(exercises, views)
+	}
 	pool, poolViews := podcastPool(exercises, views)
 	if req.FavoritesOnly {
-		pool, poolViews = onlyFavorites(pool, poolViews)
 		if len(pool) == 0 {
 			writeJSONError(w, http.StatusNotFound, "NO_FAVORITES", "No favorite phrases in this topic yet.", "", false)
 			return

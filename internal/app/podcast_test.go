@@ -440,6 +440,9 @@ func postFavoritesPodcast(t *testing.T, app *App, userID string) (*httptest.Resp
 func TestHandlePodcastFavoritesOnly(t *testing.T) {
 	// A small topic would normally trigger generation; favorites mode must not.
 	app, mock, generated := setupPodcastTest(t, 5)
+	// c3 duplicates c4's German sentence and comes after it: still kept.
+	mock.exercises[3].ExerciseJSON = mock.exercises[4].ExerciseJSON
+	mock.exercises[3], mock.exercises[4] = mock.exercises[4], mock.exercises[3]
 	mock.userViews = map[string]*storage.UserExerciseView{
 		"c0": {IsFavorite: true, IsHidden: true},
 		"c1": {IsFavorite: true},
