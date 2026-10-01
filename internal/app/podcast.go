@@ -543,7 +543,7 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.recordPodcastEpisode(&storage.PodcastEpisode{
-		ID: id, UserID: userID, TopicID: topic.ID, Title: topic.Name,
+		ID: id, UserID: userID, TopicID: topic.ID, Title: topic.Name, FavoritesOnly: req.FavoritesOnly,
 		DurationSeconds: int(duration.Round(time.Second).Seconds()), SizeBytes: int64(len(audio)),
 		PhraseCount: len(phrases), CreatedAt: time.Now(),
 	})
