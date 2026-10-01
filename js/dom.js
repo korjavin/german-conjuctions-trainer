@@ -14,6 +14,8 @@ export const dom = {
     podcastModal: document.getElementById('podcast-modal'),
     podcastCloseBtn: document.getElementById('podcast-close-btn'),
     podcastTopicName: document.getElementById('podcast-topic-name'),
+    podcastFavoritesOption: document.getElementById('podcast-favorites-option'),
+    podcastFavoritesOnly: document.getElementById('podcast-favorites-only'),
     podcastGenerateBtn: document.getElementById('podcast-generate-btn'),
     podcastStatus: document.getElementById('podcast-status'),
     podcastStatusText: document.getElementById('podcast-status-text'),

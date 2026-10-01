@@ -128,6 +128,8 @@ vi.mock('../dom.js', () => {
       podcastModal: createMockDialog(),
       podcastCloseBtn: createMockElement('button'),
       podcastTopicName: createMockElement('p'),
+      podcastFavoritesOption: createMockElement('label'),
+      podcastFavoritesOnly: createMockElement('input'),
       podcastGenerateBtn: createMockElement('button'),
       podcastStatus: createMockElement('div'),
       podcastStatusText: createMockElement('span'),
