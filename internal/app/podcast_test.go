@@ -424,6 +424,66 @@ func TestHandlePodcastGeneratesWhenTopicIsSmall(t *testing.T) {
 	}
 }
 
+func postFavoritesPodcast(t *testing.T, app *App, userID string) (*httptest.ResponseRecorder, podcastResponse) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/api/podcast", strings.NewReader(`{"topic_id":"t1","favorites_only":true}`))
+	if userID != "" {
+		req = req.WithContext(context.WithValue(req.Context(), userContextKey, userID))
+	}
+	rr := httptest.NewRecorder()
+	app.handlePodcast(rr, req)
+	var resp podcastResponse
+	json.Unmarshal(rr.Body.Bytes(), &resp)
+	return rr, resp
+}
+
+func TestHandlePodcastFavoritesOnly(t *testing.T) {
+	// A small topic would normally trigger generation; favorites mode must not.
+	app, mock, generated := setupPodcastTest(t, 5)
+	mock.userViews = map[string]*storage.UserExerciseView{
+		"c0": {IsFavorite: true, IsHidden: true},
+		"c1": {IsFavorite: true},
+		"c2": {IsFavorite: true, TotalAttempts: 3, FailedAttempts: 3},
+		"c3": {IsFavorite: true},
+		"c4": {TotalAttempts: 1},
+	}
+
+	rr, resp := postFavoritesPodcast(t, app, "user1")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rr.Code, rr.Body.String())
+	}
+	if *generated != 0 {
+		t.Errorf("generated %d exercises in favorites mode", *generated)
+	}
+	got := map[string]bool{}
+	for _, p := range resp.Phrases {
+		got[p.ExerciseID] = true
+	}
+	if len(resp.Phrases) != 3 || !got["c1"] || !got["c2"] || !got["c3"] {
+		t.Errorf("phrases = %v, want exactly c1, c2, c3", got)
+	}
+	if resp.TopicName != "Konjunktionen (favorites)" {
+		t.Errorf("TopicName = %q", resp.TopicName)
+	}
+	if !strings.Contains(resp.DownloadURL, "konjunktionen-favorites") {
+		t.Errorf("DownloadURL = %q", resp.DownloadURL)
+	}
+
+	mock.userViews = map[string]*storage.UserExerciseView{"c0": {IsFavorite: true, IsHidden: true}}
+	rr, _ = postFavoritesPodcast(t, app, "user1")
+	if rr.Code != http.StatusNotFound || !strings.Contains(rr.Body.String(), "NO_FAVORITES") {
+		t.Errorf("no favorites: status %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr, _ = postFavoritesPodcast(t, app, "")
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("guest: status %d, want 401", rr.Code)
+	}
+	if *generated != 0 {
+		t.Errorf("generated %d exercises in favorites mode", *generated)
+	}
+}
+
 func TestHandlePodcastFileRejectsBadIDs(t *testing.T) {
 	app := &App{}
 	for _, path := range []string{"/api/podcast/../../app.db", "/api/podcast/xyz.mp3", "/api/podcast/"} {

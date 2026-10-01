@@ -137,6 +137,19 @@ func podcastPool(exercises []*storage.Exercise, views map[string]*storage.UserEx
 	return phrases, phraseViews
 }
 
+// onlyFavorites keeps the pool entries the user starred.
+func onlyFavorites(phrases []podcastPhrase, views []*storage.UserExerciseView) ([]podcastPhrase, []*storage.UserExerciseView) {
+	var keptPhrases []podcastPhrase
+	var keptViews []*storage.UserExerciseView
+	for i, view := range views {
+		if view != nil && view.IsFavorite {
+			keptPhrases = append(keptPhrases, phrases[i])
+			keptViews = append(keptViews, view)
+		}
+	}
+	return keptPhrases, keptViews
+}
+
 // selectPodcastPhrases picks up to n phrases. Without user stats (guests)
 // the pick is uniform; otherwise it is weighted by podcastWeight using
 // Efraimidis–Spirakis sampling without replacement.
@@ -359,7 +372,8 @@ type podcastResponse struct {
 	RecallRepeats   int             `json:"recall_repeats"`
 }
 
-// handlePodcast builds an episode: POST /api/podcast {"topic_id": "..."}.
+// handlePodcast builds an episode: POST /api/podcast {"topic_id": "...", "favorites_only": false}.
+// favorites_only (logged-in users) builds it from starred phrases only, with no LLM generation.
 func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "", false)
@@ -368,7 +382,8 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 
 	var req struct {
-		TopicID string `json:"topic_id"`
+		TopicID       string `json:"topic_id"`
+		FavoritesOnly bool   `json:"favorites_only"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.TopicID == "" {
 		writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST_BODY", "topic_id is required", "", false)
@@ -381,6 +396,10 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := getUserIDFromRequest(r)
+	if req.FavoritesOnly && userID == "" {
+		writeJSONError(w, http.StatusUnauthorized, "NOT_AUTHENTICATED", "Log in to build an episode from your favorites.", "", false)
+		return
+	}
 	if !a.podcast.tryAcquireSlot() {
 		writeRetryAfter(w, 30*time.Second)
 		writeJSONError(w, http.StatusTooManyRequests, "PODCAST_BUSY", "Other podcasts are being built right now. Please try again in a minute.", "", true)
@@ -417,9 +436,17 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pool, poolViews := podcastPool(exercises, views)
+	if req.FavoritesOnly {
+		pool, poolViews = onlyFavorites(pool, poolViews)
+		if len(pool) == 0 {
+			writeJSONError(w, http.StatusNotFound, "NO_FAVORITES", "No favorite phrases in this topic yet.", "", false)
+			return
+		}
+	}
 	// The LLM call itself cannot be cancelled (it has its own
-	// OPENAI_TIMEOUT_SECONDS); the deadline stops further rounds.
-	for round := 0; len(pool) < podcastPhraseCount && round < podcastMaxGenerationRounds && ctx.Err() == nil; round++ {
+	// OPENAI_TIMEOUT_SECONDS); the deadline stops further rounds. Generated
+	// phrases are never favorites, so favorites mode skips this.
+	for round := 0; !req.FavoritesOnly && len(pool) < podcastPhraseCount && round < podcastMaxGenerationRounds && ctx.Err() == nil; round++ {
 		log.Printf("[PODCAST] Topic %s has %d phrases, generating more (round %d)", topic.ID, len(pool), round+1)
 		generated, genErr := a.generateForSubtree(topicIDs, exercises)
 		if genErr != nil {
@@ -502,12 +529,16 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	}
 	repeats -= len(phrases)
 
-	name := fmt.Sprintf("podcast-%s-%s", podcastFileSlug(topic.Name), time.Now().Format("2006-01-02"))
+	topicName := topic.Name
+	if req.FavoritesOnly {
+		topicName += " (favorites)"
+	}
+	name := fmt.Sprintf("podcast-%s-%s", podcastFileSlug(topicName), time.Now().Format("2006-01-02"))
 	resp := podcastResponse{
 		ID:              id,
 		URL:             "/api/podcast/" + id + ".mp3",
 		DownloadURL:     "/api/podcast/" + id + ".mp3?download=" + url.QueryEscape(name),
-		TopicName:       topic.Name,
+		TopicName:       topicName,
 		DurationSeconds: int(duration.Round(time.Second).Seconds()),
 		ExpiresAt:       podcastExpiry(time.Now()).UTC(),
 		Phrases:         phrases,
