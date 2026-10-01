@@ -38,10 +38,10 @@ func (a *App) handleTTS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, statErr := os.Stat(ttsCachePath(req.Text, "de"))
+	_, statErr := os.Stat(a.ttsCachePath(req.Text, "de", a.ElevenLabs.Speed))
 	wasCached := statErr == nil
 
-	filename, err := a.ensureTTSAudio(r.Context(), req.Text, "de")
+	filename, err := a.ensureTTSAudio(r.Context(), req.Text, "de", a.ElevenLabs.Speed)
 	if err != nil {
 		if errors.Is(err, errTTSNotConfigured) {
 			http.Error(w, "TTS service is not configured and audio is not cached", http.StatusServiceUnavailable)
@@ -66,12 +66,16 @@ var errTTSNotConfigured = errors.New("TTS service is not configured")
 // has no deadline.
 var ttsHTTPClient = &http.Client{Timeout: 60 * time.Second}
 
-// ttsCachePath returns the audio cache file for text spoken in lang. German
-// keeps the historical text-only key so already cached exercise audio stays
-// valid; other languages are namespaced by their code.
-func ttsCachePath(text, lang string) string {
+// ttsCachePath returns the audio cache file for text spoken in lang at speed.
+// German at the configured speed keeps the historical text-only key so already
+// cached exercise audio stays valid; other languages are namespaced by their
+// code, and any other speed (the slow podcast German) also by the speed.
+func (a *App) ttsCachePath(text, lang string, speed float64) string {
 	key := text
-	if lang != "de" {
+	switch {
+	case speed != a.ElevenLabs.Speed:
+		key = fmt.Sprintf("%s@%g:%s", lang, speed, text)
+	case lang != "de":
 		key = lang + ":" + text
 	}
 	sum := sha256.Sum256([]byte(key))
@@ -79,9 +83,9 @@ func ttsCachePath(text, lang string) string {
 }
 
 // ensureTTSAudio returns the cached audio file for text in lang ("de" or
-// "en"), generating it with ElevenLabs on a cache miss.
-func (a *App) ensureTTSAudio(ctx context.Context, text, lang string) (string, error) {
-	filename := ttsCachePath(text, lang)
+// "en") spoken at speed, generating it with ElevenLabs on a cache miss.
+func (a *App) ensureTTSAudio(ctx context.Context, text, lang string, speed float64) (string, error) {
+	filename := a.ttsCachePath(text, lang, speed)
 	if _, err := os.Stat(filename); err == nil {
 		log.Printf("Using cached audio file: %s", filename)
 		// Update modification time for LRU eviction logic
@@ -91,15 +95,15 @@ func (a *App) ensureTTSAudio(ctx context.Context, text, lang string) (string, er
 		}
 		return filename, nil
 	}
-	return a.generateAndSaveAudio(ctx, text, lang, filename)
+	return a.generateAndSaveAudio(ctx, text, lang, speed, filename)
 }
 
-func (a *App) generateAndSaveAudio(ctx context.Context, text, lang, filename string) (string, error) {
+func (a *App) generateAndSaveAudio(ctx context.Context, text, lang string, speed float64, filename string) (string, error) {
 	if a.ElevenLabs.APIKey == "" {
 		return "", errTTSNotConfigured
 	}
 
-	log.Printf("Generating new %s audio file for text: %s", lang, text)
+	log.Printf("Generating new %s audio file (speed %g) for text: %s", lang, speed, text)
 
 	voiceID := a.cachedVoiceID(ctx)
 
@@ -114,7 +118,7 @@ func (a *App) generateAndSaveAudio(ctx context.Context, text, lang, filename str
 			"similarity_boost":  0.75,
 			"style":             0.0,
 			"use_speaker_boost": true,
-			"speed":             a.ElevenLabs.Speed,
+			"speed":             speed,
 		},
 	})
 	if err != nil {

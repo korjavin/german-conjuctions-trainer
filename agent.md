@@ -47,6 +47,7 @@ A web-based application for learning German grammar. It features interactive wor
 - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed CORS origins (defaults to `*`).
 - `ELEVENLABS_MODEL_ID`: ElevenLabs model to use for TTS (defaults to `eleven_multilingual_v2`).
 - `ELEVENLABS_VOICE_SPEED`: ElevenLabs voice speed for TTS (defaults to `1.0`).
+- `PODCAST_DE_SPEED`: ElevenLabs speed of German podcast clips (defaults to `0.75`, clamped to `0.7`–`1.2`).
 
 ### API Structure:
 ```go
