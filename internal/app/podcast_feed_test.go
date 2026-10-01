@@ -34,7 +34,9 @@ func feedURLFor(t *testing.T, app *App, userID string, regenerate bool) string {
 		method, handler = http.MethodPost, app.handlePodcastFeedRegenerate
 	}
 	rr := httptest.NewRecorder()
-	handler(rr, asUser(httptest.NewRequest(method, "/api/podcast/feed", nil), userID))
+	req := httptest.NewRequest(method, "/api/podcast/feed", nil)
+	req.Header.Set("Content-Type", "application/json")
+	handler(rr, asUser(req, userID))
 	if rr.Code != http.StatusOK {
 		t.Fatalf("feed url status %d: %s", rr.Code, rr.Body.String())
 	}
@@ -143,6 +145,15 @@ func TestPodcastFeedListsOnlyOwnLiveEpisodes(t *testing.T) {
 	items = feedItems(t, getFeed(app, aliceURL))
 	if len(items) != 1 || items[0].GUID.Value != aliceIDs[1] {
 		t.Errorf("after removal feed = %+v, want only %s", items, aliceIDs[1])
+	}
+
+	// A cross-site form POST (no JSON content type) cannot rotate the token.
+	formRR := httptest.NewRecorder()
+	formReq := httptest.NewRequest(http.MethodPost, "/api/podcast/feed/regenerate", strings.NewReader("x=1"))
+	formReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	app.handlePodcastFeedRegenerate(formRR, asUser(formReq, alice.ID))
+	if formRR.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("form POST status %d, want 415", formRR.Code)
 	}
 
 	// Regenerating kills the old URL.

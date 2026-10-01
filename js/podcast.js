@@ -182,6 +182,7 @@ export async function regeneratePodcastFeed() {
     setFeedError('');
     try {
         const data = await regeneratePodcastFeedAPI();
+        feedRequest++; // loads started meanwhile may have read the old token
         dom.podcastFeedUrl.value = data.feed_url || '';
     } catch (error) {
         setFeedError(error.message || 'Failed to regenerate the podcast feed.');

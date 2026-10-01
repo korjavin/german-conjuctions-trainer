@@ -147,7 +147,11 @@ export async function getPodcastFeedAPI() {
 
 // Replaces the feed URL; the old one stops working.
 export async function regeneratePodcastFeedAPI() {
-    const response = await apiFetch('/api/podcast/feed/regenerate', { method: 'POST' });
+    const response = await apiFetch('/api/podcast/feed/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+    });
     return response.json();
 }
 

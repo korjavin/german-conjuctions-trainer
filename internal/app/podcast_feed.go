@@ -77,6 +77,12 @@ func (a *App) handlePodcastFeedRegenerate(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "", false)
 		return
 	}
+	// A cross-site form cannot send a JSON content type without a CORS
+	// preflight, which the server never grants with credentials: CSRF guard.
+	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		writeJSONError(w, http.StatusUnsupportedMediaType, "INVALID_CONTENT_TYPE", "Content-Type must be application/json", "", false)
+		return
+	}
 	if a.PublicBaseURL == "" {
 		writeJSONError(w, http.StatusServiceUnavailable, "PODCAST_FEED_UNAVAILABLE", "The podcast feed is not configured on this server (PUBLIC_BASE_URL).", "", false)
 		return
