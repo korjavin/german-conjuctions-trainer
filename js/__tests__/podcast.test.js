@@ -130,5 +130,17 @@ describe('podcast.js', () => {
             expect(dom.podcastFeedUrl.value).toBe(feedURL);
             expect(dom.podcastFeedRegenerateBtn.disabled).toBe(false);
         });
+
+        it('keeps the regenerated URL when an older load finishes late', async () => {
+            let finishLoad;
+            api.getPodcastFeedAPI.mockReturnValueOnce(new Promise((resolve) => { finishLoad = resolve; }));
+            const load = loadPodcastFeed();
+            window.confirm = vi.fn().mockReturnValueOnce(true);
+            api.regeneratePodcastFeedAPI.mockResolvedValueOnce({ feed_url: feedURL });
+            await regeneratePodcastFeed();
+            finishLoad({ feed_url: 'https://gct.example/podcast/feed/revoked.xml' });
+            await load;
+            expect(dom.podcastFeedUrl.value).toBe(feedURL);
+        });
     });
 });

@@ -141,14 +141,21 @@ function setFeedError(message) {
     dom.podcastFeedError.textContent = message || '';
 }
 
+// Bumped by every feed request so a slow load cannot overwrite the URL a
+// later regenerate returned (the old one is already revoked).
+let feedRequest = 0;
+
 // Fills the Settings feed field; called when Settings opens for a logged-in user.
 export async function loadPodcastFeed() {
     if (!state.isLoggedIn || !dom.podcastFeedUrl) return;
+    const request = ++feedRequest;
     setFeedError('');
     try {
         const data = await getPodcastFeedAPI();
+        if (request !== feedRequest) return;
         dom.podcastFeedUrl.value = data.feed_url || '';
     } catch (error) {
+        if (request !== feedRequest) return;
         dom.podcastFeedUrl.value = '';
         setFeedError(error.message || 'Failed to load the podcast feed.');
     }
@@ -170,6 +177,7 @@ export async function copyPodcastFeed() {
 
 export async function regeneratePodcastFeed() {
     if (!window.confirm('Create a new feed URL? The current URL stops working, and your podcast app must be re-subscribed with the new one.')) return;
+    feedRequest++;
     dom.podcastFeedRegenerateBtn.disabled = true;
     setFeedError('');
     try {
