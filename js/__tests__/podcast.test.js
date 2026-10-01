@@ -37,6 +37,9 @@ describe('podcast.js', () => {
         state.currentTopicId = 'topic1';
         state.topics = [{ id: 'topic1', name: 'Konjunktionen' }];
         dom.podcastGenerateBtn.disabled = false;
+        state.isLoggedIn = false;
+        dom.podcastFavoritesOnly.checked = false;
+        localStorage.clear();
     });
 
     it('formats durations as m:ss', () => {
@@ -60,7 +63,7 @@ describe('podcast.js', () => {
         api.generatePodcastAPI.mockResolvedValueOnce(episode);
         await generatePodcast();
 
-        expect(api.generatePodcastAPI).toHaveBeenCalledWith('topic1');
+        expect(api.generatePodcastAPI).toHaveBeenCalledWith('topic1', false);
         expect(dom.podcastAudio.getAttribute('src') || dom.podcastAudio.src).toContain('/api/podcast/abc.mp3');
         expect(dom.podcastDownloadLink.getAttribute('href')).toBe(episode.download_url);
         expect(dom.podcastResult.classList.contains('hidden')).toBe(false);
@@ -81,6 +84,30 @@ describe('podcast.js', () => {
         expect(dom.podcastError.textContent).toBe('Failed to synthesize podcast audio.');
         expect(dom.podcastError.classList.contains('hidden')).toBe(false);
         expect(dom.podcastGenerateBtn.disabled).toBe(false);
+    });
+
+    it('hides the favorites option from guests and never sends it', async () => {
+        dom.podcastFavoritesOnly.checked = true;
+        openPodcastDialog();
+        expect(dom.podcastFavoritesOption.classList.contains('hidden')).toBe(true);
+
+        dom.podcastFavoritesOnly.checked = true;
+        api.generatePodcastAPI.mockResolvedValueOnce(episode);
+        await generatePodcast();
+        expect(api.generatePodcastAPI).toHaveBeenCalledWith('topic1', false);
+    });
+
+    it('sends favorites_only for a logged-in user and restores the last choice', async () => {
+        state.isLoggedIn = true;
+        localStorage.setItem('podcastFavoritesOnly', 'true');
+        openPodcastDialog();
+        expect(dom.podcastFavoritesOption.classList.contains('hidden')).toBe(false);
+        expect(dom.podcastFavoritesOnly.checked).toBe(true);
+
+        api.generatePodcastAPI.mockRejectedValueOnce(new Error('No favorite phrases in this topic yet.'));
+        await generatePodcast();
+        expect(api.generatePodcastAPI).toHaveBeenCalledWith('topic1', true);
+        expect(dom.podcastError.textContent).toBe('No favorite phrases in this topic yet.');
     });
 
     it('asks for a topic when none is selected', async () => {

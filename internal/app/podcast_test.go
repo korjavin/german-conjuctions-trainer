@@ -3,6 +3,8 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	mrand "math/rand"
@@ -310,7 +312,7 @@ func setupPodcastTest(t *testing.T, cached int) (*App, *mockStorage, *int) {
 	}
 
 	clip := fakeMP3(20, true)
-	app.ttsAudio = func(_ context.Context, text, lang string) (string, error) {
+	app.ttsAudio = func(_ context.Context, text, lang string, _ float64) (string, error) {
 		path := filepath.Join("audio_cache", fmt.Sprintf("%x.mp3", []byte(lang+text)))
 		return path, writeFileAtomic(path, clip)
 	}
@@ -424,6 +426,69 @@ func TestHandlePodcastGeneratesWhenTopicIsSmall(t *testing.T) {
 	}
 }
 
+func postFavoritesPodcast(t *testing.T, app *App, userID string) (*httptest.ResponseRecorder, podcastResponse) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/api/podcast", strings.NewReader(`{"topic_id":"t1","favorites_only":true}`))
+	if userID != "" {
+		req = req.WithContext(context.WithValue(req.Context(), userContextKey, userID))
+	}
+	rr := httptest.NewRecorder()
+	app.handlePodcast(rr, req)
+	var resp podcastResponse
+	json.Unmarshal(rr.Body.Bytes(), &resp)
+	return rr, resp
+}
+
+func TestHandlePodcastFavoritesOnly(t *testing.T) {
+	// A small topic would normally trigger generation; favorites mode must not.
+	app, mock, generated := setupPodcastTest(t, 5)
+	// c3 duplicates c4's German sentence and comes after it: still kept.
+	mock.exercises[3].ExerciseJSON = mock.exercises[4].ExerciseJSON
+	mock.exercises[3], mock.exercises[4] = mock.exercises[4], mock.exercises[3]
+	mock.userViews = map[string]*storage.UserExerciseView{
+		"c0": {IsFavorite: true, IsHidden: true},
+		"c1": {IsFavorite: true},
+		"c2": {IsFavorite: true, TotalAttempts: 3, FailedAttempts: 3},
+		"c3": {IsFavorite: true},
+		"c4": {TotalAttempts: 1},
+	}
+
+	rr, resp := postFavoritesPodcast(t, app, "user1")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rr.Code, rr.Body.String())
+	}
+	if *generated != 0 {
+		t.Errorf("generated %d exercises in favorites mode", *generated)
+	}
+	got := map[string]bool{}
+	for _, p := range resp.Phrases {
+		got[p.ExerciseID] = true
+	}
+	if len(resp.Phrases) != 3 || !got["c1"] || !got["c2"] || !got["c3"] {
+		t.Errorf("phrases = %v, want exactly c1, c2, c3", got)
+	}
+	if resp.TopicName != "Konjunktionen (favorites)" {
+		t.Errorf("TopicName = %q", resp.TopicName)
+	}
+	if !strings.Contains(resp.DownloadURL, "konjunktionen-favorites") {
+		t.Errorf("DownloadURL = %q", resp.DownloadURL)
+	}
+
+	mock.userViews = map[string]*storage.UserExerciseView{"c0": {IsFavorite: true, IsHidden: true}}
+	rr, _ = postFavoritesPodcast(t, app, "user1")
+	if rr.Code != http.StatusNotFound || !strings.Contains(rr.Body.String(), "NO_FAVORITES") {
+		t.Errorf("no favorites: status %d: %s", rr.Code, rr.Body.String())
+	}
+
+	rr, _ = postFavoritesPodcast(t, app, "")
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("guest: status %d, want 401", rr.Code)
+	}
+	if *generated != 0 {
+		t.Errorf("generated %d exercises in favorites mode", *generated)
+	}
+}
+
 func TestHandlePodcastFileRejectsBadIDs(t *testing.T) {
 	app := &App{}
 	for _, path := range []string{"/api/podcast/../../app.db", "/api/podcast/xyz.mp3", "/api/podcast/"} {
@@ -494,13 +559,13 @@ func TestPodcastConcurrentBuildsAreCapped(t *testing.T) {
 	app, _, _ := setupPodcastTest(t, 30)
 	realTTS := app.ttsAudio
 	release := make(chan struct{})
-	app.ttsAudio = func(ctx context.Context, text, lang string) (string, error) {
+	app.ttsAudio = func(ctx context.Context, text, lang string, speed float64) (string, error) {
 		select {
 		case <-release:
 		case <-ctx.Done():
 			return "", ctx.Err()
 		}
-		return realTTS(ctx, text, lang)
+		return realTTS(ctx, text, lang, speed)
 	}
 
 	codes := make(chan int, podcastMaxConcurrentBuilds)
@@ -543,7 +608,7 @@ func TestPodcastStalledTTSReleasesSlot(t *testing.T) {
 	app.podcast.buildTimeout = 100 * time.Millisecond
 	var cancelled int32
 	var mu sync.Mutex
-	app.ttsAudio = func(ctx context.Context, text, lang string) (string, error) {
+	app.ttsAudio = func(ctx context.Context, text, lang string, speed float64) (string, error) {
 		<-ctx.Done() // a stalled upstream
 		mu.Lock()
 		cancelled++
@@ -643,5 +708,60 @@ func TestPodcastRefusedWhenStoreIsFull(t *testing.T) {
 	// Existing episodes are kept, not evicted to make room.
 	if _, err := os.Stat(filepath.Join(podcastDir, "0123456789abcdef0123456789abcdef.mp3")); err != nil {
 		t.Error("existing episode was evicted")
+	}
+}
+
+func TestPodcastSlowGermanUsesSeparateCacheKey(t *testing.T) {
+	app := &App{ElevenLabs: ElevenLabsConfig{Speed: 1.0}}
+
+	if got := app.podcastSpeed("de"); got != 0.75 {
+		t.Errorf("default podcast DE speed %v, want 0.75", got)
+	}
+	if got := app.podcastSpeed("en"); got != 1.0 {
+		t.Errorf("podcast EN speed %v, want configured 1.0", got)
+	}
+	for in, want := range map[float64]float64{0.5: 0.7, 0.9: 0.9, 2: 1.2} {
+		app.ElevenLabs.PodcastDESpeed = in
+		if got := app.podcastSpeed("de"); got != want {
+			t.Errorf("PodcastDESpeed %v -> %v, want %v", in, got, want)
+		}
+	}
+	app.ElevenLabs.PodcastDESpeed = 0
+
+	key := func(k string) string {
+		sum := sha256.Sum256([]byte(k))
+		return "audio_cache/" + hex.EncodeToString(sum[:]) + ".mp3"
+	}
+	// Trainer German and podcast English keep their historical keys.
+	if got := app.ttsCachePath("Hallo", "de", app.ElevenLabs.Speed); got != key("Hallo") {
+		t.Errorf("trainer DE key changed: %s", got)
+	}
+	if got := app.ttsCachePath("Hello", "en", app.podcastSpeed("en")); got != key("en:Hello") {
+		t.Errorf("podcast EN key changed: %s", got)
+	}
+	if got := app.ttsCachePath("Hallo", "de", app.podcastSpeed("de")); got != key("de@0.75:Hallo") {
+		t.Errorf("podcast DE key %s, want the de@0.75 key", got)
+	}
+}
+
+func TestPodcastRequestsSlowGermanOnly(t *testing.T) {
+	app, _, _ := setupPodcastTest(t, 30)
+	realTTS := app.ttsAudio
+	var mu sync.Mutex
+	speeds := map[string]map[float64]bool{"de": {}, "en": {}}
+	app.ttsAudio = func(ctx context.Context, text, lang string, speed float64) (string, error) {
+		mu.Lock()
+		speeds[lang][speed] = true
+		mu.Unlock()
+		return realTTS(ctx, text, lang, speed)
+	}
+	if rr, _ := postPodcast(t, app, "user1"); rr.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rr.Code, rr.Body.String())
+	}
+	if len(speeds["de"]) != 1 || !speeds["de"][0.75] {
+		t.Errorf("DE speeds %v, want only 0.75", speeds["de"])
+	}
+	if len(speeds["en"]) != 1 || !speeds["en"][app.ElevenLabs.Speed] {
+		t.Errorf("EN speeds %v, want only the configured %v", speeds["en"], app.ElevenLabs.Speed)
 	}
 }

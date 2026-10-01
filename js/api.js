@@ -129,12 +129,13 @@ export async function fetchExercisesFromAPI(topicId, options = {}) {
 }
 
 // Builds a podcast episode for a topic subtree. Slow: may generate phrases
-// and synthesize audio server-side.
-export async function generatePodcastAPI(topicId) {
+// and synthesize audio server-side. favoritesOnly builds it from starred
+// phrases only (logged-in users).
+export async function generatePodcastAPI(topicId, favoritesOnly = false) {
     const response = await apiFetch('/api/podcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_id: topicId })
+        body: JSON.stringify({ topic_id: topicId, favorites_only: favoritesOnly })
     });
     return response.json();
 }

@@ -9,6 +9,22 @@ import { handleVoiceToggle } from './voice.js';
 let episode = null; // last built episode: server response + topicId
 let isGenerating = false;
 
+const FAVORITES_ONLY_KEY = 'podcastFavoritesOnly';
+
+function loadFavoritesOnly() {
+    try {
+        return localStorage.getItem(FAVORITES_ONLY_KEY) === 'true';
+    } catch (_) {
+        return false;
+    }
+}
+
+function saveFavoritesOnly(value) {
+    try {
+        localStorage.setItem(FAVORITES_ONLY_KEY, String(value));
+    } catch (_) { /* private mode: the choice just isn't remembered */ }
+}
+
 export function formatDuration(totalSeconds) {
     const seconds = Math.max(0, Math.round(totalSeconds || 0));
     const m = Math.floor(seconds / 60);
@@ -91,6 +107,9 @@ export function openPodcastDialog() {
         dom.podcastMeta.textContent = `Previous episode: ${episode.data.topic_name} · ${describeEpisode(episode.data)}`;
         dom.podcastGenerateBtn.textContent = 'Generate podcast for this topic';
     }
+    // Favorites are per user, so guests don't get the option.
+    dom.podcastFavoritesOption.classList.toggle('hidden', !state.isLoggedIn);
+    dom.podcastFavoritesOnly.checked = state.isLoggedIn && loadFavoritesOnly();
     if (!isGenerating) setError('');
     dom.podcastModal.showModal();
 }
@@ -108,6 +127,7 @@ export async function generatePodcast() {
 
     isGenerating = true;
     const topicId = state.currentTopicId;
+    const favoritesOnly = state.isLoggedIn && dom.podcastFavoritesOnly.checked;
     dom.podcastGenerateBtn.disabled = true;
     setError('');
     const started = Date.now();
@@ -119,7 +139,7 @@ export async function generatePodcast() {
     const timer = setInterval(tick, 1000);
 
     try {
-        const data = await generatePodcastAPI(topicId);
+        const data = await generatePodcastAPI(topicId, favoritesOnly);
         episode = { topicId, data };
         renderEpisode(data);
         updateMediaSession(data);
@@ -198,6 +218,7 @@ export function initPodcast() {
     dom.podcastBtn.addEventListener('click', openPodcastDialog);
     dom.podcastCloseBtn.addEventListener('click', () => dom.podcastModal.close());
     dom.podcastGenerateBtn.addEventListener('click', generatePodcast);
+    dom.podcastFavoritesOnly.addEventListener('change', () => saveFavoritesOnly(dom.podcastFavoritesOnly.checked));
     // The episode's own German would be heard as spoken answers.
     dom.podcastAudio.addEventListener('play', () => {
         if (state.voiceActive) handleVoiceToggle();
