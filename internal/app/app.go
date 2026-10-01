@@ -15,11 +15,11 @@ import (
 
 // App holds all application dependencies.
 type App struct {
-	DB                 storage.Storage
-	SC                 *securecookie.SecureCookie
-	OAuthConfig        *oauth2.Config
-	OAuthState         string
-	AdminGoogleID      string
+	DB            storage.Storage
+	SC            *securecookie.SecureCookie
+	OAuthConfig   *oauth2.Config
+	OAuthState    string
+	AdminGoogleID string
 	// CLIGoogleClientID is the OAuth client ID of the CLI's Google
 	// application. handleCLIExchange refuses to mint app bearer tokens for
 	// Google access tokens whose audience does not match this value.
@@ -36,17 +36,17 @@ type App struct {
 	// inject a fake to avoid hitting Google. The userinfo URL is hardcoded
 	// inside the oauth2v2 SDK, so this interface seam is the only practical way
 	// to test the handler in isolation.
-	UserInfo           UserInfoFetcher
+	UserInfo UserInfoFetcher
 	// ttsAudio and generateExercises are seams for the podcast builder;
 	// nil means the real ElevenLabs / LLM implementations.
-	ttsAudio           func(ctx context.Context, text, lang string) (string, error)
-	generateExercises  func(topic *storage.Topic, coverageSection string) ([]*storage.Exercise, error)
-	podcast            podcastLimits
-	voiceMu            sync.Mutex
-	voiceID            string
-	clients            map[string]*rateclient
-	mu                 sync.Mutex
-	shutdown           chan struct{} // Channel to signal goroutine shutdown
+	ttsAudio          func(ctx context.Context, text, lang string, speed float64) (string, error)
+	generateExercises func(topic *storage.Topic, coverageSection string) ([]*storage.Exercise, error)
+	podcast           podcastLimits
+	voiceMu           sync.Mutex
+	voiceID           string
+	clients           map[string]*rateclient
+	mu                sync.Mutex
+	shutdown          chan struct{} // Channel to signal goroutine shutdown
 	// bgWG tracks per-request fire-and-forget goroutines (currently only the
 	// async TouchCLIToken update in resolveBearer). It lets tests drain
 	// these workers before t.TempDir() cleanup deletes the sqlite database,
@@ -66,10 +66,13 @@ func (a *App) WaitBackground() {
 
 // ElevenLabsConfig holds ElevenLabs TTS configuration.
 type ElevenLabsConfig struct {
-	APIKey              string
-	VoiceName           string
-	ModelID             string
-	Speed               float64
+	APIKey    string
+	VoiceName string
+	ModelID   string
+	Speed     float64
+	// PodcastDESpeed is the speed of German podcast clips; 0 means the
+	// default (see podcastSpeed).
+	PodcastDESpeed      float64
 	AudioCacheMaxSizeMB int64
 }
 

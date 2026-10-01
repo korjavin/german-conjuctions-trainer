@@ -44,8 +44,8 @@ const (
 
 	podcastLeadIn         = 500 * time.Millisecond
 	podcastAfterEnglish   = 700 * time.Millisecond
-	podcastBetweenGerman  = 1000 * time.Millisecond
-	podcastAfterPhrase    = 2000 * time.Millisecond
+	podcastBetweenGerman  = 1500 * time.Millisecond
+	podcastAfterPhrase    = 2500 * time.Millisecond
 	podcastBetweenParts   = 4000 * time.Millisecond
 	podcastRecallFactor   = 1.5
 	podcastRecallExtra    = 1500 * time.Millisecond
@@ -209,6 +209,27 @@ func buildPodcastPlan(phrases []podcastPhrase, rng *mrand.Rand) []podcastStep {
 	return steps
 }
 
+// podcastDefaultDESpeed slows German down for listening practice; ElevenLabs
+// accepts speeds from 0.7 to 1.2.
+const (
+	podcastDefaultDESpeed = 0.75
+	elevenLabsMinSpeed    = 0.7
+	elevenLabsMaxSpeed    = 1.2
+)
+
+// podcastSpeed is the ElevenLabs speed of a podcast clip in lang: German uses
+// the (clamped) podcast speed, English the configured default.
+func (a *App) podcastSpeed(lang string) float64 {
+	if lang != "de" {
+		return a.ElevenLabs.Speed
+	}
+	s := a.ElevenLabs.PodcastDESpeed
+	if s == 0 {
+		s = podcastDefaultDESpeed
+	}
+	return min(max(s, elevenLabsMinSpeed), elevenLabsMaxSpeed)
+}
+
 func recallPause(germanClip time.Duration) time.Duration {
 	d := time.Duration(float64(germanClip)*podcastRecallFactor) + podcastRecallExtra
 	if d < podcastRecallMinPause {
@@ -257,7 +278,7 @@ func (a *App) fetchPodcastClips(ctx context.Context, phrases []podcastPhrase) (m
 
 			clipCtx, cancel := context.WithTimeout(ctx, podcastTTSTimeout)
 			defer cancel()
-			path, err := tts(clipCtx, k.text, k.lang)
+			path, err := tts(clipCtx, k.text, k.lang, a.podcastSpeed(k.lang))
 			var clip *mp3Clip
 			if err == nil {
 				var data []byte

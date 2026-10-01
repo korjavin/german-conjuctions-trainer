@@ -106,6 +106,13 @@ func main() {
 				el.Speed = speed
 			}
 		}
+		if v := os.Getenv("PODCAST_DE_SPEED"); v != "" {
+			speed, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				log.Printf("Invalid PODCAST_DE_SPEED value: '%s'. Using default.", v)
+			}
+			el.PodcastDESpeed = speed // 0 on error = default; clamped in app
+		}
 		log.Printf("ElevenLabs integration enabled with voice: %s, model: %s, speed: %.1f", el.VoiceName, el.ModelID, el.Speed)
 	}
 

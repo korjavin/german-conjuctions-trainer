@@ -41,6 +41,8 @@ The 🎧 button in the header builds a Glossika-style audio lesson from the sele
 - **Part 2, recall:** the phrases reshuffled; English, then a silence long enough to say the German yourself (1.5× the German clip + 1.5 s), then the German.
 - **Selection:** logged-in users get a weighted pick — phrases with many mistakes come up more often, well-learned ones less often, hidden ones never — and up to five of their weakest phrases are recalled a second time. Guests get a uniform random pick. Listening does not change SRS statistics.
 
+German in episodes is spoken slower than in the trainer: ElevenLabs speed `PODCAST_DE_SPEED` (default `0.75`, clamped to `0.7`–`1.2`); English uses `ELEVENLABS_VOICE_SPEED`. Slow German clips are cached under their own key, so trainer audio is unaffected.
+
 Audio uses the configured ElevenLabs voice; English clips are cached in `audio_cache` next to the German ones. The server stitches the MP3 frames itself (no ffmpeg) and serves episodes from `GET /api/podcast/<id>.mp3` (built by `POST /api/podcast` with `{"topic_id": "..."}`).
 
 Builds are the most expensive request, so they are bounded:
