@@ -185,6 +185,18 @@
                 </div>
             </div>
 
+            <!-- Podcast RSS feed (any logged-in user) -->
+            <div id="podcast-feed-section" class="mb-6 hidden">
+                <h3 class="section-title mb-2">Podcast RSS feed</h3>
+                <p class="section-desc mb-2">Add this private URL to your podcast app to get the episodes you build with 🎧. Each episode stays in the feed for 7 days. Keep the URL to yourself.</p>
+                <div class="flex items-center gap-2">
+                    <input type="text" id="podcast-feed-url" class="form-input flex-1 min-w-0" readonly placeholder="Loading…" aria-label="Podcast feed URL">
+                    <button id="podcast-feed-copy-btn" class="btn-secondary btn-sm">Copy</button>
+                    <button id="podcast-feed-regenerate-btn" class="btn-secondary btn-sm">Regenerate</button>
+                </div>
+                <div id="podcast-feed-error" class="text-error text-sm hidden mt-2"></div>
+            </div>
+
             <!-- Topics management (admin only) -->
             <div id="topics-admin-section" class="hidden">
             <div class="db-stats-separator"></div>

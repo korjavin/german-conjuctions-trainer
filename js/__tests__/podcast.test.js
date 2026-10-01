@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { formatDuration, describeEpisode, openPodcastDialog, generatePodcast } from '../podcast.js';
+import { formatDuration, describeEpisode, openPodcastDialog, generatePodcast, loadPodcastFeed, regeneratePodcastFeed } from '../podcast.js';
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 import * as api from '../api.js';
 
 vi.mock('../api.js', () => ({
-    generatePodcastAPI: vi.fn()
+    generatePodcastAPI: vi.fn(),
+    getPodcastFeedAPI: vi.fn(),
+    regeneratePodcastFeedAPI: vi.fn()
 }));
 
 vi.mock('../topics.js', () => ({
@@ -86,5 +88,47 @@ describe('podcast.js', () => {
         await generatePodcast();
         expect(api.generatePodcastAPI).not.toHaveBeenCalled();
         expect(dom.podcastError.textContent).toBe('Please select a topic first.');
+    });
+
+    describe('RSS feed', () => {
+        const feedURL = 'https://gct.example/podcast/feed/0123456789abcdef0123456789abcdef.xml';
+
+        beforeEach(() => {
+            state.isLoggedIn = true;
+            dom.podcastFeedUrl.value = '';
+            dom.podcastFeedRegenerateBtn.disabled = false;
+        });
+
+        it('shows the feed URL for a logged-in user', async () => {
+            api.getPodcastFeedAPI.mockResolvedValueOnce({ feed_url: feedURL });
+            await loadPodcastFeed();
+            expect(dom.podcastFeedUrl.value).toBe(feedURL);
+            expect(dom.podcastFeedError.classList.contains('hidden')).toBe(true);
+        });
+
+        it('does not ask the server for guests', async () => {
+            state.isLoggedIn = false;
+            await loadPodcastFeed();
+            expect(api.getPodcastFeedAPI).not.toHaveBeenCalled();
+        });
+
+        it('shows the error when the feed is unavailable', async () => {
+            api.getPodcastFeedAPI.mockRejectedValueOnce(new Error('The podcast feed is not configured on this server (PUBLIC_BASE_URL).'));
+            await loadPodcastFeed();
+            expect(dom.podcastFeedError.textContent).toContain('not configured');
+            expect(dom.podcastFeedError.classList.contains('hidden')).toBe(false);
+        });
+
+        it('regenerates only after confirmation', async () => {
+            window.confirm = vi.fn().mockReturnValueOnce(false);
+            await regeneratePodcastFeed();
+            expect(api.regeneratePodcastFeedAPI).not.toHaveBeenCalled();
+
+            window.confirm.mockReturnValueOnce(true);
+            api.regeneratePodcastFeedAPI.mockResolvedValueOnce({ feed_url: feedURL });
+            await regeneratePodcastFeed();
+            expect(dom.podcastFeedUrl.value).toBe(feedURL);
+            expect(dom.podcastFeedRegenerateBtn.disabled).toBe(false);
+        });
     });
 });

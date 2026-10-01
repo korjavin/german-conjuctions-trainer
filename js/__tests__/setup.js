@@ -138,6 +138,11 @@ vi.mock('../dom.js', () => {
       podcastDownloadLink: createMockElement('a'),
       podcastTranscriptSummary: createMockElement('summary'),
       podcastPhraseList: createMockElement('ol'),
+      podcastFeedSection: createMockElement('div'),
+      podcastFeedUrl: createMockElement('input'),
+      podcastFeedCopyBtn: createMockElement('button'),
+      podcastFeedRegenerateBtn: createMockElement('button'),
+      podcastFeedError: createMockElement('div'),
     }
   };
 });

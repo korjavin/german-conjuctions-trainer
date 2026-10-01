@@ -50,6 +50,14 @@ Builds are the most expensive request, so they are bounded:
 - **Deadline:** a build gives up after 4 minutes (`504`), each TTS clip after 45 s; TTS calls are cancelled when the deadline passes or the client disconnects.
 - **Retention:** episodes are kept in `audio_cache/podcasts/` for exactly seven days (`expires_at` in the response). The TTS cache cleanup never touches them. The episode store is capped at 1 GiB; when it is full, new builds get `503 PODCAST_STORAGE_FULL` instead of evicting episodes whose links were already handed out.
 
+### Private RSS feed
+
+Logged-in users can listen in a podcast app instead of the browser. **Settings → Podcast RSS feed** shows a private feed URL (`/podcast/feed/<token>.xml`) to add to any podcast app; it lists the episodes that user built in the web UI during the last seven days (the app downloads them before they expire). Guests get no feed.
+
+- The URL itself is the credential (podcast apps send no cookie), so keep it private. **Regenerate** replaces it; the old URL returns `404` and the podcast app must be re-subscribed.
+- The feed is RSS 2.0 with the iTunes namespace; enclosures are absolute URLs to `/api/podcast/<id>.mp3` built from `PUBLIC_BASE_URL` (or the origin of `GOOGLE_REDIRECT_URL`), never from the request's `Host` header. Without either, the feed is disabled.
+- API: `GET /api/podcast/feed` returns `{"feed_url": "..."}` (creating the token on first call); `POST /api/podcast/feed/regenerate` replaces it. Both need a session.
+
 ## Prompt Refinement
 
 This application uses a **Simple Intent** approach combined with optional **Prompt Refinement** to enhance the quality of generated exercises.
@@ -125,6 +133,7 @@ docker run -p 8080:8080 \
 | `GOOGLE_CLIENT_ID` | No | - | Your Google OAuth 2.0 Client ID |
 | `GOOGLE_CLIENT_SECRET` | No | - | Your Google OAuth 2.0 Client Secret |
 | `GOOGLE_REDIRECT_URL` | No | - | Your Google OAuth 2.0 Redirect URL |
+| `PUBLIC_BASE_URL` | No | origin of `GOOGLE_REDIRECT_URL` | Public origin of the server (e.g. `https://gct.example.com`), used for absolute URLs in the podcast RSS feed. If neither is set, the feed is disabled. |
 | `COOKIE_HASH_KEY` | No | Randomly generated | A 64-byte key for HMAC authentication of cookies. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
 | `COOKIE_BLOCK_KEY` | No | Randomly generated | A 32-byte key for AES-256 encryption of cookie data. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
 

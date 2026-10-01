@@ -138,6 +138,16 @@ func main() {
 	if a.CLIGoogleClientID == "" {
 		log.Println("Warning: GCT_GOOGLE_CLIENT_ID not set. CLI login (POST /api/auth/cli-exchange) will be disabled.")
 	}
+	// Absolute URLs in the podcast RSS feed; never derived from the Host header.
+	a.PublicBaseURL = app.PublicOrigin(os.Getenv("PUBLIC_BASE_URL"))
+	if a.PublicBaseURL == "" {
+		a.PublicBaseURL = app.PublicOrigin(redirectURL)
+	}
+	if a.PublicBaseURL == "" {
+		log.Println("Warning: PUBLIC_BASE_URL not set and no GOOGLE_REDIRECT_URL to derive it from. Podcast RSS feed will be disabled.")
+	} else {
+		log.Printf("Public base URL: %s", a.PublicBaseURL)
+	}
 	a.RegisterRoutes()
 
 	port := os.Getenv("PORT")

@@ -78,12 +78,14 @@ export function updateAuthUI() {
         dom.historyBtn.classList.remove('hidden');
         dom.skipRemoveBtn.classList.remove('hidden');
         dom.offlineCacheSection?.classList.remove('hidden');
+        dom.podcastFeedSection?.classList.remove('hidden');
     } else {
         dom.loginBtn.classList.remove('hidden');
         dom.logoutBtn.classList.add('hidden');
         dom.historyBtn.classList.add('hidden');
         dom.skipRemoveBtn.classList.add('hidden');
         dom.offlineCacheSection?.classList.add('hidden');
+        dom.podcastFeedSection?.classList.add('hidden');
     }
 
     // Settings holds offline practice (any logged-in user) plus the

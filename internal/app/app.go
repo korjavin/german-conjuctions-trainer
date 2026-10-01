@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -29,7 +30,10 @@ type App struct {
 	CLIGoogleClientID  string
 	ElevenLabs         ElevenLabsConfig
 	CORSAllowedOrigins string
-	DBPath             string
+	// PublicBaseURL is the server's public origin (https://host), used for
+	// absolute URLs in the podcast RSS feed. Empty disables the feed.
+	PublicBaseURL      string
+	DBPath            string
 	AudioCacheDir      string
 	// UserInfo is the Google userinfo fetcher used by the CLI exchange handler.
 	// Defaulted to a real google.golang.org/api/oauth2/v2 client in New(); tests
@@ -131,6 +135,9 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 				}
 				a.mu.Unlock()
 				podcastStoreSize() // prune expired podcast episodes
+				if err := a.DB.DeletePodcastEpisodesBefore(time.Now().Add(-podcastMaxAge)); err != nil {
+					log.Printf("[PODCAST] Failed to prune expired feed entries: %v", err)
+				}
 			case <-a.shutdown:
 				return // Exit goroutine on shutdown signal
 			}
@@ -203,6 +210,9 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/api/tts", a.handleTTS)
 	http.HandleFunc("/api/podcast", a.withOptionalAuth(a.handlePodcast))
 	http.HandleFunc("/api/podcast/", a.handlePodcastFile)
+	http.HandleFunc("/api/podcast/feed", a.withAuth(a.handlePodcastFeedURL))
+	http.HandleFunc("/api/podcast/feed/regenerate", a.withAuth(a.handlePodcastFeedRegenerate))
+	http.HandleFunc("/podcast/feed/", a.handlePodcastFeed)
 	http.Handle("/audio_cache/", http.StripPrefix("/audio_cache/", http.FileServer(http.Dir("./audio_cache"))))
 	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir(getJSDir()))))
 

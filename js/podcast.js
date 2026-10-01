@@ -2,7 +2,7 @@
 // subtree, to play in the browser or download for a phone's player.
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { generatePodcastAPI } from './api.js';
+import { generatePodcastAPI, getPodcastFeedAPI, regeneratePodcastFeedAPI } from './api.js';
 import { getTopicPath } from './topics.js';
 import { handleVoiceToggle } from './voice.js';
 
@@ -134,7 +134,57 @@ export async function generatePodcast() {
     }
 }
 
+// --- Private RSS feed (Settings) ---
+
+function setFeedError(message) {
+    dom.podcastFeedError.classList.toggle('hidden', !message);
+    dom.podcastFeedError.textContent = message || '';
+}
+
+// Fills the Settings feed field; called when Settings opens for a logged-in user.
+export async function loadPodcastFeed() {
+    if (!state.isLoggedIn || !dom.podcastFeedUrl) return;
+    setFeedError('');
+    try {
+        const data = await getPodcastFeedAPI();
+        dom.podcastFeedUrl.value = data.feed_url || '';
+    } catch (error) {
+        dom.podcastFeedUrl.value = '';
+        setFeedError(error.message || 'Failed to load the podcast feed.');
+    }
+}
+
+export async function copyPodcastFeed() {
+    const value = dom.podcastFeedUrl.value;
+    if (!value) return;
+    try {
+        await navigator.clipboard.writeText(value);
+        dom.podcastFeedCopyBtn.textContent = 'Copied!';
+        setTimeout(() => { dom.podcastFeedCopyBtn.textContent = 'Copy'; }, 1500);
+    } catch (_) {
+        // Clipboard API can fail (insecure context): let the user copy by hand.
+        dom.podcastFeedUrl.focus();
+        dom.podcastFeedUrl.select();
+    }
+}
+
+export async function regeneratePodcastFeed() {
+    if (!window.confirm('Create a new feed URL? The current URL stops working, and your podcast app must be re-subscribed with the new one.')) return;
+    dom.podcastFeedRegenerateBtn.disabled = true;
+    setFeedError('');
+    try {
+        const data = await regeneratePodcastFeedAPI();
+        dom.podcastFeedUrl.value = data.feed_url || '';
+    } catch (error) {
+        setFeedError(error.message || 'Failed to regenerate the podcast feed.');
+    } finally {
+        dom.podcastFeedRegenerateBtn.disabled = false;
+    }
+}
+
 export function initPodcast() {
+    dom.podcastFeedCopyBtn?.addEventListener('click', copyPodcastFeed);
+    dom.podcastFeedRegenerateBtn?.addEventListener('click', regeneratePodcastFeed);
     if (!dom.podcastBtn) return;
     dom.podcastBtn.addEventListener('click', openPodcastDialog);
     dom.podcastCloseBtn.addEventListener('click', () => dom.podcastModal.close());
