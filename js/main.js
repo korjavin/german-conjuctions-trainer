@@ -2,7 +2,7 @@ import { state, toggleTopicCollapse, isTopicCollapsed, collapseAllTopics, expand
 import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
 import { initVoice } from './voice.js';
-import { initPodcast } from './podcast.js';
+import { initPodcast, loadPodcastFeed } from './podcast.js';
 import {
     initExercise,
     renderExercise,
@@ -92,6 +92,7 @@ initSession({ renderExercise });
 dom.settingsBtn.addEventListener('click', () => {
     if (state.isAdmin) loadTopics(); // Refresh topics when opening settings
     renderOfflineCacheStatus();
+    loadPodcastFeed();
     dom.settingsModal.showModal();
     loadDatabaseStats();
     toggleCLIAccessSection();

@@ -68,6 +68,20 @@ type CLIToken struct {
 	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
 }
 
+// PodcastEpisode is a built podcast episode owned by a logged-in user; the
+// rows back the user's private RSS feed. The MP3 itself lives on disk.
+type PodcastEpisode struct {
+	ID              string    `json:"id"`
+	UserID          string    `json:"user_id"`
+	TopicID         string    `json:"topic_id"`
+	Title           string    `json:"title"`
+	FavoritesOnly   bool      `json:"favorites_only"`
+	DurationSeconds int       `json:"duration_seconds"`
+	SizeBytes       int64     `json:"size_bytes"`
+	PhraseCount     int       `json:"phrase_count"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
 type UserStats struct {
 	UserID         string `json:"user_id"`
 	TotalExercises int    `json:"total_exercises"`
@@ -179,6 +193,19 @@ type Storage interface {
 	TouchCLIToken(id string) error
 	RevokeCLIToken(id, userID string) error
 	ListCLITokensForUser(userID string) ([]*CLIToken, error)
+
+	// Podcast episodes and the per-user feed token
+	CreatePodcastEpisode(ep *PodcastEpisode) error
+	// ListPodcastEpisodes returns the user's episodes created after since, newest first.
+	ListPodcastEpisodes(userID string, since time.Time) ([]*PodcastEpisode, error)
+	DeletePodcastEpisodesBefore(before time.Time) error
+	// EnsurePodcastFeedToken stores token for the user unless one exists and
+	// returns the user's token.
+	EnsurePodcastFeedToken(userID, token string) (string, error)
+	// ReplacePodcastFeedToken sets the user's token; the old one stops working.
+	ReplacePodcastFeedToken(userID, token string) error
+	// GetUserIDByPodcastFeedToken returns "" for an unknown token.
+	GetUserIDByPodcastFeedToken(token string) (string, error)
 
 	// Statistics
 	GetDatabaseStats(audioCacheDir, dbFilePath string) (*DatabaseStats, error)

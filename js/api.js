@@ -140,6 +140,22 @@ export async function generatePodcastAPI(topicId, favoritesOnly = false) {
     return response.json();
 }
 
+// The user's private podcast RSS feed URL ({feed_url}); created on first call.
+export async function getPodcastFeedAPI() {
+    const response = await apiFetch('/api/podcast/feed');
+    return response.json();
+}
+
+// Replaces the feed URL; the old one stops working.
+export async function regeneratePodcastFeedAPI() {
+    const response = await apiFetch('/api/podcast/feed/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+    });
+    return response.json();
+}
+
 export async function fetchExplainAPI(topic, correctSentence, mistakes) {
     const response = await fetch('/api/explain', {
         method: 'POST',

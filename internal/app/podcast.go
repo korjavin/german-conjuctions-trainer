@@ -542,6 +542,11 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "PODCAST_SAVE_FAILED", "Failed to save podcast.", err.Error(), false)
 		return
 	}
+	a.recordPodcastEpisode(&storage.PodcastEpisode{
+		ID: id, UserID: userID, TopicID: topic.ID, Title: topic.Name, FavoritesOnly: req.FavoritesOnly,
+		DurationSeconds: int(duration.Round(time.Second).Seconds()), SizeBytes: int64(len(audio)),
+		PhraseCount: len(phrases), CreatedAt: time.Now(),
+	})
 
 	repeats := 0
 	for _, s := range steps {

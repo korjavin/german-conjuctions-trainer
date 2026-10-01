@@ -151,6 +151,23 @@ func (s *SQLiteStorage) runMigrations() error {
 			PRIMARY KEY(user_id, batch_id),
 			FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 		)`,
+		`CREATE TABLE IF NOT EXISTS podcast_episodes (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			topic_id TEXT NOT NULL,
+			title TEXT NOT NULL,
+			favorites_only BOOLEAN NOT NULL DEFAULT 0,
+			duration_seconds INTEGER NOT NULL,
+			size_bytes INTEGER NOT NULL,
+			phrase_count INTEGER NOT NULL,
+			created_at DATETIME NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_podcast_episodes_user ON podcast_episodes(user_id, created_at)`,
+		`CREATE TABLE IF NOT EXISTS podcast_feed_tokens (
+			user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			token TEXT NOT NULL UNIQUE,
+			created_at DATETIME NOT NULL
+		)`,
 	}
 
 	for _, migration := range migrations {
@@ -1598,4 +1615,70 @@ func (s *SQLiteStorage) ListCLITokensForUser(userID string) ([]*CLIToken, error)
 		tokens = append(tokens, &tok)
 	}
 	return tokens, rows.Err()
+}
+
+func (s *SQLiteStorage) CreatePodcastEpisode(ep *PodcastEpisode) error {
+	_, err := s.db.Exec(
+		`INSERT INTO podcast_episodes(id, user_id, topic_id, title, favorites_only, duration_seconds, size_bytes, phrase_count, created_at)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ep.ID, ep.UserID, ep.TopicID, ep.Title, ep.FavoritesOnly, ep.DurationSeconds, ep.SizeBytes, ep.PhraseCount, ep.CreatedAt.UTC(),
+	)
+	return err
+}
+
+func (s *SQLiteStorage) ListPodcastEpisodes(userID string, since time.Time) ([]*PodcastEpisode, error) {
+	rows, err := s.db.Query(
+		`SELECT id, user_id, topic_id, title, favorites_only, duration_seconds, size_bytes, phrase_count, created_at
+		 FROM podcast_episodes WHERE user_id = ? AND created_at > ?
+		 ORDER BY created_at DESC`,
+		userID, since.UTC(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var episodes []*PodcastEpisode
+	for rows.Next() {
+		var ep PodcastEpisode
+		if err := rows.Scan(&ep.ID, &ep.UserID, &ep.TopicID, &ep.Title, &ep.FavoritesOnly, &ep.DurationSeconds, &ep.SizeBytes, &ep.PhraseCount, &ep.CreatedAt); err != nil {
+			return nil, err
+		}
+		episodes = append(episodes, &ep)
+	}
+	return episodes, rows.Err()
+}
+
+func (s *SQLiteStorage) DeletePodcastEpisodesBefore(before time.Time) error {
+	_, err := s.db.Exec(`DELETE FROM podcast_episodes WHERE created_at < ?`, before.UTC())
+	return err
+}
+
+func (s *SQLiteStorage) EnsurePodcastFeedToken(userID, token string) (string, error) {
+	if _, err := s.db.Exec(
+		`INSERT INTO podcast_feed_tokens(user_id, token, created_at) VALUES(?, ?, ?) ON CONFLICT(user_id) DO NOTHING`,
+		userID, token, time.Now().UTC(),
+	); err != nil {
+		return "", err
+	}
+	var existing string
+	err := s.db.QueryRow(`SELECT token FROM podcast_feed_tokens WHERE user_id = ?`, userID).Scan(&existing)
+	return existing, err
+}
+
+func (s *SQLiteStorage) ReplacePodcastFeedToken(userID, token string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO podcast_feed_tokens(user_id, token, created_at) VALUES(?, ?, ?)
+		 ON CONFLICT(user_id) DO UPDATE SET token = excluded.token, created_at = excluded.created_at`,
+		userID, token, time.Now().UTC(),
+	)
+	return err
+}
+
+func (s *SQLiteStorage) GetUserIDByPodcastFeedToken(token string) (string, error) {
+	var userID string
+	err := s.db.QueryRow(`SELECT user_id FROM podcast_feed_tokens WHERE token = ?`, token).Scan(&userID)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return userID, err
 }

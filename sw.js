@@ -9,7 +9,7 @@
  * IMPORTANT: bump CACHE_VERSION whenever a shell file changes, otherwise
  * returning visitors keep the old cached copy until the cache is evicted.
  */
-const CACHE_VERSION = 'gct-shell-v13';
+const CACHE_VERSION = 'gct-shell-v14';
 
 const SHELL_ASSETS = [
     '/',
@@ -90,6 +90,7 @@ self.addEventListener('fetch', (event) => {
 
     if (url.origin === self.location.origin) {
         if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) return;
+        if (url.pathname.startsWith('/podcast/feed/')) return; // private RSS, always fresh
         if (url.pathname === '/sw.js') return;
         event.respondWith(cacheFirst(request));
         return;
