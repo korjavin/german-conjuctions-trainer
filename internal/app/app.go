@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"german-conjunctions-trainer/pkg/storage"
@@ -49,6 +50,7 @@ type App struct {
 	voiceMu           sync.Mutex
 	voiceID           string
 	limits            keyedLimiters // shared per-client rate limits; keys namespaced per endpoint
+	genInFlight       atomic.Int32  // exercise generations running for /api/exercises
 	shutdown          chan struct{} // Channel to signal goroutine shutdown
 	// bgWG tracks per-request fire-and-forget goroutines (currently only the
 	// async TouchCLIToken update in resolveBearer). It lets tests drain
