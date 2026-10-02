@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -227,4 +228,28 @@ func (a *App) getVoiceIDByName(ctx context.Context, voiceName string) (string, e
 	}
 
 	return "", fmt.Errorf("voice '%s' not found", voiceName)
+}
+
+// ttsClipName matches exactly the file names ttsCachePath produces.
+var ttsClipName = regexp.MustCompile(`^[0-9a-f]{64}\.mp3$`)
+
+// handleAudioCache serves cached TTS clips by name only. A plain FileServer
+// would list the directory, including the podcasts/ subtree (whose episode
+// ids are bearer secrets) and in-flight .tts-*.tmp files.
+func (a *App) handleAudioCache(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/audio_cache/")
+	if !ttsClipName.MatchString(name) {
+		http.NotFound(w, r)
+		return
+	}
+	path := filepath.Join("audio_cache", name)
+	if fi, err := os.Stat(path); err != nil || !fi.Mode().IsRegular() {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, path)
 }
