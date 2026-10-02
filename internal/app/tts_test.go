@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -136,5 +137,24 @@ func TestTTSSizeCaps(t *testing.T) {
 	}
 	if rec := ttsCall(app, strings.Repeat("ä", 250), nil); rec.Code != http.StatusOK {
 		t.Fatalf("250 runes: got %d", rec.Code)
+	}
+}
+
+func TestTTSConcurrentRefusalsLeaveNoDebt(t *testing.T) {
+	app, _ := setupTTSTest(t)
+	for i := 0; i < ttsClientBurst; i++ {
+		ttsCall(app, fmt.Sprintf("W%d", i), fromIP("3.3.3.3"))
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ttsCall(app, "Mehr", fromIP("3.3.3.3"))
+		}()
+	}
+	wg.Wait()
+	if tok := app.limits.get("tts:ip:3.3.3.3", ttsClientRate, ttsClientBurst).Tokens(); tok < -0.5 {
+		t.Fatalf("refused requests left the bucket in debt: %.2f tokens", tok)
 	}
 }
