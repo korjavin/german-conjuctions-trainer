@@ -19,7 +19,6 @@ type App struct {
 	DB            storage.Storage
 	SC            *securecookie.SecureCookie
 	OAuthConfig   *oauth2.Config
-	OAuthState    string
 	AdminGoogleID string
 	// CLIGoogleClientID is the OAuth client ID of the CLI's Google
 	// application. handleCLIExchange refuses to mint app bearer tokens for
@@ -106,12 +105,11 @@ func (a *App) getCORSOrigin(r *http.Request) string {
 }
 
 // New creates a new App and starts background maintenance tasks.
-func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.Config, oauthState string, adminGoogleID string, el ElevenLabsConfig, corsAllowedOrigins string, dbPath string, audioCacheDir string) *App {
+func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.Config, adminGoogleID string, el ElevenLabsConfig, corsAllowedOrigins string, dbPath string, audioCacheDir string) *App {
 	a := &App{
 		DB:                 db,
 		SC:                 sc,
 		OAuthConfig:        oauthConfig,
-		OAuthState:         oauthState,
 		AdminGoogleID:      adminGoogleID,
 		ElevenLabs:         el,
 		CORSAllowedOrigins: corsAllowedOrigins,
