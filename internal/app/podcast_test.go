@@ -765,3 +765,34 @@ func TestPodcastRequestsSlowGermanOnly(t *testing.T) {
 		t.Errorf("EN speeds %v, want only the configured %v", speeds["en"], app.ElevenLabs.Speed)
 	}
 }
+
+func TestPodcastConcurrentRejectionsLeaveNoDebt(t *testing.T) {
+	var l podcastLimits
+	guest := func(i int) *http.Request {
+		r := httptest.NewRequest(http.MethodPost, "/api/podcast", nil)
+		r.RemoteAddr = fmt.Sprintf("198.51.100.%d:1234", i)
+		return r
+	}
+	for i := 0; i < podcastAllGuestsBurst; i++ {
+		if ok, _ := l.allowBuild("", guest(i)); !ok {
+			t.Fatalf("guest %d refused before the shared bucket ran dry", i)
+		}
+	}
+	var wg sync.WaitGroup
+	for i := 100; i < 150; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if ok, _ := l.allowBuild("", guest(i)); ok {
+				t.Error("admitted with an empty shared bucket")
+			}
+		}(i)
+	}
+	wg.Wait()
+	if tokens := l.allGuests.Tokens(); tokens < -0.5 {
+		t.Fatalf("rejected builds left the shared guest bucket in debt: %.2f", tokens)
+	}
+	if tokens := l.clients.get("ip:198.51.100.120", podcastGuestRate, podcastGuestBurst).Tokens(); tokens < float64(podcastGuestBurst)-0.5 {
+		t.Fatalf("a rejected build spent a per-IP token: %.2f left", tokens)
+	}
+}

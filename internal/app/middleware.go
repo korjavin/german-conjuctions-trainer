@@ -62,6 +62,35 @@ func (k *keyedLimiters) get(key string, r rate.Limit, burst int) *rate.Limiter {
 	return c.limiter
 }
 
+var reserveMu sync.Mutex
+
+// reserveAll spends one token from every bucket, or none: if any bucket would
+// make the caller wait, every reservation is cancelled and the longest wait
+// is returned. The whole reserve/check/cancel runs under reserveMu: CancelAt
+// only restores a token when no later reservation exists, so overlapping
+// rejections would otherwise leave token debt on shared buckets.
+// ponytail: one global lock around cheap in-memory work; per-bucket locks if it shows up in profiles.
+func reserveAll(limiters ...*rate.Limiter) time.Duration {
+	reserveMu.Lock()
+	defer reserveMu.Unlock()
+	now := time.Now()
+	var wait time.Duration
+	reservations := make([]*rate.Reservation, 0, len(limiters))
+	for _, l := range limiters {
+		res := l.ReserveN(now, 1)
+		reservations = append(reservations, res)
+		if d := res.DelayFrom(now); d > wait {
+			wait = d
+		}
+	}
+	if wait > 0 {
+		for _, res := range reservations {
+			res.CancelAt(now)
+		}
+	}
+	return wait
+}
+
 // clientIP identifies a client by address. Behind the reverse proxy the last
 // X-Forwarded-For hop is the address the proxy saw; earlier hops are
 // client-supplied and would let a guest mint fresh buckets at will.

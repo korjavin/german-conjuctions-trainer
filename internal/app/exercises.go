@@ -9,7 +9,6 @@ import (
 	mrand "math/rand"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -40,41 +39,12 @@ const (
 	explainAllBurst    = 30
 )
 
-var reserveMu sync.Mutex
-
 var (
 	genUserRate       = rate.Every(3 * time.Minute)  // ~20/h sustained per user
 	explainKeyRate    = rate.Every(12 * time.Minute) // per user, or per IP for guests
 	explainGuestsRate = rate.Every(3 * time.Minute)  // all guests together
 	explainAllRate    = rate.Every(time.Minute)      // everyone together
 )
-
-// reserveAll spends one token from every bucket, or none: if any bucket would
-// make the caller wait, every reservation is cancelled and the longest wait
-// is returned. The whole reserve/check/cancel runs under reserveMu: CancelAt
-// only restores a token when no later reservation exists, so overlapping
-// rejections would otherwise leave token debt on shared buckets.
-// ponytail: one global lock around cheap in-memory work; per-bucket locks if it shows up in profiles.
-func reserveAll(limiters ...*rate.Limiter) time.Duration {
-	reserveMu.Lock()
-	defer reserveMu.Unlock()
-	now := time.Now()
-	var wait time.Duration
-	reservations := make([]*rate.Reservation, 0, len(limiters))
-	for _, l := range limiters {
-		res := l.ReserveN(now, 1)
-		reservations = append(reservations, res)
-		if d := res.DelayFrom(now); d > wait {
-			wait = d
-		}
-	}
-	if wait > 0 {
-		for _, res := range reservations {
-			res.CancelAt(now)
-		}
-	}
-	return wait
-}
 
 // tryStartGeneration takes a server-wide generation slot and a token from the
 // user's bucket, or neither; on refusal it returns how long to wait. A true
