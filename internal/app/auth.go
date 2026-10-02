@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -82,13 +83,58 @@ func (googleUserInfoFetcher) Fetch(ctx context.Context, accessToken, expectedAud
 	return &GoogleUserInfo{ID: info.Id, Email: info.Email}, nil
 }
 
+// The oauth-state cookie carries the per-login OAuth state. Its value is a
+// securecookie envelope (signed + encrypted), so a cookie planted from a
+// sibling subdomain cannot match a state the attacker chose, and Exp is
+// verified server-side (MaxAge is only browser retention). The path covers
+// both /auth/google/login and /auth/google/callback.
+const (
+	oauthStateCookie = "oauth-state"
+	oauthStatePath   = "/auth/google/"
+	oauthStateTTL    = 10 * time.Minute
+)
+
+type oauthStateEnvelope struct {
+	State string
+	Exp   int64
+}
+
 func (a *App) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	if a.OAuthConfig == nil {
 		http.Error(w, "Google login is not configured", http.StatusInternalServerError)
 		return
 	}
-	url := a.OAuthConfig.AuthCodeURL(a.OAuthState)
-	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		http.Error(w, "Failed to start login", http.StatusInternalServerError)
+		return
+	}
+	state := base64.RawURLEncoding.EncodeToString(raw)
+	encoded, err := a.SC.Encode(oauthStateCookie, oauthStateEnvelope{State: state, Exp: time.Now().Add(oauthStateTTL).Unix()})
+	if err != nil {
+		log.Printf("Failed to encode oauth state cookie: %v", err)
+		http.Error(w, "Failed to start login", http.StatusInternalServerError)
+		return
+	}
+	c := a.laxCookie(oauthStateCookie, oauthStatePath, encoded)
+	c.MaxAge = int(oauthStateTTL.Seconds())
+	http.SetCookie(w, c)
+	http.Redirect(w, r, a.OAuthConfig.AuthCodeURL(state), http.StatusTemporaryRedirect)
+}
+
+// validLoginState checks the callback's state param against the signed
+// oauth-state cookie. It never logs the expected value.
+func (a *App) validLoginState(r *http.Request) bool {
+	state := r.FormValue("state")
+	c, err := r.Cookie(oauthStateCookie)
+	if state == "" || err != nil {
+		return false
+	}
+	var env oauthStateEnvelope
+	if err := a.SC.Decode(oauthStateCookie, c.Value, &env); err != nil {
+		return false
+	}
+	return time.Now().Unix() < env.Exp && subtle.ConstantTimeCompare([]byte(env.State), []byte(state)) == 1
 }
 
 func (a *App) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
@@ -97,9 +143,12 @@ func (a *App) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state := r.FormValue("state")
-	if state != a.OAuthState {
-		log.Printf("Invalid oauth state, expected '%s', got '%s'\n", a.OAuthState, state)
+	ok := a.validLoginState(r)
+	expired := a.laxCookie(oauthStateCookie, oauthStatePath, "")
+	expired.MaxAge = -1
+	http.SetCookie(w, expired)
+	if !ok {
+		log.Println("Invalid or missing oauth state on Google callback")
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
@@ -175,14 +224,21 @@ func (a *App) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 // behind the TLS-terminating proxy). Lax, not Strict: the OAuth callback is a
 // cross-site top-level navigation.
 func (a *App) sessionCookie(value string, expires time.Time) *http.Cookie {
+	c := a.laxCookie(cookieName, "/", value)
+	c.Expires = expires
+	return c
+}
+
+// laxCookie builds an auth cookie (session or oauth-state) with the shared
+// HttpOnly / Secure / SameSite=Lax attributes described on sessionCookie.
+func (a *App) laxCookie(name, path, value string) *http.Cookie {
 	return &http.Cookie{
-		Name:     cookieName,
+		Name:     name,
 		Value:    value,
 		HttpOnly: true,
 		Secure:   a.OAuthConfig != nil && strings.HasPrefix(a.OAuthConfig.RedirectURL, "https://"),
 		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-		Expires:  expires,
+		Path:     path,
 	}
 }
 

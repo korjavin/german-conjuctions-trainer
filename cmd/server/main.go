@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"log"
 	"net/http"
 	"os"
@@ -34,7 +32,6 @@ func main() {
 
 	// OAuth
 	var oauthConfig *oauth2.Config
-	var oauthState string
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
 	clientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
 	redirectURL := os.Getenv("GOOGLE_REDIRECT_URL")
@@ -42,11 +39,6 @@ func main() {
 	if clientID == "" || clientSecret == "" || redirectURL == "" {
 		log.Println("Warning: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REDIRECT_URL not set. Google login will be disabled.")
 	} else {
-		b := make([]byte, 16)
-		if _, err := rand.Read(b); err != nil {
-			log.Fatalf("Failed to generate OAuth state: %v", err)
-		}
-		oauthState = base64.URLEncoding.EncodeToString(b)
 		oauthConfig = &oauth2.Config{
 			RedirectURL:  redirectURL,
 			ClientID:     clientID,
@@ -131,7 +123,7 @@ func main() {
 
 	db.InitializeDefaultTopics()
 
-	a := app.New(db, sc, oauthConfig, oauthState, adminGoogleID, el, corsAllowedOrigins, dbPath, "./audio_cache")
+	a := app.New(db, sc, oauthConfig, adminGoogleID, el, corsAllowedOrigins, dbPath, "./audio_cache")
 	a.CLIGoogleClientID = os.Getenv("GCT_GOOGLE_CLIENT_ID")
 	if a.CLIGoogleClientID == "" {
 		log.Println("Warning: GCT_GOOGLE_CLIENT_ID not set. CLI login (POST /api/auth/cli-exchange) will be disabled.")
