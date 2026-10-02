@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -44,17 +43,9 @@ var (
 	ttsAllBurst    = 120
 )
 
-// ttsAdmitMu serializes reserve-and-cancel: CancelAt only fully refunds when
-// no later reservation landed on the bucket in between, so concurrent
-// refusals would otherwise leave shared buckets in debt.
-// ponytail: one global lock; the critical section is a few map/limiter ops.
-var ttsAdmitMu sync.Mutex
-
 // allowTTSMiss spends one token from every bucket that applies to r, or none,
 // and otherwise returns how long to wait.
 func (a *App) allowTTSMiss(r *http.Request) (bool, time.Duration) {
-	ttsAdmitMu.Lock()
-	defer ttsAdmitMu.Unlock()
 	buckets := []*rate.Limiter{
 		a.limits.get("tts:"+limitKey(r), ttsClientRate, ttsClientBurst),
 		a.limits.get("tts:all", ttsAllRate, ttsAllBurst),
@@ -62,22 +53,8 @@ func (a *App) allowTTSMiss(r *http.Request) (bool, time.Duration) {
 	if getUserIDFromRequest(r) == "" {
 		buckets = append(buckets, a.limits.get("tts:guests", ttsGuestsRate, ttsGuestsBurst))
 	}
-	now := time.Now()
-	reservations := make([]*rate.Reservation, len(buckets))
-	var wait time.Duration
-	for i, b := range buckets {
-		reservations[i] = b.ReserveN(now, 1)
-		if d := reservations[i].DelayFrom(now); d > wait {
-			wait = d
-		}
-	}
-	if wait > 0 {
-		for _, res := range reservations {
-			res.CancelAt(now)
-		}
-		return false, wait
-	}
-	return true, 0
+	wait := reserveAll(buckets...)
+	return wait == 0, wait
 }
 
 func (a *App) handleTTS(w http.ResponseWriter, r *http.Request) {

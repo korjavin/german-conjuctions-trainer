@@ -108,28 +108,13 @@ func (l *podcastLimits) maxStoreBytes() int64 {
 // wait. Tokens are only spent when every applicable bucket has one.
 func (l *podcastLimits) allowBuild(userID string, r *http.Request) (bool, time.Duration) {
 	l.init()
-	now := time.Now()
-	var reservations []*rate.Reservation
-	if userID != "" {
-		reservations = append(reservations, l.clients.get("user:"+userID, podcastUserRate, podcastUserBurst).ReserveN(now, 1))
-	} else {
-		reservations = append(reservations,
-			l.clients.get("ip:"+clientIP(r), podcastGuestRate, podcastGuestBurst).ReserveN(now, 1),
-			l.allGuests.ReserveN(now, 1))
-	}
 	var wait time.Duration
-	for _, res := range reservations {
-		if d := res.DelayFrom(now); d > wait {
-			wait = d
-		}
+	if userID != "" {
+		wait = reserveAll(l.clients.get("user:"+userID, podcastUserRate, podcastUserBurst))
+	} else {
+		wait = reserveAll(l.clients.get("ip:"+clientIP(r), podcastGuestRate, podcastGuestBurst), l.allGuests)
 	}
-	if wait > 0 {
-		for _, res := range reservations {
-			res.CancelAt(now)
-		}
-		return false, wait
-	}
-	return true, 0
+	return wait == 0, wait
 }
 
 func writeRetryAfter(w http.ResponseWriter, wait time.Duration) {
