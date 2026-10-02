@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
@@ -366,5 +367,50 @@ func TestResolveBearer_EmptyToken(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer   ")
 	if uid, res := app.resolveBearer(req); res != bearerInvalid || uid != "" {
 		t.Errorf("got (%q, %d), want ('', bearerInvalid)", uid, res)
+	}
+}
+
+func TestKeyedLimitersAndClientIP(t *testing.T) {
+	var k keyedLimiters // zero value must be usable
+	a := k.get("tts:ip:1.2.3.4", 1, 1)
+	if k.get("tts:ip:1.2.3.4", 1, 1) != a {
+		t.Fatal("same key returned a different limiter")
+	}
+	if k.get("explain:ip:1.2.3.4", 1, 1) == a {
+		t.Fatal("different key shared a limiter")
+	}
+	k.clients["tts:ip:1.2.3.4"].lastSeen = time.Now().Add(-limiterIdleTime - time.Minute)
+	k.get("other", 1, 1)
+	if _, ok := k.clients["tts:ip:1.2.3.4"]; ok {
+		t.Fatal("idle entry was not evicted")
+	}
+
+	for _, tc := range []struct{ name, xff, remote, want string }{
+		{"no xff", "", "10.0.0.9:1234", "10.0.0.9"},
+		{"last hop wins", "6.6.6.6, 203.0.113.7", "172.18.0.2:80", "203.0.113.7"},
+		{"spoofed first hop ignored", "1.1.1.1, 203.0.113.7", "172.18.0.2:80", "203.0.113.7"},
+		{"garbage last hop", "203.0.113.7, not-an-ip", "172.18.0.2:80", "172.18.0.2"},
+		{"empty last hop", "203.0.113.7,", "172.18.0.2:80", "172.18.0.2"},
+		{"ipv6 hop", "2001:db8::1", "172.18.0.2:80", "2001:db8::1"},
+		{"remote without port", "", "10.0.0.9", "10.0.0.9"},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = tc.remote
+		if tc.xff != "" {
+			r.Header.Set("X-Forwarded-For", tc.xff)
+		}
+		if got := clientIP(r); got != tc.want {
+			t.Errorf("%s: clientIP = %q, want %q", tc.name, got, tc.want)
+		}
+		if got := limitKey(r); got != "ip:"+tc.want {
+			t.Errorf("%s: limitKey = %q", tc.name, got)
+		}
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r = r.WithContext(context.WithValue(r.Context(), userContextKey, "u1"))
+	r.Header.Set("X-Forwarded-For", "203.0.113.7")
+	if got := limitKey(r); got != "user:u1" {
+		t.Errorf("signed-in limitKey = %q, want user:u1", got)
 	}
 }

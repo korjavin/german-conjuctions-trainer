@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -24,13 +25,69 @@ type rateclient struct {
 	lastSeen time.Time
 }
 
-func getClientIP(r *http.Request) string {
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip != "" {
-		return ip
+// limiterIdleTime is how long an unused per-client bucket is kept.
+const limiterIdleTime = 2 * time.Hour
+
+// keyedLimiters is a map of per-client token buckets with idle eviction.
+// The zero value is ready to use. Keys are namespaced by the caller
+// ("tts:"+limitKey(r), "explain:"+limitKey(r), ...), so one instance can
+// serve every endpoint; the rate and burst passed on a key's first get win.
+type keyedLimiters struct {
+	mu      sync.Mutex
+	clients map[string]*rateclient
+}
+
+// get returns the bucket for key, creating it with rate r and burst on first
+// use. Idle entries are evicted on each call.
+// ponytail: O(n) eviction scan per call, fine for a few thousand clients;
+// move eviction to a ticker if the map grows large.
+func (k *keyedLimiters) get(key string, r rate.Limit, burst int) *rate.Limiter {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.clients == nil {
+		k.clients = make(map[string]*rateclient)
 	}
-	ip, _, _ = net.SplitHostPort(r.RemoteAddr)
+	now := time.Now()
+	for id, c := range k.clients {
+		if now.Sub(c.lastSeen) > limiterIdleTime {
+			delete(k.clients, id)
+		}
+	}
+	c, ok := k.clients[key]
+	if !ok {
+		c = &rateclient{limiter: rate.NewLimiter(r, burst)}
+		k.clients[key] = c
+	}
+	c.lastSeen = now
+	return c.limiter
+}
+
+// clientIP identifies a client by address. Behind the reverse proxy the last
+// X-Forwarded-For hop is the address the proxy saw; earlier hops are
+// client-supplied and would let a guest mint fresh buckets at will.
+// ponytail: single Traefik hop; with Cloudflare/multiple proxies, walk only
+// explicitly trusted proxies from the right.
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		hops := strings.Split(xff, ",")
+		if ip := strings.TrimSpace(hops[len(hops)-1]); net.ParseIP(ip) != nil {
+			return ip
+		}
+	}
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
 	return ip
+}
+
+// limitKey is the rate-limit identity of a request: the user when signed in
+// (so it must run inside withAuth/withOptionalAuth), else the client IP.
+func limitKey(r *http.Request) string {
+	if userID := getUserIDFromRequest(r); userID != "" {
+		return "user:" + userID
+	}
+	return "ip:" + clientIP(r)
 }
 
 func getUserIDFromRequest(r *http.Request) string {
