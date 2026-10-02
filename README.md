@@ -136,8 +136,8 @@ docker run -p 8080:8080 \
 | `GOOGLE_CLIENT_SECRET` | No | - | Your Google OAuth 2.0 Client Secret |
 | `GOOGLE_REDIRECT_URL` | No | - | Your Google OAuth 2.0 Redirect URL |
 | `PUBLIC_BASE_URL` | No | origin of `GOOGLE_REDIRECT_URL` | Public origin of the server (e.g. `https://gct.example.com`), used for absolute URLs in the podcast RSS feed. If neither is set, the feed is disabled. |
-| `COOKIE_HASH_KEY` | No | Randomly generated | A 64-byte key for HMAC authentication of cookies. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
-| `COOKIE_BLOCK_KEY` | No | Randomly generated | A 32-byte key for AES-256 encryption of cookie data. If not set, a temporary key is generated at startup. **It is strongly recommended to set this for production.** |
+| `COOKIE_HASH_KEY` | When Google login is enabled | Randomly generated | A 32- or 64-byte key for HMAC authentication of cookies (`openssl rand -hex 32`). Required when Google login is enabled; the server refuses to start without it. Without login, a temporary key is generated at startup. |
+| `COOKIE_BLOCK_KEY` | When Google login is enabled | Randomly generated | A 32-byte key for AES-256 encryption of cookie data (`openssl rand -hex 16`). Required when Google login is enabled; the server refuses to start without it. Without login, a temporary key is generated at startup. |
 
 ## Database Migrations
 

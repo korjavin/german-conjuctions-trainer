@@ -8,11 +8,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/gorilla/securecookie"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/googleapi"
 	oauth2v2 "google.golang.org/api/oauth2/v2"
@@ -147,14 +149,7 @@ func (a *App) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     cookieName,
-		Value:    encoded,
-		HttpOnly: true,
-		Secure:   r.URL.Scheme == "https",
-		Path:     "/",
-		Expires:  time.Now().Add(30 * 24 * time.Hour),
-	})
+	http.SetCookie(w, a.sessionCookie(encoded, time.Now().Add(30*24*time.Hour)))
 
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
@@ -173,14 +168,49 @@ func (a *App) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"logged_in": true, "user_id": userID})
 }
 
-func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
+// sessionCookie builds the user-session cookie for both login and logout so
+// the attributes always match. Secure follows the configured OAuth redirect
+// URL: Google only calls back to it, so an https:// redirect means the site
+// is served over TLS (r.URL.Scheme is never set server-side, and r.TLS is nil
+// behind the TLS-terminating proxy). Lax, not Strict: the OAuth callback is a
+// cross-site top-level navigation.
+func (a *App) sessionCookie(value string, expires time.Time) *http.Cookie {
+	return &http.Cookie{
 		Name:     cookieName,
-		Value:    "",
+		Value:    value,
 		HttpOnly: true,
+		Secure:   a.OAuthConfig != nil && strings.HasPrefix(a.OAuthConfig.RedirectURL, "https://"),
+		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
-		Expires:  time.Unix(0, 0),
-	})
+		Expires:  expires,
+	}
+}
+
+// NewSecureCookie validates the session cookie keys. With Google login
+// enabled the keys are required: random per-process keys would log every
+// user out on each restart. Without login no session cookie is ever issued,
+// so random keys are fine.
+func NewSecureCookie(loginEnabled bool, hashKey, blockKey string) (*securecookie.SecureCookie, error) {
+	if hashKey == "" || blockKey == "" {
+		if loginEnabled {
+			return nil, errors.New("COOKIE_HASH_KEY and COOKIE_BLOCK_KEY are required when Google login is enabled; generate with: openssl rand -hex 32 (hash, 64 chars) / openssl rand -hex 16 (block, 32 chars)")
+		}
+		log.Println("Warning: COOKIE_HASH_KEY or COOKIE_BLOCK_KEY not set. Generating random keys for this session.")
+		return securecookie.New(securecookie.GenerateRandomKey(64), securecookie.GenerateRandomKey(32)), nil
+	}
+	if len(hashKey) != 32 && len(hashKey) != 64 {
+		return nil, fmt.Errorf("COOKIE_HASH_KEY must be 32 or 64 bytes long, got %d bytes", len(hashKey))
+	}
+	if len(blockKey) != 32 {
+		return nil, fmt.Errorf("COOKIE_BLOCK_KEY must be 32 bytes long for AES-256, got %d bytes", len(blockKey))
+	}
+	return securecookie.New([]byte(hashKey), []byte(blockKey)), nil
+}
+
+func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
+	c := a.sessionCookie("", time.Unix(0, 0))
+	c.MaxAge = -1
+	http.SetCookie(w, c)
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 

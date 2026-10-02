@@ -11,7 +11,6 @@ import (
 	"german-conjunctions-trainer/internal/app"
 	"german-conjunctions-trainer/pkg/storage"
 
-	"github.com/gorilla/securecookie"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -64,17 +63,9 @@ func main() {
 	}
 
 	// SecureCookie
-	hashKey := os.Getenv("COOKIE_HASH_KEY")
-	blockKey := os.Getenv("COOKIE_BLOCK_KEY")
-	var sc *securecookie.SecureCookie
-	if hashKey == "" || blockKey == "" {
-		log.Println("Warning: COOKIE_HASH_KEY or COOKIE_BLOCK_KEY not set. Generating random keys for this session.")
-		sc = securecookie.New(securecookie.GenerateRandomKey(64), securecookie.GenerateRandomKey(32))
-	} else {
-		if len(blockKey) != 32 {
-			log.Fatalf("Error: COOKIE_BLOCK_KEY must be 32 bytes long for AES-256. Got %d bytes.", len(blockKey))
-		}
-		sc = securecookie.New([]byte(hashKey), []byte(blockKey))
+	sc, err := app.NewSecureCookie(oauthConfig != nil, os.Getenv("COOKIE_HASH_KEY"), os.Getenv("COOKIE_BLOCK_KEY"))
+	if err != nil {
+		log.Fatalf("Error: %v", err)
 	}
 
 	// ElevenLabs
