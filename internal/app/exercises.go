@@ -2,12 +2,17 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"math"
 	mrand "math/rand"
 	"net/http"
 	"os"
+	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 
 	"german-conjunctions-trainer/pkg/llm"
 	"german-conjunctions-trainer/pkg/storage"
@@ -19,7 +24,76 @@ const (
 	maxExerciseBatchLimit = 200
 	// maxClientBatchIDLen bounds the client-supplied idempotency key.
 	maxClientBatchIDLen = 64
+
+	// One generation is up to 3 paid LLM calls (refinement, provider retries,
+	// quality-gate retry), so generation is bounded per user and server-wide.
+	genMaxConcurrent = 2
+	genUserBurst     = 10
+	// genBusyRetry is the Retry-After when only the server-wide slots refused.
+	genBusyRetry = 30 * time.Second
+
+	// /api/explain is rarely used and open to guests: the body bound also
+	// bounds the prompt (~4k tokens), and the buckets are strict.
+	explainMaxBody     = 16 << 10
+	explainKeyBurst    = 5
+	explainGuestsBurst = 10
+	explainAllBurst    = 30
 )
+
+var reserveMu sync.Mutex
+
+var (
+	genUserRate       = rate.Every(3 * time.Minute)  // ~20/h sustained per user
+	explainKeyRate    = rate.Every(12 * time.Minute) // per user, or per IP for guests
+	explainGuestsRate = rate.Every(3 * time.Minute)  // all guests together
+	explainAllRate    = rate.Every(time.Minute)      // everyone together
+)
+
+// reserveAll spends one token from every bucket, or none: if any bucket would
+// make the caller wait, every reservation is cancelled and the longest wait
+// is returned. The whole reserve/check/cancel runs under reserveMu: CancelAt
+// only restores a token when no later reservation exists, so overlapping
+// rejections would otherwise leave token debt on shared buckets.
+// ponytail: one global lock around cheap in-memory work; per-bucket locks if it shows up in profiles.
+func reserveAll(limiters ...*rate.Limiter) time.Duration {
+	reserveMu.Lock()
+	defer reserveMu.Unlock()
+	now := time.Now()
+	var wait time.Duration
+	reservations := make([]*rate.Reservation, 0, len(limiters))
+	for _, l := range limiters {
+		res := l.ReserveN(now, 1)
+		reservations = append(reservations, res)
+		if d := res.DelayFrom(now); d > wait {
+			wait = d
+		}
+	}
+	if wait > 0 {
+		for _, res := range reservations {
+			res.CancelAt(now)
+		}
+	}
+	return wait
+}
+
+// tryStartGeneration takes a server-wide generation slot and a token from the
+// user's bucket, or neither; on refusal it returns how long to wait. A true
+// result must be paired with a.genInFlight.Add(-1).
+func (a *App) tryStartGeneration(userID string) (bool, time.Duration) {
+	if a.genInFlight.Add(1) > genMaxConcurrent {
+		a.genInFlight.Add(-1)
+		return false, genBusyRetry
+	}
+	if wait := reserveAll(a.limits.get("gen:user:"+userID, genUserRate, genUserBurst)); wait > 0 {
+		a.genInFlight.Add(-1)
+		return false, wait
+	}
+	return true, 0
+}
+
+func retryMinutes(wait time.Duration) int {
+	return max(1, int(math.Ceil(wait.Minutes())))
+}
 
 func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 	requestStartedAt := time.Now()
@@ -83,22 +157,37 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 
 		eligibleExercises := getEligibleExercisesForSRS(allExercises, userViews)
 		if len(eligibleExercises) < 10 && !req.SkipGeneration {
-			newlyGenerated, err := a.generateForSubtree(topicIDs, allExercises)
-			if err != nil {
-				status := http.StatusBadGateway
-				code := "EXERCISE_GENERATION_FAILED"
-				message := "Failed to generate new exercises from AI provider."
-				if llm.IsTimeoutError(err) {
-					status = http.StatusGatewayTimeout
-					code = "UPSTREAM_TIMEOUT"
-					message = "Exercise generation timed out while waiting for AI provider. Please try again."
+			if ok, wait := a.tryStartGeneration(userID); !ok {
+				// Throttled: serve what is eligible, as skip_generation would,
+				// but never hide the cause behind a silent empty batch.
+				log.Printf("[EXERCISES] generation throttled user=%s", userID)
+				if len(eligibleExercises) == 0 {
+					writeRetryAfter(w, wait)
+					writeJSONError(w, http.StatusTooManyRequests, "RATE_LIMITED",
+						fmt.Sprintf("Exercise generation is temporarily limited, try again in %d minutes", retryMinutes(wait)), "", true)
+					return
 				}
-				log.Printf("[EXERCISES] ERROR generating exercises for topic subtree %s user %s: %v", req.TopicID, userID, err)
-				writeJSONError(w, status, code, message, err.Error(), true)
-				return
+			} else {
+				newlyGenerated, err := func() ([]*storage.Exercise, error) {
+					defer a.genInFlight.Add(-1)
+					return a.generateForSubtree(topicIDs, allExercises)
+				}()
+				if err != nil {
+					status := http.StatusBadGateway
+					code := "EXERCISE_GENERATION_FAILED"
+					message := "Failed to generate new exercises from AI provider."
+					if llm.IsTimeoutError(err) {
+						status = http.StatusGatewayTimeout
+						code = "UPSTREAM_TIMEOUT"
+						message = "Exercise generation timed out while waiting for AI provider. Please try again."
+					}
+					log.Printf("[EXERCISES] ERROR generating exercises for topic subtree %s user %s: %v", req.TopicID, userID, err)
+					writeJSONError(w, status, code, message, err.Error(), true)
+					return
+				}
+				allExercises = append(allExercises, newlyGenerated...)
+				eligibleExercises = getEligibleExercisesForSRS(allExercises, userViews)
 			}
-			allExercises = append(allExercises, newlyGenerated...)
-			eligibleExercises = getEligibleExercisesForSRS(allExercises, userViews)
 		}
 
 		if len(eligibleExercises) > limit {
@@ -414,8 +503,26 @@ func (a *App) handleExplain(w http.ResponseWriter, r *http.Request) {
 		Mistakes        []string `json:"mistakes"`
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, explainMaxBody)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "REQUEST_TOO_LARGE", "Request body too large", "", false)
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST_BODY", "Invalid request body", err.Error(), false)
+		return
+	}
+
+	limiters := []*rate.Limiter{a.limits.get("explain:"+limitKey(r), explainKeyRate, explainKeyBurst)}
+	if getUserIDFromRequest(r) == "" {
+		limiters = append(limiters, a.limits.get("explain:guests", explainGuestsRate, explainGuestsBurst))
+	}
+	limiters = append(limiters, a.limits.get("explain:all", explainAllRate, explainAllBurst))
+	if wait := reserveAll(limiters...); wait > 0 {
+		writeRetryAfter(w, wait)
+		writeJSONError(w, http.StatusTooManyRequests, "RATE_LIMITED",
+			fmt.Sprintf("Too many explanation requests, try again in %d minutes", retryMinutes(wait)), "", true)
 		return
 	}
 
