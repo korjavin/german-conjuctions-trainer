@@ -15,11 +15,69 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
+
+	"golang.org/x/time/rate"
 )
 
 type TTSRequest struct {
 	Text string `json:"text"`
+}
+
+// ttsMaxTextRunes caps text synthesized on a cache miss; legitimate payloads
+// are single words or one exercise sentence.
+// ponytail: the bead's default 300, not yet checked against the longest
+// correct_german_sentence in the prod DB; raise it if prod has longer ones.
+const ttsMaxTextRunes = 300
+
+// TTS miss admission buckets: per client, all guests together, server-wide.
+// ponytail: request count x rune cap, not character-weighted; no singleflight
+// for identical concurrent misses. Tune from ElevenLabs usage logs.
+var (
+	ttsClientRate  = rate.Every(3 * time.Second)
+	ttsClientBurst = 40
+	ttsGuestsRate  = rate.Every(2 * time.Second)
+	ttsGuestsBurst = 60
+	ttsAllRate     = rate.Every(time.Second)
+	ttsAllBurst    = 120
+)
+
+// ttsAdmitMu serializes reserve-and-cancel: CancelAt only fully refunds when
+// no later reservation landed on the bucket in between, so concurrent
+// refusals would otherwise leave shared buckets in debt.
+// ponytail: one global lock; the critical section is a few map/limiter ops.
+var ttsAdmitMu sync.Mutex
+
+// allowTTSMiss spends one token from every bucket that applies to r, or none,
+// and otherwise returns how long to wait.
+func (a *App) allowTTSMiss(r *http.Request) (bool, time.Duration) {
+	ttsAdmitMu.Lock()
+	defer ttsAdmitMu.Unlock()
+	buckets := []*rate.Limiter{
+		a.limits.get("tts:"+limitKey(r), ttsClientRate, ttsClientBurst),
+		a.limits.get("tts:all", ttsAllRate, ttsAllBurst),
+	}
+	if getUserIDFromRequest(r) == "" {
+		buckets = append(buckets, a.limits.get("tts:guests", ttsGuestsRate, ttsGuestsBurst))
+	}
+	now := time.Now()
+	reservations := make([]*rate.Reservation, len(buckets))
+	var wait time.Duration
+	for i, b := range buckets {
+		reservations[i] = b.ReserveN(now, 1)
+		if d := reservations[i].DelayFrom(now); d > wait {
+			wait = d
+		}
+	}
+	if wait > 0 {
+		for _, res := range reservations {
+			res.CancelAt(now)
+		}
+		return false, wait
+	}
+	return true, 0
 }
 
 func (a *App) handleTTS(w http.ResponseWriter, r *http.Request) {
@@ -28,8 +86,14 @@ func (a *App) handleTTS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var req TTSRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -39,24 +103,52 @@ func (a *App) handleTTS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, statErr := os.Stat(a.ttsCachePath(req.Text, "de", a.ElevenLabs.Speed))
-	wasCached := statErr == nil
-
-	filename, err := a.ensureTTSAudio(r.Context(), req.Text, "de", a.ElevenLabs.Speed)
-	if err != nil {
-		if errors.Is(err, errTTSNotConfigured) {
-			http.Error(w, "TTS service is not configured and audio is not cached", http.StatusServiceUnavailable)
-			return
+	// A cache hit costs nothing: served with no length cap and no token, so
+	// already-cached long audio keeps working.
+	filename := a.ttsCachePath(req.Text, "de", a.ElevenLabs.Speed)
+	if _, err := os.Stat(filename); err == nil {
+		now := time.Now() // LRU eviction is by modification time
+		if err := os.Chtimes(filename, now, now); err != nil {
+			log.Printf("Warning: failed to update times for %s: %v", filename, err)
 		}
+		writeTTSFilePath(w, filename)
+		return
+	}
+
+	if utf8.RuneCountInString(req.Text) > ttsMaxTextRunes {
+		http.Error(w, "Text too long", http.StatusRequestEntityTooLarge)
+		return
+	}
+	if a.ElevenLabs.APIKey == "" {
+		http.Error(w, "TTS service is not configured and audio is not cached", http.StatusServiceUnavailable)
+		return
+	}
+	if ok, wait := a.allowTTSMiss(r); !ok {
+		log.Printf("[TTS] rate limited %s", limitKey(r))
+		writeRetryAfter(w, wait)
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+
+	// generateAndSaveAudio, not ensureTTSAudio: the token admitted above pays
+	// for this call even if the LRU evicted the file since the stat.
+	filename, err := a.generateAndSaveAudio(r.Context(), req.Text, "de", a.ElevenLabs.Speed, filename)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if !wasCached {
-		// Try to update any legacy exercises that match this text
-		go a.DB.UpdateLegacyExercisesWithAudio(req.Text, filename)
-	}
+	// Try to update any legacy exercises that match this text
+	a.bgWG.Add(1)
+	go func() {
+		defer a.bgWG.Done()
+		a.DB.UpdateLegacyExercisesWithAudio(req.Text, filename)
+	}()
 
+	writeTTSFilePath(w, filename)
+}
+
+func writeTTSFilePath(w http.ResponseWriter, filename string) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"filePath": filename})
 }
