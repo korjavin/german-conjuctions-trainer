@@ -13,7 +13,7 @@ func (a *App) handleGetLastRefinedPrompt(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
 
 	response := map[string]string{
@@ -31,7 +31,7 @@ func (a *App) handleGetLastGenerationDebug(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(llm.GetLastGenerationDebugInfo()); err != nil {

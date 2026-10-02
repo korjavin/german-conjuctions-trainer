@@ -189,8 +189,8 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/api/topics", a.withOptionalAuth(a.handleTopics))
 	http.HandleFunc("/api/topics/", a.withOptionalAuth(a.handleTopicByID))
 	http.HandleFunc("/api/versions/", a.withOptionalAuth(a.handleVersions))
-	http.HandleFunc("/api/last-refined-prompt", a.handleGetLastRefinedPrompt)
-	http.HandleFunc("/api/last-generation-debug", a.handleGetLastGenerationDebug)
+	http.HandleFunc("/api/last-refined-prompt", a.withAuth(a.adminOnly(a.handleGetLastRefinedPrompt)))
+	http.HandleFunc("/api/last-generation-debug", a.withAuth(a.adminOnly(a.handleGetLastGenerationDebug)))
 
 	http.HandleFunc("/auth/google/login", a.handleGoogleLogin)
 	http.HandleFunc("/auth/google/callback", a.handleGoogleCallback)
@@ -216,7 +216,7 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/api/podcast/feed", a.withAuth(a.handlePodcastFeedURL))
 	http.HandleFunc("/api/podcast/feed/regenerate", a.withAuth(a.handlePodcastFeedRegenerate))
 	http.HandleFunc("/podcast/feed/", a.handlePodcastFeed)
-	http.Handle("/audio_cache/", http.StripPrefix("/audio_cache/", http.FileServer(http.Dir("./audio_cache"))))
+	http.HandleFunc("/audio_cache/", a.handleAudioCache)
 	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir(getJSDir()))))
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
