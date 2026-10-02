@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"german-conjunctions-trainer/pkg/llm"
 	"german-conjunctions-trainer/pkg/storage"
 )
@@ -221,4 +223,25 @@ func TestExplainLimits(t *testing.T) {
 		}
 		assertRateLimited(t, postExplain(app, "", "203.0.113.99, 198.51.100.7", explainBody(1, 10)))
 	})
+}
+
+func TestReserveAllConcurrentRejectionsLeaveNoDebt(t *testing.T) {
+	l := rate.NewLimiter(rate.Every(time.Hour), 1)
+	if reserveAll(l) != 0 {
+		t.Fatal("first token refused")
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if reserveAll(l) == 0 {
+				t.Error("admitted with an empty bucket")
+			}
+		}()
+	}
+	wg.Wait()
+	if tokens := l.Tokens(); tokens < -0.5 {
+		t.Fatalf("rejected reservations left token debt: %.2f", tokens)
+	}
 }

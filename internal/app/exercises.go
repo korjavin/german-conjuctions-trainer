@@ -9,6 +9,7 @@ import (
 	mrand "math/rand"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -39,6 +40,8 @@ const (
 	explainAllBurst    = 30
 )
 
+var reserveMu sync.Mutex
+
 var (
 	genUserRate       = rate.Every(3 * time.Minute)  // ~20/h sustained per user
 	explainKeyRate    = rate.Every(12 * time.Minute) // per user, or per IP for guests
@@ -48,8 +51,13 @@ var (
 
 // reserveAll spends one token from every bucket, or none: if any bucket would
 // make the caller wait, every reservation is cancelled and the longest wait
-// is returned.
+// is returned. The whole reserve/check/cancel runs under reserveMu: CancelAt
+// only restores a token when no later reservation exists, so overlapping
+// rejections would otherwise leave token debt on shared buckets.
+// ponytail: one global lock around cheap in-memory work; per-bucket locks if it shows up in profiles.
 func reserveAll(limiters ...*rate.Limiter) time.Duration {
+	reserveMu.Lock()
+	defer reserveMu.Unlock()
 	now := time.Now()
 	var wait time.Duration
 	reservations := make([]*rate.Reservation, 0, len(limiters))
