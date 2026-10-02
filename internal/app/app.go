@@ -201,7 +201,7 @@ func (a *App) RegisterRoutes() {
 
 	http.HandleFunc("/api/db/stats", a.withAuth(a.adminOnly(a.handleDatabaseStats)))
 
-	http.HandleFunc("/api/tts", a.handleTTS)
+	http.HandleFunc("/api/tts", a.withOptionalAuth(a.handleTTS))
 	http.HandleFunc("/api/podcast", a.withOptionalAuth(a.handlePodcast))
 	http.HandleFunc("/api/podcast/", a.handlePodcastFile)
 	http.HandleFunc("/api/podcast/feed", a.withAuth(a.handlePodcastFeedURL))
