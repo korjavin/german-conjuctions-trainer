@@ -2,12 +2,10 @@ package app
 
 import (
 	"math"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -40,13 +38,12 @@ const (
 )
 
 var (
-	podcastUserRate        = rate.Every(6 * time.Minute) // 10 per hour
-	podcastUserBurst       = 3
-	podcastGuestRate       = rate.Every(15 * time.Minute) // 4 per hour per IP
-	podcastGuestBurst      = 2
-	podcastAllGuestsRate   = rate.Every(3 * time.Minute) // 20 per hour for all guests
-	podcastAllGuestsBurst  = 5
-	podcastLimiterIdleTime = 2 * time.Hour
+	podcastUserRate       = rate.Every(6 * time.Minute) // 10 per hour
+	podcastUserBurst      = 3
+	podcastGuestRate      = rate.Every(15 * time.Minute) // 4 per hour per IP
+	podcastGuestBurst     = 2
+	podcastAllGuestsRate  = rate.Every(3 * time.Minute) // 20 per hour for all guests
+	podcastAllGuestsBurst = 5
 )
 
 // podcastLimits holds the build guards. Zero-value overrides mean defaults;
@@ -56,8 +53,7 @@ type podcastLimits struct {
 	slots     chan struct{}
 	allGuests *rate.Limiter
 
-	mu      sync.Mutex
-	clients map[string]*rateclient
+	clients keyedLimiters
 
 	maxConcurrent int
 	buildTimeout  time.Duration
@@ -72,7 +68,6 @@ func (l *podcastLimits) init() {
 		}
 		l.slots = make(chan struct{}, n)
 		l.allGuests = rate.NewLimiter(podcastAllGuestsRate, podcastAllGuestsBurst)
-		l.clients = make(map[string]*rateclient)
 	})
 }
 
@@ -109,24 +104,6 @@ func (l *podcastLimits) maxStoreBytes() int64 {
 	return podcastStoreMaxBytes
 }
 
-func (l *podcastLimits) clientLimiter(key string, r rate.Limit, burst int) *rate.Limiter {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	now := time.Now()
-	for k, c := range l.clients {
-		if now.Sub(c.lastSeen) > podcastLimiterIdleTime {
-			delete(l.clients, k)
-		}
-	}
-	c, ok := l.clients[key]
-	if !ok {
-		c = &rateclient{limiter: rate.NewLimiter(r, burst)}
-		l.clients[key] = c
-	}
-	c.lastSeen = now
-	return c.limiter
-}
-
 // allowBuild spends one build token for the client, or returns how long to
 // wait. Tokens are only spent when every applicable bucket has one.
 func (l *podcastLimits) allowBuild(userID string, r *http.Request) (bool, time.Duration) {
@@ -134,10 +111,10 @@ func (l *podcastLimits) allowBuild(userID string, r *http.Request) (bool, time.D
 	now := time.Now()
 	var reservations []*rate.Reservation
 	if userID != "" {
-		reservations = append(reservations, l.clientLimiter("user:"+userID, podcastUserRate, podcastUserBurst).ReserveN(now, 1))
+		reservations = append(reservations, l.clients.get("user:"+userID, podcastUserRate, podcastUserBurst).ReserveN(now, 1))
 	} else {
 		reservations = append(reservations,
-			l.clientLimiter("ip:"+podcastClientIP(r), podcastGuestRate, podcastGuestBurst).ReserveN(now, 1),
+			l.clients.get("ip:"+clientIP(r), podcastGuestRate, podcastGuestBurst).ReserveN(now, 1),
 			l.allGuests.ReserveN(now, 1))
 	}
 	var wait time.Duration
@@ -153,23 +130,6 @@ func (l *podcastLimits) allowBuild(userID string, r *http.Request) (bool, time.D
 		return false, wait
 	}
 	return true, 0
-}
-
-// podcastClientIP identifies a guest. Behind the reverse proxy the last
-// X-Forwarded-For hop is the address the proxy saw; earlier hops are
-// client-supplied and would let a guest mint fresh buckets at will.
-func podcastClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		hops := strings.Split(xff, ",")
-		if ip := strings.TrimSpace(hops[len(hops)-1]); ip != "" {
-			return ip
-		}
-	}
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
 }
 
 func writeRetryAfter(w http.ResponseWriter, wait time.Duration) {

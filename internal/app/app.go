@@ -32,9 +32,9 @@ type App struct {
 	CORSAllowedOrigins string
 	// PublicBaseURL is the server's public origin (https://host), used for
 	// absolute URLs in the podcast RSS feed. Empty disables the feed.
-	PublicBaseURL      string
-	DBPath            string
-	AudioCacheDir      string
+	PublicBaseURL string
+	DBPath        string
+	AudioCacheDir string
 	// UserInfo is the Google userinfo fetcher used by the CLI exchange handler.
 	// Defaulted to a real google.golang.org/api/oauth2/v2 client in New(); tests
 	// inject a fake to avoid hitting Google. The userinfo URL is hardcoded
@@ -48,8 +48,7 @@ type App struct {
 	podcast           podcastLimits
 	voiceMu           sync.Mutex
 	voiceID           string
-	clients           map[string]*rateclient
-	mu                sync.Mutex
+	limits            keyedLimiters // shared per-client rate limits; keys namespaced per endpoint
 	shutdown          chan struct{} // Channel to signal goroutine shutdown
 	// bgWG tracks per-request fire-and-forget goroutines (currently only the
 	// async TouchCLIToken update in resolveBearer). It lets tests drain
@@ -119,24 +118,16 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 		DBPath:             dbPath,
 		AudioCacheDir:      audioCacheDir,
 		UserInfo:           googleUserInfoFetcher{},
-		clients:            make(map[string]*rateclient),
 		shutdown:           make(chan struct{}),
 	}
 
-	// Cleanup stale rate-limit client entries every 10 minutes.
+	// Prune expired podcast episodes every 10 minutes.
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				a.mu.Lock()
-				for ip, c := range a.clients {
-					if time.Since(c.lastSeen) > 30*time.Minute {
-						delete(a.clients, ip)
-					}
-				}
-				a.mu.Unlock()
 				podcastStoreSize() // prune expired podcast episodes
 				if err := a.DB.DeletePodcastEpisodesBefore(time.Now().Add(-podcastMaxAge)); err != nil {
 					log.Printf("[PODCAST] Failed to prune expired feed entries: %v", err)
