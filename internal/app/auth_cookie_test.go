@@ -55,11 +55,12 @@ func TestNewSecureCookieKeys(t *testing.T) {
 	}{
 		{"login without keys", true, "", "", "openssl rand"},
 		{"login missing block", true, hash64, "", "required when Google login"},
-		{"short hash key", true, strings.Repeat("h", 31), block, "COOKIE_HASH_KEY must be 32 or 64 bytes"},
+		{"short hash key", true, strings.Repeat("h", 31), block, "COOKIE_HASH_KEY must be at least 32 bytes"},
 		{"bad block key", false, hash64, "short", "COOKIE_BLOCK_KEY must be 32 bytes"},
 		{"no login, no keys", false, "", "", ""},
 		{"64-byte hash", true, hash64, block, ""},
 		{"32-byte hash", true, hash32, block, ""},
+		{"44-byte hash", true, strings.Repeat("h", 44), block, ""},
 	} {
 		sc, err := NewSecureCookie(tc.login, tc.hash, tc.block)
 		if tc.wantErrSubstr == "" {

@@ -254,8 +254,10 @@ func NewSecureCookie(loginEnabled bool, hashKey, blockKey string) (*securecookie
 		log.Println("Warning: COOKIE_HASH_KEY or COOKIE_BLOCK_KEY not set. Generating random keys for this session.")
 		return securecookie.New(securecookie.GenerateRandomKey(64), securecookie.GenerateRandomKey(32)), nil
 	}
-	if len(hashKey) != 32 && len(hashKey) != 64 {
-		return nil, fmt.Errorf("COOKIE_HASH_KEY must be 32 or 64 bytes long, got %d bytes", len(hashKey))
+	// HMAC-SHA256 accepts any key length; existing deployments use e.g. a
+	// 44-char base64 string as raw bytes, so only enforce a minimum.
+	if len(hashKey) < 32 {
+		return nil, fmt.Errorf("COOKIE_HASH_KEY must be at least 32 bytes long, got %d bytes", len(hashKey))
 	}
 	if len(blockKey) != 32 {
 		return nil, fmt.Errorf("COOKIE_BLOCK_KEY must be 32 bytes long for AES-256, got %d bytes", len(blockKey))
