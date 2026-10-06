@@ -69,17 +69,22 @@ type CLIToken struct {
 }
 
 // PodcastEpisode is a built podcast episode owned by a logged-in user; the
-// rows back the user's private RSS feed. The MP3 itself lives on disk.
+// rows back the user's private RSS feed and the list of saved episodes in the
+// podcast dialog. The MP3 itself lives on disk.
 type PodcastEpisode struct {
-	ID              string    `json:"id"`
-	UserID          string    `json:"user_id"`
-	TopicID         string    `json:"topic_id"`
-	Title           string    `json:"title"`
-	FavoritesOnly   bool      `json:"favorites_only"`
-	DurationSeconds int       `json:"duration_seconds"`
-	SizeBytes       int64     `json:"size_bytes"`
-	PhraseCount     int       `json:"phrase_count"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID              string `json:"id"`
+	UserID          string `json:"user_id"`
+	TopicID         string `json:"topic_id"`
+	Title           string `json:"title"`
+	FavoritesOnly   bool   `json:"favorites_only"`
+	DurationSeconds int    `json:"duration_seconds"`
+	SizeBytes       int64  `json:"size_bytes"`
+	PhraseCount     int    `json:"phrase_count"`
+	// PhrasesJSON is the episode's phrase list as the build returned it;
+	// empty for episodes recorded before it was stored.
+	PhrasesJSON   string    `json:"phrases_json"`
+	RecallRepeats int       `json:"recall_repeats"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type UserStats struct {

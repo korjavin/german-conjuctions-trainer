@@ -52,6 +52,12 @@ Builds are the most expensive request, so they are bounded:
 - **Deadline:** a build gives up after 4 minutes (`504`), each TTS clip after 45 s; TTS calls are cancelled when the deadline passes or the client disconnects.
 - **Retention:** episodes are kept in `audio_cache/podcasts/` for exactly seven days (`expires_at` in the response). The TTS cache cleanup never touches them. The episode store is capped at 1 GiB; when it is full, new builds get `503 PODCAST_STORAGE_FULL` instead of evicting episodes whose links were already handed out.
 
+### Saved episodes
+
+For logged-in users the podcast dialog lists the episodes they built during the last seven days, ready to play: opening the dialog puts the newest episode of the selected topic in the player (unless something is already playing), and **Generate a new episode** is only needed for a fresh pick. Any episode in the list plays with one click, including those of other topics. Guests' episodes are not listed.
+
+- API: `GET /api/podcast/episodes` (needs a session) returns `{"episodes": [...]}`, newest first, each shaped like the `POST /api/podcast` response (plus `topic_id`, `created_at`, `phrase_count`). Episodes whose file is gone or past retention are left out. The phrase list is stored with the episode; episodes built before that have an empty `phrases` list.
+
 ### Private RSS feed
 
 Logged-in users can listen in a podcast app instead of the browser. **Settings → Podcast RSS feed** shows a private feed URL (`/podcast/feed/<token>.xml`) to add to any podcast app; it lists the episodes that user built in the web UI during the last seven days (the app downloads them before they expire). Guests get no feed.

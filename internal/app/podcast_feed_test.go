@@ -207,3 +207,91 @@ func TestPublicOrigin(t *testing.T) {
 		}
 	}
 }
+
+func getEpisodes(t *testing.T, app *App, userID string) []podcastResponse {
+	t.Helper()
+	rr := httptest.NewRecorder()
+	app.handlePodcastEpisodes(rr, asUser(httptest.NewRequest(http.MethodGet, "/api/podcast/episodes", nil), userID))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("episodes status %d: %s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Episodes []podcastResponse `json:"episodes"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("episodes response is not JSON: %v\n%s", err, rr.Body.String())
+	}
+	if resp.Episodes == nil {
+		t.Fatalf("episodes must be a list, got %s", rr.Body.String())
+	}
+	return resp.Episodes
+}
+
+func TestPodcastEpisodesListsSavedEpisodesReadyToPlay(t *testing.T) {
+	app, mock, _ := setupPodcastTest(t, 30)
+	store, err := storage.NewSQLiteStorage(filepath.Join(t.TempDir(), "episodes.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.Close() })
+	mock.Storage = store
+
+	alice, _ := store.CreateUser("g-alice")
+	bob, _ := store.CreateUser("g-bob")
+	if got := getEpisodes(t, app, alice.ID); len(got) != 0 {
+		t.Fatalf("new user has %d episodes, want 0", len(got))
+	}
+
+	var built []podcastResponse
+	for i := 0; i < 2; i++ {
+		rr, resp := postPodcast(t, app, alice.ID)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("build status %d: %s", rr.Code, rr.Body.String())
+		}
+		built = append(built, resp)
+		time.Sleep(10 * time.Millisecond) // distinct created_at for the order check
+	}
+	postPodcast(t, app, bob.ID)
+
+	got := getEpisodes(t, app, alice.ID)
+	if len(got) != 2 {
+		t.Fatalf("alice has %d episodes, want 2", len(got))
+	}
+	// Newest first, and identical to what the build returned.
+	for i, ep := range got {
+		want := built[len(built)-1-i]
+		if ep.ID != want.ID || ep.URL != want.URL || ep.DownloadURL != want.DownloadURL ||
+			ep.TopicID != want.TopicID || ep.TopicName != want.TopicName ||
+			ep.DurationSeconds != want.DurationSeconds || ep.RecallRepeats != want.RecallRepeats {
+			t.Errorf("episode %d = %+v, want %+v", i, ep, want)
+		}
+		if ep.PhraseCount != len(want.Phrases) || len(ep.Phrases) != len(want.Phrases) {
+			t.Fatalf("episode %d has %d/%d phrases, want %d", i, ep.PhraseCount, len(ep.Phrases), len(want.Phrases))
+		}
+		for j := range ep.Phrases {
+			if ep.Phrases[j] != want.Phrases[j] {
+				t.Errorf("episode %d phrase %d = %+v, want %+v", i, j, ep.Phrases[j], want.Phrases[j])
+			}
+		}
+	}
+
+	// Missing files, expired rows and rows from before phrases were stored.
+	os.Remove(filepath.Join(podcastDir, built[0].ID+".mp3"))
+	old := newPodcastID()
+	os.WriteFile(filepath.Join(podcastDir, old+".mp3"), []byte("x"), 0o644)
+	store.CreatePodcastEpisode(&storage.PodcastEpisode{ID: old, UserID: alice.ID, TopicID: "t1", Title: "Old", SizeBytes: 1, CreatedAt: time.Now().Add(-podcastMaxAge - time.Hour)})
+	legacy := newPodcastID()
+	os.WriteFile(filepath.Join(podcastDir, legacy+".mp3"), []byte("x"), 0o644)
+	store.CreatePodcastEpisode(&storage.PodcastEpisode{ID: legacy, UserID: alice.ID, TopicID: "t1", Title: "Legacy", SizeBytes: 1, PhraseCount: 7, CreatedAt: time.Now()})
+
+	got = getEpisodes(t, app, alice.ID)
+	if len(got) != 2 || got[0].ID != legacy || got[1].ID != built[1].ID {
+		t.Fatalf("episodes = %+v, want [%s %s]", got, legacy, built[1].ID)
+	}
+	if got[0].PhraseCount != 7 || got[0].Phrases == nil || len(got[0].Phrases) != 0 {
+		t.Errorf("legacy episode = %+v, want 7 phrases and an empty list", got[0])
+	}
+	if got := getEpisodes(t, app, bob.ID); len(got) != 1 {
+		t.Errorf("bob has %d episodes, want 1", len(got))
+	}
+}

@@ -496,11 +496,18 @@ gct whoami</pre>
                     <span id="podcast-meta" class="section-desc"></span>
                     <a id="podcast-download-link" class="btn-secondary btn-sm" href="#" download>Download MP3</a>
                 </div>
-                <details class="podcast-transcript">
+                <details id="podcast-transcript" class="podcast-transcript">
                     <summary id="podcast-transcript-summary">Phrases</summary>
                     <ol id="podcast-phrase-list" class="podcast-phrase-list"></ol>
                 </details>
             </div>
+
+            <!-- Episodes the logged-in user already built, still on the server -->
+            <section id="podcast-library" class="podcast-library hidden" aria-labelledby="podcast-library-title">
+                <h3 id="podcast-library-title" class="podcast-library-title">Your saved episodes</h3>
+                <p class="section-desc text-sm">Ready to play, no need to build them again. Each stays available for 7 days.</p>
+                <ul id="podcast-library-list" class="podcast-library-list"></ul>
+            </section>
         </div>
     </dialog>
 

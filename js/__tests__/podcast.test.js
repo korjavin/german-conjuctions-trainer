@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { formatDuration, describeEpisode, openPodcastDialog, generatePodcast, loadPodcastFeed, regeneratePodcastFeed } from '../podcast.js';
+import { formatDuration, describeEpisode, openPodcastDialog, generatePodcast, loadPodcastLibrary, loadPodcastFeed, regeneratePodcastFeed } from '../podcast.js';
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 import * as api from '../api.js';
 
 vi.mock('../api.js', () => ({
     generatePodcastAPI: vi.fn(),
+    getPodcastEpisodesAPI: vi.fn(),
     getPodcastFeedAPI: vi.fn(),
     regeneratePodcastFeedAPI: vi.fn()
 }));
@@ -108,6 +109,122 @@ describe('podcast.js', () => {
         await generatePodcast();
         expect(api.generatePodcastAPI).toHaveBeenCalledWith('topic1', true);
         expect(dom.podcastError.textContent).toBe('No favorite phrases in this topic yet.');
+    });
+
+    it('counts phrases of a saved episode that has no transcript', () => {
+        expect(describeEpisode({ ...episode, phrases: [], phrase_count: 25, recall_repeats: 0 })).toBe('25 phrases · 9:43');
+    });
+
+    describe('saved episodes', () => {
+        const future = new Date(Date.now() + 86400000).toISOString();
+        const saved = (id, topicId, extra = {}) => ({
+            ...episode,
+            id,
+            url: `/api/podcast/${id}.mp3`,
+            download_url: `/api/podcast/${id}.mp3?download=podcast-${id}`,
+            topic_id: topicId,
+            topic_name: `Topic ${topicId}`,
+            created_at: '2026-10-05T09:30:00Z',
+            expires_at: future,
+            phrase_count: episode.phrases.length,
+            ...extra,
+        });
+        const libraryItems = () => [...dom.podcastLibraryList.querySelectorAll('.podcast-library-item')];
+
+        beforeEach(() => {
+            state.isLoggedIn = true;
+            Object.defineProperty(dom.podcastAudio, 'paused', { value: true, configurable: true });
+            dom.podcastAudio.play = vi.fn(() => Promise.resolve());
+        });
+
+        it('puts the newest saved episode of the topic in the player when the dialog opens', async () => {
+            state.currentTopicId = 'saved-a';
+            api.getPodcastEpisodesAPI.mockResolvedValueOnce({
+                episodes: [saved('a2', 'saved-a'), saved('b1', 'saved-b'), saved('a1', 'saved-a')],
+            });
+            openPodcastDialog();
+            await vi.waitFor(() => expect(libraryItems()).toHaveLength(3));
+
+            expect(dom.podcastAudio.getAttribute('src') || dom.podcastAudio.src).toContain('/api/podcast/a2.mp3');
+            expect(dom.podcastDownloadLink.getAttribute('href')).toBe('/api/podcast/a2.mp3?download=podcast-a2');
+            expect(dom.podcastResult.classList.contains('hidden')).toBe(false);
+            expect(dom.podcastGenerateBtn.textContent).toBe('Generate a new episode');
+            expect(api.generatePodcastAPI).not.toHaveBeenCalled();
+            expect(dom.podcastAudio.play).not.toHaveBeenCalled();
+
+            expect(dom.podcastLibrary.classList.contains('hidden')).toBe(false);
+            const items = libraryItems();
+            expect(items).toHaveLength(3);
+            expect(items[0].getAttribute('aria-current')).toBe('true');
+            expect(items[0].textContent).toContain('Topic saved-a');
+            expect(items[1].getAttribute('aria-current')).toBe('false');
+        });
+
+        it('plays a saved episode picked from the list', async () => {
+            state.currentTopicId = 'saved-a';
+            api.getPodcastEpisodesAPI.mockResolvedValue({ episodes: [saved('a2', 'saved-a'), saved('b1', 'saved-b')] });
+            await loadPodcastLibrary();
+
+            libraryItems()[1].click();
+            expect(dom.podcastAudio.getAttribute('src') || dom.podcastAudio.src).toContain('/api/podcast/b1.mp3');
+            expect(dom.podcastAudio.play).toHaveBeenCalled();
+            expect(dom.podcastMeta.textContent).toContain('Previous episode: Topic saved-b');
+            expect(dom.podcastGenerateBtn.textContent).toBe('Generate podcast for this topic');
+            expect(libraryItems()[1].getAttribute('aria-current')).toBe('true');
+            api.getPodcastEpisodesAPI.mockReset();
+        });
+
+        it('does not interrupt an episode that is playing', async () => {
+            state.currentTopicId = 'saved-a';
+            api.getPodcastEpisodesAPI.mockResolvedValueOnce({ episodes: [saved('c1', 'saved-c')] });
+            await loadPodcastLibrary();
+            libraryItems()[0].click();
+            Object.defineProperty(dom.podcastAudio, 'paused', { value: false, configurable: true });
+
+            state.currentTopicId = 'saved-d';
+            api.getPodcastEpisodesAPI.mockResolvedValueOnce({ episodes: [saved('d1', 'saved-d'), saved('c1', 'saved-c')] });
+            await loadPodcastLibrary();
+            expect(dom.podcastAudio.getAttribute('src') || dom.podcastAudio.src).toContain('/api/podcast/c1.mp3');
+            expect(libraryItems()).toHaveLength(2);
+        });
+
+        it('hides the transcript of an episode saved without phrases and skips expired ones', async () => {
+            state.currentTopicId = 'saved-e';
+            api.getPodcastEpisodesAPI.mockResolvedValueOnce({
+                episodes: [
+                    saved('e2', 'saved-e', { expires_at: new Date(Date.now() - 1000).toISOString() }),
+                    saved('e1', 'saved-e', { phrases: [], phrase_count: 25 }),
+                ],
+            });
+            await loadPodcastLibrary();
+            expect(dom.podcastAudio.getAttribute('src') || dom.podcastAudio.src).toContain('/api/podcast/e1.mp3');
+            expect(dom.podcastTranscript.classList.contains('hidden')).toBe(true);
+            expect(dom.podcastMeta.textContent).toContain('25 phrases');
+            expect(libraryItems()).toHaveLength(1);
+        });
+
+        it('adds a freshly built episode to the top of the list', async () => {
+            state.currentTopicId = 'saved-f';
+            api.getPodcastEpisodesAPI.mockResolvedValueOnce({ episodes: [saved('f1', 'saved-f')] });
+            await loadPodcastLibrary();
+            api.generatePodcastAPI.mockResolvedValueOnce(saved('f2', 'saved-f'));
+            await generatePodcast();
+
+            const items = libraryItems();
+            expect(items).toHaveLength(2);
+            expect(items[0].getAttribute('aria-current')).toBe('true');
+            expect(dom.podcastAudio.getAttribute('src') || dom.podcastAudio.src).toContain('/api/podcast/f2.mp3');
+            expect(dom.podcastTranscript.classList.contains('hidden')).toBe(false);
+        });
+
+        it('shows no list to guests and does not ask the server', async () => {
+            state.isLoggedIn = false;
+            openPodcastDialog();
+            await loadPodcastLibrary();
+            expect(api.getPodcastEpisodesAPI).not.toHaveBeenCalled();
+            expect(dom.podcastLibrary.classList.contains('hidden')).toBe(true);
+            expect(libraryItems()).toHaveLength(0);
+        });
     });
 
     it('asks for a topic when none is selected', async () => {

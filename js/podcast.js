@@ -2,12 +2,16 @@
 // subtree, to play in the browser or download for a phone's player.
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { generatePodcastAPI, getPodcastFeedAPI, regeneratePodcastFeedAPI } from './api.js';
+import { generatePodcastAPI, getPodcastEpisodesAPI, getPodcastFeedAPI, regeneratePodcastFeedAPI } from './api.js';
 import { getTopicPath } from './topics.js';
 import { handleVoiceToggle } from './voice.js';
 
-let episode = null; // last built episode: server response + topicId
+let episode = null; // episode in the player: server response + topicId
 let isGenerating = false;
+// Logged-in user's episodes still on the server, newest first.
+let library = [];
+// Bumped by every library request so a slow load cannot overwrite a newer one.
+let libraryRequest = 0;
 
 const FAVORITES_ONLY_KEY = 'podcastFavoritesOnly';
 
@@ -33,7 +37,9 @@ export function formatDuration(totalSeconds) {
 }
 
 export function describeEpisode(data) {
-    const parts = [`${data.phrases.length} phrases`, formatDuration(data.duration_seconds)];
+    // Episodes saved before phrases were stored only know their count.
+    const count = data.phrase_count ?? data.phrases.length;
+    const parts = [`${count} phrases`, formatDuration(data.duration_seconds)];
     if (data.recall_repeats > 0) {
         parts.push(`${data.recall_repeats} tricky ${data.recall_repeats === 1 ? 'phrase' : 'phrases'} repeated`);
     }
@@ -91,22 +97,121 @@ function renderEpisode(data) {
     dom.podcastDownloadLink.href = data.download_url;
     dom.podcastMeta.textContent = describeEpisode(data);
     dom.podcastTranscriptSummary.textContent = `Phrases (${data.phrases.length})`;
+    dom.podcastTranscript.classList.toggle('hidden', data.phrases.length === 0);
     renderPhraseList(data.phrases);
     dom.podcastResult.classList.remove('hidden');
-    dom.podcastGenerateBtn.textContent = 'Generate a new episode';
+}
+
+// Puts an episode (just built or saved) into the player.
+function showEpisode(data, topicId = data.topic_id) {
+    episode = { topicId, data };
+    renderEpisode(data);
+    updateMediaSession(data);
+    renderHeader();
+    renderLibrary();
+}
+
+// Labels the player and the generate button for the selected topic. An
+// episode for another topic stays playable but is labelled as such.
+function renderHeader() {
+    if (!episode) {
+        dom.podcastResult.classList.add('hidden');
+        dom.podcastGenerateBtn.textContent = 'Generate podcast';
+    } else if (episode.topicId !== state.currentTopicId) {
+        dom.podcastMeta.textContent = `Previous episode: ${episode.data.topic_name} · ${describeEpisode(episode.data)}`;
+        dom.podcastGenerateBtn.textContent = 'Generate podcast for this topic';
+    } else {
+        dom.podcastMeta.textContent = describeEpisode(episode.data);
+        dom.podcastGenerateBtn.textContent = 'Generate a new episode';
+    }
+}
+
+function liveLibrary() {
+    const now = Date.now();
+    return library.filter((ep) => !ep.expires_at || new Date(ep.expires_at).getTime() > now);
+}
+
+function formatSavedAt(createdAt) {
+    const date = new Date(createdAt);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderLibrary() {
+    const episodes = state.isLoggedIn ? liveLibrary() : [];
+    dom.podcastLibrary.classList.toggle('hidden', episodes.length === 0);
+    const items = episodes.map((ep) => {
+        const li = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'podcast-library-item';
+        const inPlayer = episode?.data.id === ep.id;
+        button.setAttribute('aria-current', String(inPlayer));
+
+        const text = document.createElement('span');
+        text.className = 'podcast-library-text';
+        const name = document.createElement('span');
+        name.className = 'podcast-library-name';
+        name.textContent = ep.topic_name;
+        const meta = document.createElement('span');
+        meta.className = 'podcast-library-meta';
+        meta.textContent = [formatSavedAt(ep.created_at), describeEpisode(ep)].filter(Boolean).join(' · ');
+        text.append(name, meta);
+
+        const action = document.createElement('span');
+        action.className = 'podcast-library-action';
+        action.textContent = inPlayer ? 'In player' : '▶ Play';
+        button.append(text, action);
+        button.addEventListener('click', () => playSavedEpisode(ep));
+        li.appendChild(button);
+        return li;
+    });
+    dom.podcastLibraryList.replaceChildren(...items);
+}
+
+function playSavedEpisode(ep) {
+    if (episode?.data.id !== ep.id) showEpisode(ep);
+    const playing = dom.podcastAudio.play?.();
+    playing?.catch?.(() => { /* autoplay refused: the player is ready anyway */ });
+}
+
+// Loads the newest saved episode of the selected topic into the player, so
+// the user does not have to build it again. Never interrupts playback.
+function offerSavedEpisode() {
+    if (isGenerating || !state.currentTopicId) return;
+    if (episode && (episode.topicId === state.currentTopicId || !dom.podcastAudio.paused)) return;
+    const saved = liveLibrary().find((ep) => ep.topic_id === state.currentTopicId);
+    if (saved) showEpisode(saved);
+}
+
+// Fetches the logged-in user's saved episodes; called when the dialog opens.
+export async function loadPodcastLibrary() {
+    const request = ++libraryRequest;
+    if (!state.isLoggedIn) {
+        library = [];
+        renderLibrary();
+        return;
+    }
+    try {
+        const data = await getPodcastEpisodesAPI();
+        if (request !== libraryRequest) return;
+        library = data.episodes || [];
+    } catch (error) {
+        // Building still works; the list just stays as it was.
+        console.error('Failed to load saved podcast episodes:', error);
+        return;
+    }
+    renderLibrary();
+    offerSavedEpisode();
 }
 
 export function openPodcastDialog() {
     dom.podcastTopicName.textContent = currentTopicLabel() || 'No topic selected';
-    // An episode built for another topic stays playable but is labelled as such.
-    const stale = episode && episode.topicId !== state.currentTopicId;
-    if (!episode) {
-        dom.podcastResult.classList.add('hidden');
-        dom.podcastGenerateBtn.textContent = 'Generate podcast';
-    } else if (stale) {
-        dom.podcastMeta.textContent = `Previous episode: ${episode.data.topic_name} · ${describeEpisode(episode.data)}`;
-        dom.podcastGenerateBtn.textContent = 'Generate podcast for this topic';
-    }
+    renderHeader();
+    // Show what we already know right away; the fresh list follows.
+    renderLibrary();
+    offerSavedEpisode();
+    loadPodcastLibrary();
     // Favorites are per user, so guests don't get the option.
     dom.podcastFavoritesOption.classList.toggle('hidden', !state.isLoggedIn);
     dom.podcastFavoritesOnly.checked = state.isLoggedIn && loadFavoritesOnly();
@@ -140,9 +245,10 @@ export async function generatePodcast() {
 
     try {
         const data = await generatePodcastAPI(topicId, favoritesOnly);
-        episode = { topicId, data };
-        renderEpisode(data);
-        updateMediaSession(data);
+        if (state.isLoggedIn) {
+            library = [data, ...library.filter((ep) => ep.id !== data.id)];
+        }
+        showEpisode(data, topicId);
     } catch (error) {
         console.error('Podcast generation failed:', error);
         setError(error.message || 'Failed to build the podcast.');

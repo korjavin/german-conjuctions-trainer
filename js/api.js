@@ -140,6 +140,13 @@ export async function generatePodcastAPI(topicId, favoritesOnly = false) {
     return response.json();
 }
 
+// The logged-in user's saved episodes that can still be played, newest
+// first ({episodes: [...]}, each shaped like generatePodcastAPI's result).
+export async function getPodcastEpisodesAPI() {
+    const response = await apiFetch('/api/podcast/episodes');
+    return response.json();
+}
+
 // The user's private podcast RSS feed URL ({feed_url}); created on first call.
 export async function getPodcastFeedAPI() {
     const response = await apiFetch('/api/podcast/feed');
