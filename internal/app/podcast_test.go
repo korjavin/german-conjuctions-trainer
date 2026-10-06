@@ -732,13 +732,23 @@ func TestPodcastSlowGermanUsesSeparateCacheKey(t *testing.T) {
 		sum := sha256.Sum256([]byte(k))
 		return "audio_cache/" + hex.EncodeToString(sum[:]) + ".mp3"
 	}
-	// Trainer German and podcast English keep their historical keys.
+	// Trainer German keeps its historical key.
 	if got := app.ttsCachePath("Hallo", "de", app.ElevenLabs.Speed); got != key("Hallo") {
 		t.Errorf("trainer DE key changed: %s", got)
 	}
-	if got := app.ttsCachePath("Hello", "en", app.podcastSpeed("en")); got != key("en:Hello") {
-		t.Errorf("podcast EN key changed: %s", got)
+	// English is keyed by model and voice, so a voice change re-synthesizes.
+	enKey := app.ttsCachePath("Hello", "en", app.podcastSpeed("en"))
+	if enKey == key("en:Hello") {
+		t.Error("podcast EN still uses the pre-language-enforcement key")
 	}
+	app.ElevenLabs.OriginalLanguageVoiceID = "enVoice"
+	if got := app.ttsCachePath("Hello", "en", app.podcastSpeed("en")); got == enKey {
+		t.Error("EN key ignores OriginalLanguageVoiceID")
+	}
+	if got := app.ttsCachePath("Hallo", "de", app.ElevenLabs.Speed); got != key("Hallo") {
+		t.Errorf("OriginalLanguageVoiceID changed the DE key: %s", got)
+	}
+	app.ElevenLabs.OriginalLanguageVoiceID = ""
 	if got := app.ttsCachePath("Hallo", "de", app.podcastSpeed("de")); got != key("de@0.75:Hallo") {
 		t.Errorf("podcast DE key %s, want the de@0.75 key", got)
 	}

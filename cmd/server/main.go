@@ -96,7 +96,11 @@ func main() {
 			}
 			el.PodcastDESpeed = speed // 0 on error = default; clamped in app
 		}
+		el.OriginalLanguageVoiceID = os.Getenv("ELEVENLABS_ORIGINAL_LANGUAGE_VOICE_ID")
 		log.Printf("ElevenLabs integration enabled with voice: %s, model: %s, speed: %.1f", el.VoiceName, el.ModelID, el.Speed)
+		if el.OriginalLanguageVoiceID != "" {
+			log.Printf("English (original language) clips use voice ID: %s", el.OriginalLanguageVoiceID)
+		}
 	}
 
 	// CORS
