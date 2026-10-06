@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -156,5 +157,54 @@ func TestTTSConcurrentRefusalsLeaveNoDebt(t *testing.T) {
 	wg.Wait()
 	if tok := app.limits.get("tts:ip:3.3.3.3", ttsClientRate, ttsClientBurst).Tokens(); tok < -0.5 {
 		t.Fatalf("refused requests left the bucket in debt: %.2f tokens", tok)
+	}
+}
+
+// TestTTSEnglishVoiceAndModel checks that English clips use the original
+// language voice and a model that enforces language_code, while German keeps
+// the configured voice and model.
+func TestTTSEnglishVoiceAndModel(t *testing.T) {
+	app, _ := setupTTSTest(t)
+	type call struct{ path, model, lang string }
+	var calls []call
+	ttsHTTPClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		body := `{"voices":[{"voice_id":"v1","name":"Test"}]}`
+		if strings.Contains(r.URL.Path, "/text-to-speech/") {
+			var req struct {
+				ModelID      string `json:"model_id"`
+				LanguageCode string `json:"language_code"`
+			}
+			json.NewDecoder(r.Body).Decode(&req)
+			calls = append(calls, call{r.URL.Path, req.ModelID, req.LanguageCode})
+			body = "mp3"
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+	})
+	app.ElevenLabs.ModelID = "eleven_multilingual_v2"
+
+	ctx := context.Background()
+	if _, err := app.ensureTTSAudio(ctx, "Hello", "en", 1.0); err != nil {
+		t.Fatal(err)
+	}
+	app.ElevenLabs.OriginalLanguageVoiceID = "enVoice"
+	if _, err := app.ensureTTSAudio(ctx, "Hello", "en", 1.0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.ensureTTSAudio(ctx, "Hallo", "de", 1.0); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []call{
+		{"/v1/text-to-speech/v1", ttsMultilingualV2Fallback, "en"},
+		{"/v1/text-to-speech/enVoice", ttsMultilingualV2Fallback, "en"},
+		{"/v1/text-to-speech/v1", "eleven_multilingual_v2", "de"},
+	}
+	if fmt.Sprint(calls) != fmt.Sprint(want) {
+		t.Errorf("calls %v, want %v", calls, want)
+	}
+
+	app.ElevenLabs.ModelID = "eleven_v3"
+	if got := app.ttsModel("en"); got != "eleven_v3" {
+		t.Errorf("EN model %q, want the configured eleven_v3", got)
 	}
 }

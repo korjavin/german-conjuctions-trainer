@@ -138,15 +138,21 @@ var ttsHTTPClient = &http.Client{Timeout: 60 * time.Second}
 
 // ttsCachePath returns the audio cache file for text spoken in lang at speed.
 // German at the configured speed keeps the historical text-only key so already
-// cached exercise audio stays valid; other languages are namespaced by their
-// code, and any other speed (the slow podcast German) also by the speed.
+// cached exercise audio stays valid; any other speed (the slow podcast German)
+// is namespaced by the speed. Other languages are keyed by the model and voice
+// too, so changing the English voice re-synthesizes instead of serving the old
+// clips.
 func (a *App) ttsCachePath(text, lang string, speed float64) string {
 	key := text
 	switch {
+	case lang != "de":
+		voice := a.ElevenLabs.OriginalLanguageVoiceID
+		if voice == "" {
+			voice = "name=" + a.ElevenLabs.VoiceName
+		}
+		key = fmt.Sprintf("%s@%g|%s|%s:%s", lang, speed, a.ttsModel(lang), voice, text)
 	case speed != a.ElevenLabs.Speed:
 		key = fmt.Sprintf("%s@%g:%s", lang, speed, text)
-	case lang != "de":
-		key = lang + ":" + text
 	}
 	sum := sha256.Sum256([]byte(key))
 	return fmt.Sprintf("audio_cache/%s.mp3", hex.EncodeToString(sum[:]))
@@ -175,13 +181,16 @@ func (a *App) generateAndSaveAudio(ctx context.Context, text, lang string, speed
 
 	log.Printf("Generating new %s audio file (speed %g) for text: %s", lang, speed, text)
 
-	voiceID := a.cachedVoiceID(ctx)
+	voiceID := a.ElevenLabs.OriginalLanguageVoiceID
+	if lang == "de" || voiceID == "" {
+		voiceID = a.cachedVoiceID(ctx)
+	}
 
 	apiURL := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
 
 	requestBody, err := json.Marshal(map[string]interface{}{
 		"text":          text,
-		"model_id":      a.ElevenLabs.ModelID,
+		"model_id":      a.ttsModel(lang),
 		"language_code": lang,
 		"voice_settings": map[string]interface{}{
 			"stability":         0.5,
@@ -238,6 +247,20 @@ func (a *App) generateAndSaveAudio(ctx context.Context, text, lang string, speed
 
 	log.Printf("Successfully created audio file: %s", filename)
 	return filename, nil
+}
+
+// ttsMultilingualV2Fallback speaks non-German clips when the configured model
+// is a multilingual v1/v2 one: those ignore language_code, so a German voice
+// reads English with a German accent. Flash v2.5 enforces the language.
+const ttsMultilingualV2Fallback = "eleven_flash_v2_5"
+
+// ttsModel returns the ElevenLabs model for clips in lang. German keeps the
+// configured model, so cached trainer audio does not change.
+func (a *App) ttsModel(lang string) string {
+	if lang != "de" && strings.HasPrefix(a.ElevenLabs.ModelID, "eleven_multilingual_") {
+		return ttsMultilingualV2Fallback
+	}
+	return a.ElevenLabs.ModelID
 }
 
 // cachedVoiceID resolves the configured voice name once and reuses the ID, so

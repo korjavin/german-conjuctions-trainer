@@ -76,8 +76,11 @@ type ElevenLabsConfig struct {
 	Speed     float64
 	// PodcastDESpeed is the speed of German podcast clips; 0 means the
 	// default (see podcastSpeed).
-	PodcastDESpeed      float64
-	AudioCacheMaxSizeMB int64
+	PodcastDESpeed float64
+	// OriginalLanguageVoiceID is the voice for the learner's language
+	// (English); empty means the main voice.
+	OriginalLanguageVoiceID string
+	AudioCacheMaxSizeMB     int64
 }
 
 // getCORSOrigin returns the appropriate CORS origin for the request.
