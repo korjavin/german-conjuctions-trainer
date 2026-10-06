@@ -45,7 +45,7 @@ A web-based application for learning German grammar. It features interactive wor
 - `MODEL_NAME`: AI model (defaults to `gpt-3.5-turbo-1106`).
 - `PORT`: Server port (defaults to `8080`).
 - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed CORS origins (defaults to `*`).
-- `ELEVENLABS_MODEL_ID`: ElevenLabs model to use for TTS (defaults to `eleven_multilingual_v2`).
+- `ELEVENLABS_MODEL_ID`: ElevenLabs model to use for TTS (defaults to `eleven_v4`).
 - `ELEVENLABS_VOICE_SPEED`: ElevenLabs voice speed for TTS (defaults to `1.0`).
 - `PODCAST_DE_SPEED`: ElevenLabs speed of German podcast clips (defaults to `0.75`, clamped to `0.7`–`1.2`).
 - `ELEVENLABS_ORIGINAL_LANGUAGE_VOICE_ID`: (Optional) ElevenLabs voice ID for English podcast clips (defaults to the main voice). English clips are sent with `language_code: en`; since `eleven_multilingual_*` models ignore it, English is synthesized with `eleven_flash_v2_5` while such a model is configured.

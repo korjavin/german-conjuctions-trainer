@@ -73,8 +73,8 @@ func main() {
 		}
 		el.ModelID = os.Getenv("ELEVENLABS_MODEL_ID")
 		if el.ModelID == "" {
-			el.ModelID = "eleven_multilingual_v2"
-			log.Println("ELEVENLABS_MODEL_ID not set. Using default model: eleven_multilingual_v2")
+			el.ModelID = "eleven_v4"
+			log.Println("ELEVENLABS_MODEL_ID not set. Using default model: eleven_v4")
 		}
 		voiceSpeedStr := os.Getenv("ELEVENLABS_VOICE_SPEED")
 		if voiceSpeedStr == "" {
