@@ -14,6 +14,7 @@ import {
     fetchLastRefinedPromptAPI,
     saveUserSettingsAPI,
 } from './api.js';
+import { toast, confirm } from './ui.js';
 
 // Form validation constants
 const MAX_TOPIC_NAME_LENGTH = 200;
@@ -417,7 +418,7 @@ export async function loadTopics() {
         // Offline / server down: the last good topic tree keeps the UI usable.
         data = readCachedTopicsPayload();
         if (!data) {
-            alert('Failed to load topics. Please refresh the page.');
+            toast({ tone: 'danger', text: 'Failed to load topics. Please refresh the page.' });
             return;
         }
     }
@@ -1347,7 +1348,7 @@ function attachDropHandlers(element, options) {
         if (!draggedTopicId || isMoveInProgress) return;
         if (draggedTopicId === targetParentId && isChildDrop) return;
         if (targetParentId && wouldCreateCycle(nodesById, draggedTopicId, targetParentId)) {
-            alert('Cannot move a topic into itself or one of its descendants.');
+            toast({ tone: 'danger', text: 'A topic cannot move into itself or one of its descendants. Drop it on another topic.' });
             return;
         }
 
@@ -1471,7 +1472,7 @@ async function createTopic(name, prompt, parentId = null, sortOrder = 0) {
                 errorMessage = `Failed to create topic: ${error.message}`;
             }
         }
-        alert(errorMessage);
+        toast({ tone: 'danger', text: errorMessage });
     } finally {
         setFormLoading('add', false, dom.saveTopicBtn);
     }
@@ -1480,21 +1481,23 @@ async function createTopic(name, prompt, parentId = null, sortOrder = 0) {
 async function deleteTopic(topicId) {
     const topic = state.topics.find(t => t.id === topicId);
     if (!topic) {
-        alert('Topic not found. Please refresh and try again.');
+        toast({ tone: 'danger', text: 'Topic not found. Please refresh and try again.' });
         return;
     }
 
     // Count children
     const childCount = state.topics.filter(t => t.parent_id === topicId).length;
 
-    // Build confirmation message
-    let message = `Are you sure you want to delete the topic "${topic.name}"?`;
+    let body = 'This cannot be undone.';
     if (childCount > 0) {
-        message += `\n\nThis topic has ${childCount} child topic${childCount > 1 ? 's' : ''}. You must delete child topics first before deleting this one.`;
+        body = `It has ${childCount} child topic${childCount > 1 ? 's' : ''}, which must be deleted first. ` + body;
     }
-    message += '\n\nThis action cannot be undone.';
-
-    if (!confirm(message)) {
+    const choice = await confirm({
+        title: `Delete "${topic.name}"?`,
+        body,
+        actions: [{ label: 'Delete topic', kind: 'danger', value: 'delete' }, { label: 'Cancel', kind: 'ghost' }],
+    });
+    if (choice !== 'delete') {
         return;
     }
 
@@ -1522,14 +1525,14 @@ async function deleteTopic(topicId) {
                 errorMessage = `Failed to delete topic: ${error.message}`;
             }
         }
-        alert(errorMessage);
+        toast({ tone: 'danger', text: errorMessage });
     }
 }
 
 async function archiveTopic(topicId) {
     const topic = state.topics.find(t => t.id === topicId);
     if (!topic) {
-        alert('Topic not found. Please refresh and try again.');
+        toast({ tone: 'danger', text: 'Topic not found. Please refresh and try again.' });
         return;
     }
     try {
@@ -1540,14 +1543,14 @@ async function archiveTopic(topicId) {
     } catch (error) {
         console.error('Error archiving topic:', error);
         await loadTopics();
-        alert(`Failed to archive topic. ${error.message || ''}`.trim());
+        toast({ tone: 'danger', text: `Failed to archive topic. ${error.message || ''}`.trim() });
     }
 }
 
 async function unarchiveTopic(topicId) {
     const topic = state.topics.find(t => t.id === topicId);
     if (!topic) {
-        alert('Topic not found. Please refresh and try again.');
+        toast({ tone: 'danger', text: 'Topic not found. Please refresh and try again.' });
         return;
     }
     try {
@@ -1557,7 +1560,7 @@ async function unarchiveTopic(topicId) {
     } catch (error) {
         console.error('Error restoring topic:', error);
         await loadTopics();
-        alert(`Failed to restore topic. ${error.message || ''}`.trim());
+        toast({ tone: 'danger', text: `Failed to restore topic. ${error.message || ''}`.trim() });
     }
 }
 
@@ -1587,7 +1590,7 @@ async function updateTopicDetails(topicId, name, prompt, parentId, sortOrder) {
                 errorMessage = `Failed to update topic: ${error.message}`;
             }
         }
-        alert(errorMessage);
+        toast({ tone: 'danger', text: errorMessage });
     } finally {
         setFormLoading('edit', false, dom.savePromptBtn);
     }
@@ -1621,7 +1624,7 @@ async function moveTopic(topicId, parentId, position = null) {
         console.error('Error moving topic:', error);
         // Refresh topics to ensure frontend state reflects actual database state
         await loadTopics();
-        alert(`Failed to move topic. ${error.message || ''}`.trim());
+        toast({ tone: 'danger', text: `Failed to move topic. ${error.message || ''}`.trim() });
     }
 }
 
@@ -1779,7 +1782,7 @@ export async function showVersionHistory(topicId) {
         dom.versionHistory.classList.remove('hidden');
     } catch (error) {
         console.error('Error loading version history:', error);
-        alert('Failed to load version history.');
+        toast({ tone: 'danger', text: 'Failed to load version history. Please try again.' });
     }
 }
 
@@ -1787,9 +1790,12 @@ async function restoreVersion(topicId, versionId) {
     const topic = state.topics.find(t => t.id === topicId);
     const topicName = topic ? topic.name : 'Unknown Topic';
 
-    const message = `Are you sure you want to restore this version for "${topicName}"?\n\nThis will create a new version with the restored content. The current version will be preserved in history.`;
-
-    if (!confirm(message)) {
+    const choice = await confirm({
+        title: `Restore this version of "${topicName}"?`,
+        body: 'The restored content is saved as a new version. The current version stays in history.',
+        actions: [{ label: 'Restore version', kind: 'primary', value: 'restore' }, { label: 'Cancel', kind: 'ghost' }],
+    });
+    if (choice !== 'restore') {
         return;
     }
 
@@ -1797,7 +1803,7 @@ async function restoreVersion(topicId, versionId) {
         await restoreVersionAPI(topicId, versionId);
         await loadTopics();
         dom.versionHistory.classList.add('hidden');
-        alert('Version restored successfully! A new version has been created.');
+        toast({ tone: 'success', text: 'Version restored as a new version' });
     } catch (error) {
         console.error('Error restoring version:', error);
 
@@ -1806,7 +1812,7 @@ async function restoreVersion(topicId, versionId) {
         if (error.message) {
             errorMessage = `Failed to restore version: ${error.message}`;
         }
-        alert(errorMessage);
+        toast({ tone: 'danger', text: errorMessage });
     }
 }
 
@@ -1838,7 +1844,7 @@ export async function showLastRefinedPrompt() {
         dom.lastRefinedPromptModal.showModal();
     } catch (error) {
         console.error('Error fetching last refined prompt:', error);
-        alert('Could not fetch the last refined prompt. Please try generating some exercises first.');
+        toast({ tone: 'danger', text: 'Could not fetch the last refined prompt. Generate some exercises first.' });
     }
 }
 
@@ -2059,7 +2065,7 @@ export function savePrompt() {
 
     const existingTopic = state.topics.find(t => t.id === state.editingTopicId);
     if (!existingTopic) {
-        alert('Topic not found. Please refresh and try again.');
+        toast({ tone: 'danger', text: 'Topic not found. Please refresh and try again.' });
         return;
     }
 

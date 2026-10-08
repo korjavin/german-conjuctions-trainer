@@ -122,6 +122,8 @@ export const dom = {
     skipSessionBtn: document.getElementById('skip-session-btn'),
     skipRemoveBtn: document.getElementById('skip-remove-btn'),
     skipCancelBtn: document.getElementById('skip-cancel-btn'),
+    toastRoot: document.getElementById('toast-root'),
+    confirmDialog: document.getElementById('confirm-dialog'),
     exerciseControls: document.getElementById('exercise-controls'),
     completionStatusIndicator: document.getElementById('completion-status-indicator'),
 

@@ -3,6 +3,7 @@ import { dom } from './dom.js';
 import { fetchExercisesFromAPI } from './api.js';
 import { showExerciseHistory } from './history.js';
 import { flattenExercise, takeStashedExercises, makeBatch, sendBatch, enqueueBatch, SESSION_SIZE } from './offline.js';
+import { toast } from './ui.js';
 
 let _renderExercise = () => {};
 
@@ -12,7 +13,7 @@ export function initSession({ renderExercise }) {
 
 export async function fetchExercises() {
     if (!state.currentTopicId) {
-        alert('Please select a topic first.');
+        toast({ tone: 'danger', text: 'Select a topic first, then generate exercises.' });
         return;
     }
 
@@ -70,23 +71,23 @@ export async function fetchExercises() {
             state.startTime = Date.now();
             _renderExercise();
         } else if (navigator.onLine === false) {
-            alert('You are offline and no exercises are cached for offline practice.\nReconnect and press "Update offline cache" to download some.');
+            toast({ tone: 'danger', text: 'You are offline and no exercises are cached for offline practice. Reconnect and press "Update offline cache" to download some.' });
             _renderExercise(); // Render empty state
         } else {
             // This can happen if generation fails or cache is empty and generation is disabled
-            alert('No exercises could be retrieved for this topic. Please try another topic or contact support.');
+            toast({ tone: 'danger', text: 'No exercises could be retrieved for this topic. Try another topic or contact support.' });
             _renderExercise(); // Render empty state
         }
 
     } catch (error) {
         console.error('Error fetching exercises:', error);
         if (error.status === 429) {
-            alert(`Rate Limit Exceeded: ${error.message}`);
+            toast({ tone: 'danger', text: `Rate Limit Exceeded: ${error.message}` });
         } else if (error.status === 504 || error.code === 'UPSTREAM_TIMEOUT') {
-            alert(`The AI provider took too long to respond. Please try again in a moment.\nError: ${error.message}`);
+            toast({ tone: 'danger', text: `The AI provider took too long to respond. Try again in a moment. (${error.message})` });
         } else {
-            const retryHint = error.retryable ? '\nYou can retry this request.' : '';
-            alert(`Failed to fetch new exercises.\nError: ${error.message}${retryHint}`);
+            const retryHint = error.retryable ? ' You can retry this request.' : '';
+            toast({ tone: 'danger', text: `Failed to fetch new exercises: ${error.message}.${retryHint}` });
         }
         _renderExercise();
     } finally {

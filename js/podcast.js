@@ -5,6 +5,7 @@ import { dom } from './dom.js';
 import { generatePodcastAPI, listPodcastEpisodesAPI, getPodcastFeedAPI, regeneratePodcastFeedAPI } from './api.js';
 import { getTopicPath } from './topics.js';
 import { handleVoiceToggle } from './voice.js';
+import { confirm } from './ui.js';
 
 let current = null; // episode loaded in the player (server response)
 let sessionEpisodes = []; // built in this page session, newest first
@@ -308,7 +309,12 @@ export async function copyPodcastFeed() {
 }
 
 export async function regeneratePodcastFeed() {
-    if (!window.confirm('Create a new feed URL? The current URL stops working, and your podcast app must be re-subscribed with the new one.')) return;
+    const choice = await confirm({
+        title: 'Make a new feed URL?',
+        body: 'The current URL stops working. You will need to add the new one to your podcast app.',
+        actions: [{ label: 'Make new URL', kind: 'danger', value: 'regenerate' }, { label: 'Cancel', kind: 'ghost' }],
+    });
+    if (choice !== 'regenerate') return;
     feedRequest++;
     dom.podcastFeedRegenerateBtn.disabled = true;
     setFeedError('');
