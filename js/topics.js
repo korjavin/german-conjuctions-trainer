@@ -329,27 +329,27 @@ function enableDragging() {
 }
 
 export function getFolderIcon() {
-    return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="topic-icon-folder">
-        <path d="M2 5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V11.5C14 12.3284 13.3284 13 12.5 13H3.5C2.67157 13 2 12.3284 2 11.5V5.5Z" fill="#f59e0b" fill-opacity="0.2" stroke="#f59e0b" stroke-width="1.5"/>
-        <path d="M2 5.5H14" stroke="#f59e0b" stroke-width="1.5"/>
+    return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="topic-icon-folder" style="color: var(--color-warning-dot)">
+        <path d="M2 5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V11.5C14 12.3284 13.3284 13 12.5 13H3.5C2.67157 13 2 12.3284 2 11.5V5.5Z" fill="currentColor" fill-opacity="0.2" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M2 5.5H14" stroke="currentColor" stroke-width="1.5"/>
     </svg>`;
 }
 
 export function getArchiveIcon() {
-    return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="1.5" y="2.5" width="13" height="3" rx="0.5" fill="#e5e7eb" stroke="#6b7280" stroke-width="1"/>
-        <path d="M2.5 5.5H13.5V13C13.5 13.28 13.28 13.5 13 13.5H3C2.72 13.5 2.5 13.28 2.5 13V5.5Z" fill="#f3f4f6" stroke="#6b7280" stroke-width="1"/>
-        <line x1="6" y1="8" x2="10" y2="8" stroke="#6b7280" stroke-width="1.2" stroke-linecap="round"/>
+    return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: var(--color-neutral-dot)">
+        <rect x="1.5" y="2.5" width="13" height="3" rx="0.5" fill="currentColor" fill-opacity="0.25" stroke="currentColor" stroke-width="1"/>
+        <path d="M2.5 5.5H13.5V13C13.5 13.28 13.28 13.5 13 13.5H3C2.72 13.5 2.5 13.28 2.5 13V5.5Z" fill="currentColor" fill-opacity="0.1" stroke="currentColor" stroke-width="1"/>
+        <line x1="6" y1="8" x2="10" y2="8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
     </svg>`;
 }
 
 export function getFileIcon() {
-    return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="topic-icon-file">
-        <path d="M3 2.5C3 1.67157 3.67157 1 4.5 1H9.5L13 4.5V13.5C13 14.3284 12.3284 15 11.5 15H4.5C3.67157 15 3 14.3284 3 13.5V2.5Z" fill="#6b7280" fill-opacity="0.1" stroke="#6b7280" stroke-width="1.5"/>
-        <path d="M9 1V4.5H13" stroke="#6b7280" stroke-width="1.5" stroke-linejoin="round"/>
-        <line x1="5" y1="6" x2="11" y2="6" stroke="#6b7280" stroke-width="1" stroke-linecap="round"/>
-        <line x1="5" y1="9" x2="11" y2="9" stroke="#6b7280" stroke-width="1" stroke-linecap="round"/>
-        <line x1="5" y1="12" x2="8" y2="12" stroke="#6b7280" stroke-width="1" stroke-linecap="round"/>
+    return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="topic-icon-file" style="color: var(--color-neutral-dot)">
+        <path d="M3 2.5C3 1.67157 3.67157 1 4.5 1H9.5L13 4.5V13.5C13 14.3284 12.3284 15 11.5 15H4.5C3.67157 15 3 14.3284 3 13.5V2.5Z" fill="currentColor" fill-opacity="0.1" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M9 1V4.5H13" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        <line x1="5" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="5" y1="9" x2="11" y2="9" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+        <line x1="5" y1="12" x2="8" y2="12" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
     </svg>`;
 }
 
@@ -941,7 +941,7 @@ function createTreeLines(depth, indexInParent, totalSiblings) {
             horizontalLine.style.top = '50%';
             horizontalLine.style.width = '15px';
             horizontalLine.style.height = '1px';
-            horizontalLine.style.borderTop = '1px solid #d1d5db';
+            horizontalLine.style.borderTop = '1px solid var(--color-neutral-border)';
             horizontalLine.style.borderLeft = 'none';
             container.appendChild(horizontalLine);
         } else {
@@ -1154,7 +1154,7 @@ export function renderTopicsList() {
     dom.topicsList.setAttribute('aria-multiselectable', 'false');
 
     if (state.topics.length === 0) {
-        dom.topicsList.innerHTML = `<div style="padding: 1rem; color: #6b7280; text-align: center;" role="status">No topics available. Add one to get started.</div>`;
+        dom.topicsList.innerHTML = `<div style="padding: 1rem; color: var(--fg-muted); text-align: center;" role="status">No topics available. Add one to get started.</div>`;
         return;
     }
 
@@ -1222,7 +1222,7 @@ export function renderTopicsList() {
     }
 
     if (flattenedNodes.length === 0 && state.topicsSearchQuery) {
-        dom.topicsList.innerHTML = `<div style="padding: 1rem; color: #6b7280; text-align: center;">No topics found matching "${escapeHtml(state.topicsSearchQuery)}".</div>`;
+        dom.topicsList.innerHTML = `<div style="padding: 1rem; color: var(--fg-muted); text-align: center;">No topics found matching "${escapeHtml(state.topicsSearchQuery)}".</div>`;
         return;
     }
 
@@ -1851,7 +1851,7 @@ export function renderTopicDropdown(searchQuery = '') {
 
     // Check if topics are loaded
     if (practiceTopics.length === 0) {
-        dom.topicDropdown.innerHTML = '<div style="padding: 0.5rem; color: #6b7280;">No topics available.</div>';
+        dom.topicDropdown.innerHTML = '<div style="padding: 0.5rem; color: var(--fg-muted);">No topics available.</div>';
         return;
     }
 
@@ -1908,7 +1908,7 @@ export function renderTopicDropdown(searchQuery = '') {
 
     // Handle case where no topics match
     if (flattened.length === 0) {
-        dom.topicDropdown.innerHTML = `<div style="padding: 0.5rem; color: #6b7280;">No topics found.</div>`;
+        dom.topicDropdown.innerHTML = `<div style="padding: 0.5rem; color: var(--fg-muted);">No topics found.</div>`;
         return;
     }
 

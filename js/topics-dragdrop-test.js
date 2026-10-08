@@ -13,7 +13,7 @@
  */
 
 export function runDragDropTests() {
-    console.log('%c🧪 Starting Drag-and-Drop Visual Feedback Tests...', 'color: #2563eb; font-weight: bold; font-size: 14px;');
+    console.log('%c🧪 Starting Drag-and-Drop Visual Feedback Tests...', 'color: #a33f11; font-weight: bold; font-size: 14px;');
 
     const tests = [];
 
@@ -56,9 +56,9 @@ export function runDragDropTests() {
                 pointer-events: none;
                 z-index: 10000;
                 opacity: 0.7;
-                border: 2px solid #2563eb;
+                border: 2px solid var(--color-info-dot);
                 border-radius: 8px;
-                box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+                box-shadow: 0 8px 20px var(--color-focus);
             }
         `;
         const styleElement = document.createElement('style');
@@ -197,8 +197,8 @@ export function runDragDropTests() {
         const styleElement = document.createElement('style');
         styleElement.textContent = `
             @keyframes drop-zone-pulse {
-                0%, 100% { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
-                50% { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.2); }
+                0%, 100% { box-shadow: 0 0 0 4px var(--color-focus); }
+                50% { box-shadow: 0 0 0 6px var(--color-focus); }
             }
         `;
         document.head.appendChild(styleElement);
@@ -285,7 +285,7 @@ export function runDragDropTests() {
 
     // Summary
     console.log('\n' + '='.repeat(50));
-    console.log(`%c✅ Drag-and-Drop Visual Feedback Tests Complete`, 'color: #2563eb; font-weight: bold;');
+    console.log(`%c✅ Drag-and-Drop Visual Feedback Tests Complete`, 'color: #a33f11; font-weight: bold;');
     console.log(`   Passed: ${passed}/${tests.length}`);
     if (failed > 0) {
         console.log(`   Failed: ${failed}/${tests.length}`);
@@ -298,5 +298,5 @@ export function runDragDropTests() {
 // Run tests if called directly
 if (typeof window !== 'undefined' && typeof runDragDropTests === 'function') {
     window.runDragDropTests = runDragDropTests;
-    console.log('%c✅ Drag-and-Drop test suite loaded. Run: runDragDropTests()', 'color: #2563eb; font-weight: bold;');
+    console.log('%c✅ Drag-and-Drop test suite loaded. Run: runDragDropTests()', 'color: #a33f11; font-weight: bold;');
 }

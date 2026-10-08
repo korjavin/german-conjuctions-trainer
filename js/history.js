@@ -331,9 +331,9 @@ function createHistoryItem(item) {
 
     const rateEl = container.querySelector('.history-item-rate');
     rateEl.textContent = `${successRate}%`;
-    if (successRate >= 75) rateEl.style.color = '#16a34a'; // text-green-600
-    else if (successRate >= 50) rateEl.style.color = '#ca8a04'; // text-yellow-600
-    else rateEl.style.color = '#dc2626'; // text-red-600
+    if (successRate >= 75) rateEl.style.color = 'var(--color-success)';
+    else if (successRate >= 50) rateEl.style.color = 'var(--color-warning)';
+    else rateEl.style.color = 'var(--color-danger)';
 
     return container;
 }

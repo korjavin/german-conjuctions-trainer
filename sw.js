@@ -9,11 +9,13 @@
  * IMPORTANT: bump CACHE_VERSION whenever a shell file changes, otherwise
  * returning visitors keep the old cached copy until the cache is evicted.
  */
-const CACHE_VERSION = 'gct-shell-v16';
+const CACHE_VERSION = 'gct-shell-v17';
 
 const SHELL_ASSETS = [
     '/',
     '/style.css',
+    '/css/colors_and_type.css',
+    '/css/components.css',
     '/manifest.json',
     '/favicon.svg',
     '/favicon-32x32.svg',
@@ -25,6 +27,7 @@ const SHELL_ASSETS = [
     '/js/auth.js',
     '/js/exercise.js',
     '/js/history.js',
+    '/js/icons.js',
     '/js/offline.js',
     '/js/podcast.js',
     '/js/session.js',
@@ -32,7 +35,7 @@ const SHELL_ASSETS = [
     '/js/voice.js',
     // Third-party shell dependencies — best effort, a failure here is fine.
     'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js',
-    'https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap',
+    'https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,500;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,600;1,6..12,700&display=swap',
 ];
 
 const RUNTIME_CACHE_HOSTS = [

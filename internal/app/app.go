@@ -213,6 +213,7 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/podcast/feed/", a.handlePodcastFeed)
 	http.HandleFunc("/audio_cache/", a.handleAudioCache)
 	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir(getJSDir()))))
+	http.Handle("/css/", http.StripPrefix("/css/", http.FileServer(http.Dir(getCSSDir()))))
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

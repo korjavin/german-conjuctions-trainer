@@ -16,11 +16,16 @@ func getFilePath(filename string) string {
 	return filename
 }
 
-func getJSDir() string {
-	if _, err := os.Stat("static/js"); err == nil {
-		return "static/js"
+func getJSDir() string { return getStaticDir("js") }
+
+func getCSSDir() string { return getStaticDir("css") }
+
+// getStaticDir returns static/<name> in the Docker image, else <name> (local dev).
+func getStaticDir(name string) string {
+	if _, err := os.Stat("static/" + name); err == nil {
+		return "static/" + name
 	}
-	return "js"
+	return name
 }
 
 func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {

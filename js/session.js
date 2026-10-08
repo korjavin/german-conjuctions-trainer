@@ -134,19 +134,19 @@ export function showStatisticsPage() {
         <h2 class="page-title mb-6">Session Complete! 🎉</h2>
         <div class="history-summary mb-8">
             <div class="summary-box">
-                <div class="summary-value" style="color: #22C55E;">${perfectCount}</div>
+                <div class="summary-value" style="color: var(--color-success);">${perfectCount}</div>
                 <div class="summary-label">Perfect</div>
             </div>
             <div class="summary-box">
-                <div class="summary-value" style="color: #3B82F6;">${withHintsCount}</div>
+                <div class="summary-value" style="color: var(--color-info);">${withHintsCount}</div>
                 <div class="summary-label">With Hints</div>
             </div>
             <div class="summary-box">
-                <div class="summary-value" style="color: #EF4444;">${withMistakesCount}</div>
+                <div class="summary-value" style="color: var(--color-danger);">${withMistakesCount}</div>
                 <div class="summary-label">With Mistakes</div>
             </div>
             <div class="summary-box">
-                <div class="summary-value" style="color: #A58D78;">${state.sessionTime}s</div>
+                <div class="summary-value" style="color: var(--fg-muted);">${state.sessionTime}s</div>
                 <div class="summary-label">Total Time</div>
             </div>
         </div>
@@ -184,6 +184,9 @@ export function showStatisticsPage() {
 
     // --- Chart.js Implementation ---
     const ctx = document.getElementById('session-chart').getContext('2d');
+    // Canvas can't resolve CSS variables — read the design tokens' computed values.
+    const rootStyle = getComputedStyle(document.documentElement);
+    const token = (name) => rootStyle.getPropertyValue(name).trim();
     new Chart(ctx, {
         type: 'bar',
         data: {
@@ -191,9 +194,9 @@ export function showStatisticsPage() {
             datasets: [{
                 data: [perfectCount, withHintsCount, withMistakesCount],
                 backgroundColor: [
-                    '#22C55E',  // Green for perfect
-                    '#3B82F6',  // Blue for hints
-                    '#EF4444'   // Red for mistakes
+                    token('--color-success-dot'),
+                    token('--color-info-dot'),
+                    token('--color-danger-dot'),
                 ],
             }]
         },
