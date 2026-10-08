@@ -165,6 +165,10 @@ func (s *SQLiteStorage) runMigrations() error {
 		`CREATE INDEX IF NOT EXISTS idx_podcast_episodes_user ON podcast_episodes(user_id, created_at)`,
 		`ALTER TABLE podcast_episodes ADD COLUMN recall_repeats INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE podcast_episodes ADD COLUMN phrases_json TEXT NOT NULL DEFAULT ''`,
+		`CREATE TABLE IF NOT EXISTS topic_archive_origins (
+			topic_id TEXT PRIMARY KEY REFERENCES topics(id) ON DELETE CASCADE,
+			parent_id TEXT NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS podcast_feed_tokens (
 			user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 			token TEXT NOT NULL UNIQUE,
@@ -412,6 +416,7 @@ func (s *SQLiteStorage) GetAllTopics() ([]*Topic, error) {
 		if err := rows.Scan(&topic.ID, &topic.Name, &topic.Prompt, &topic.ParentID, &topic.SortOrder, &topic.CreatedAt, &topic.UpdatedAt); err != nil {
 			return nil, err
 		}
+		topic.IsArchive = topic.ID == ArchiveTopicID
 		topics = append(topics, &topic)
 	}
 	return topics, nil
@@ -476,6 +481,7 @@ func (s *SQLiteStorage) getTopic(q querier, topicID string) (*Topic, error) {
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("topic not found")
 	}
+	topic.IsArchive = topic.ID == ArchiveTopicID
 	return &topic, err
 }
 
@@ -595,12 +601,25 @@ func (s *SQLiteStorage) MoveTopic(topicID, parentID string, position *int) (*Top
 	}
 	defer tx.Rollback()
 
+	updatedTopic, err := s.moveTopicTx(tx, topicID, normalizeParentID(parentID), position)
+	if err != nil {
+		return nil, err
+	}
+	return updatedTopic, tx.Commit()
+}
+
+// moveTopicTx re-parents topicID under normalizedParentID (nil = root) at
+// position (nil = append) and renumbers both sibling lists, inside tx.
+func (s *SQLiteStorage) moveTopicTx(tx *sql.Tx, topicID string, normalizedParentID *string, position *int) (*Topic, error) {
 	topic, err := s.getTopic(tx, topicID)
 	if err != nil {
 		return nil, err
 	}
 
-	normalizedParentID := normalizeParentID(parentID)
+	if topic.IsArchive && normalizedParentID != nil {
+		return nil, fmt.Errorf("invalid parent: the archive must stay at the root level")
+	}
+
 	if normalizedParentID != nil {
 		if *normalizedParentID == topicID {
 			return nil, fmt.Errorf("invalid parent: topic cannot be its own parent")
@@ -652,6 +671,10 @@ func (s *SQLiteStorage) MoveTopic(topicID, parentID string, position *int) (*Top
 	}
 
 	insertAt := clampTopicPosition(targetPosition, len(destinationSiblings))
+	// Nothing goes after the archive at the root level.
+	if n := len(destinationSiblings); normalizedParentID == nil && n > 0 && destinationSiblings[n-1] == ArchiveTopicID && insertAt == n {
+		insertAt = n - 1
+	}
 	destinationSiblings = insertTopicIDAt(destinationSiblings, topicID, insertAt)
 	if err := s.setSiblingOrder(tx, normalizedParentID, destinationSiblings); err != nil {
 		return nil, err
@@ -666,15 +689,172 @@ func (s *SQLiteStorage) MoveTopic(topicID, parentID string, position *int) (*Top
 		topicID,
 	)
 	if err != nil {
+		if isUniqueConstraintError(err) {
+			return nil, ErrTopicNameConflict
+		}
 		return nil, err
 	}
 
-	updatedTopic, err := s.getTopic(tx, topicID)
+	return s.getTopic(tx, topicID)
+}
+
+// ArchiveTopicID is the fixed ID of the archive root. It is a regular root
+// topic (created on first use); the UI hides it and its subtree from the
+// practice topic picker. Exercises, audio and podcasts are untouched.
+const ArchiveTopicID = "archive"
+
+const (
+	archiveTopicName   = "Archive"
+	archiveTopicPrompt = "Archived topics. This folder only groups topics that are out of rotation; it is not practiced itself."
+)
+
+// ErrTopicNameConflict is returned when a move would put two topics with the
+// same name under one parent.
+var ErrTopicNameConflict = fmt.Errorf("a topic with this name already exists at the destination")
+
+// ErrTopicArchiveState is returned for an archive/unarchive request that does
+// not fit the topic's current place (already archived, not archived, the
+// archive root itself).
+var ErrTopicArchiveState = fmt.Errorf("invalid archive operation")
+
+func isUniqueConstraintError(err error) bool {
+	return err != nil && (strings.Contains(err.Error(), "UNIQUE constraint failed") ||
+		strings.Contains(err.Error(), "constraint violated"))
+}
+
+// ensureArchiveTopic creates the archive root if it does not exist yet. A user
+// topic may already be called "Archive", so the name falls back to a suffix.
+func (s *SQLiteStorage) ensureArchiveTopic(tx *sql.Tx) error {
+	if _, err := s.getTopic(tx, ArchiveTopicID); err == nil {
+		return nil
+	}
+
+	var nextSort int
+	if err := tx.QueryRow("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM topics WHERE parent_id IS NULL").Scan(&nextSort); err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	for _, name := range []string{archiveTopicName, archiveTopicName + " (system)", archiveTopicName + " " + now.Format("2006-01-02 15:04:05")} {
+		_, err := tx.Exec("INSERT INTO topics(id, name, prompt, parent_id, sort_order, created_at, updated_at) VALUES(?, ?, ?, NULL, ?, ?, ?)",
+			ArchiveTopicID, name, archiveTopicPrompt, nextSort, now, now)
+		if err == nil {
+			return s.addPromptVersion(tx, ArchiveTopicID, archiveTopicPrompt, 1, now)
+		}
+		if !isUniqueConstraintError(err) {
+			return err
+		}
+	}
+	return fmt.Errorf("failed to create archive topic: name taken")
+}
+
+// isInArchive reports whether topicID is the archive root or lies under it.
+func (s *SQLiteStorage) isInArchive(q querier, topicID string) (bool, error) {
+	visited := map[string]bool{}
+	current := &topicID
+	for current != nil {
+		if *current == ArchiveTopicID {
+			return true, nil
+		}
+		if visited[*current] {
+			return false, nil
+		}
+		visited[*current] = true
+		t, err := s.getTopic(q, *current)
+		if err != nil {
+			return false, err
+		}
+		current = t.ParentID
+	}
+	return false, nil
+}
+
+// ArchiveTopic moves topicID, with its whole subtree, under the archive root
+// (creating the root on first use) and remembers where it came from so that
+// UnarchiveTopic can put it back.
+func (s *SQLiteStorage) ArchiveTopic(topicID string) (*Topic, error) {
+	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback()
 
-	return updatedTopic, tx.Commit()
+	topic, err := s.getTopic(tx, topicID)
+	if err != nil {
+		return nil, err
+	}
+	if topic.IsArchive {
+		return nil, fmt.Errorf("%w: the archive cannot be archived", ErrTopicArchiveState)
+	}
+	inArchive, err := s.isInArchive(tx, topicID)
+	if err != nil {
+		return nil, err
+	}
+	if inArchive {
+		return nil, fmt.Errorf("%w: topic is already archived", ErrTopicArchiveState)
+	}
+
+	if err := s.ensureArchiveTopic(tx); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec("INSERT OR REPLACE INTO topic_archive_origins(topic_id, parent_id) VALUES(?, ?)",
+		topicID, parentIDToDBValue(topic.ParentID)); err != nil {
+		return nil, err
+	}
+
+	archiveID := ArchiveTopicID
+	moved, err := s.moveTopicTx(tx, topicID, &archiveID, nil)
+	if err != nil {
+		return nil, err
+	}
+	return moved, tx.Commit()
+}
+
+// UnarchiveTopic moves an archived topic (with its subtree) back to the parent
+// it was archived from. If that parent is gone or is itself archived, or the
+// topic was dragged into the archive by hand, it goes to the root level.
+func (s *SQLiteStorage) UnarchiveTopic(topicID string) (*Topic, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	topic, err := s.getTopic(tx, topicID)
+	if err != nil {
+		return nil, err
+	}
+	if topic.IsArchive {
+		return nil, fmt.Errorf("%w: the archive cannot be restored", ErrTopicArchiveState)
+	}
+	inArchive, err := s.isInArchive(tx, topicID)
+	if err != nil {
+		return nil, err
+	}
+	if !inArchive {
+		return nil, fmt.Errorf("%w: topic is not archived", ErrTopicArchiveState)
+	}
+
+	var destination *string
+	var originParent sql.NullString
+	err = tx.QueryRow("SELECT parent_id FROM topic_archive_origins WHERE topic_id = ?", topicID).Scan(&originParent)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	if originParent.Valid && originParent.String != "" {
+		parentInArchive, err := s.isInArchive(tx, originParent.String)
+		if err == nil && !parentInArchive {
+			destination = &originParent.String
+		}
+	}
+
+	if _, err := tx.Exec("DELETE FROM topic_archive_origins WHERE topic_id = ?", topicID); err != nil {
+		return nil, err
+	}
+	moved, err := s.moveTopicTx(tx, topicID, destination, nil)
+	if err != nil {
+		return nil, err
+	}
+	return moved, tx.Commit()
 }
 
 func (s *SQLiteStorage) getSiblingTopicIDs(tx *sql.Tx, parentID *string, excludeTopicID string) ([]string, error) {
@@ -693,7 +873,8 @@ func (s *SQLiteStorage) getSiblingTopicIDs(tx *sql.Tx, parentID *string, exclude
 		args = append(args, *parentID)
 	}
 
-	query += " ORDER BY sort_order ASC, name ASC, created_at ASC, id ASC"
+	// The archive always sorts last among root topics.
+	query += " ORDER BY (id = '" + ArchiveTopicID + "') ASC, sort_order ASC, name ASC, created_at ASC, id ASC"
 	rows, err := tx.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -737,6 +918,9 @@ func (s *SQLiteStorage) setSiblingOrder(tx *sql.Tx, parentID *string, orderedTop
 			topicID,
 		)
 		if err != nil {
+			if isUniqueConstraintError(err) {
+				return ErrTopicNameConflict
+			}
 			return err
 		}
 	}

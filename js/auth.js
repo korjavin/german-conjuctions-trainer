@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
 import { checkAuthStatusAPI, checkIsAdminAPI, loadUserStatsAPI, loadExerciseStatsAPI } from './api.js';
+import { getArchivedTopicIds } from './topics.js';
 
 export const AUTH_CACHE_KEY = 'authStatusV1';
 
@@ -58,7 +59,8 @@ export async function checkAuthStatus() {
 export async function loadUserStats() {
     try {
         const stats = await loadUserStatsAPI();
-        if (stats.last_topic_id) {
+        // An archived last topic is not offered for practice; keep the current pick.
+        if (stats.last_topic_id && !getArchivedTopicIds(state.topics).has(stats.last_topic_id)) {
             state.currentTopicId = stats.last_topic_id;
             localStorage.setItem('selectedTopicId', stats.last_topic_id);
             const currentTopic = state.topics.find(t => t.id === state.currentTopicId);

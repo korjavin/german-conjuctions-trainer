@@ -110,7 +110,12 @@ gct topics update <id> [--name X] [--prompt Y | --prompt-file PATH]
                        [--parent ID | --no-parent] [--sort N]
 gct topics delete <id> [--yes]
 gct topics move <id> --parent ID|--no-parent [--position N]
+gct topics archive <id>      # move topic + subtree into the Archive root
+gct topics unarchive <id>    # move it back to where it was archived from
 ```
+
+Archived topics live under the `Archive` root (ID `archive`) and are hidden
+from the practice topic picker; their exercises, audio and podcasts are kept.
 
 Exercises:
 

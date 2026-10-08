@@ -117,6 +117,24 @@ export async function moveTopicAPI(topicId, parentId, position = null) {
     return response.json();
 }
 
+// action is 'archive' or 'unarchive'; the server moves the whole subtree.
+async function archiveActionAPI(topicId, action) {
+    const response = await fetch(`/api/topics/${encodeURIComponent(topicId)}/${action}`, { method: 'POST' });
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(errorText || `Failed to ${action} topic`);
+    }
+    return response.json();
+}
+
+export function archiveTopicAPI(topicId) {
+    return archiveActionAPI(topicId, 'archive');
+}
+
+export function unarchiveTopicAPI(topicId) {
+    return archiveActionAPI(topicId, 'unarchive');
+}
+
 // options may carry { limit, skip_generation } for offline pre-caching.
 // Older servers ignore unknown JSON fields, so sending them is always safe.
 export async function fetchExercisesFromAPI(topicId, options = {}) {

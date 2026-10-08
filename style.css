@@ -220,6 +220,13 @@ textarea:focus-visible,
     outline-offset: 2px;
 }
 
+/* Archive root: a system folder, hidden from the practice topic picker */
+.topics-list>.topic-tree-item.topic-archive-root {
+    background: #f3f4f6;
+    border: 1px dashed #9ca3af;
+    cursor: default;
+}
+
 /* Stronger focus styles for better visibility across browsers */
 .topic-tree-item:focus,
 .topic-tree-item:focus-within {
@@ -1845,6 +1852,26 @@ button:disabled.is-audio-off {
 
 .hover\:bg-red-200:hover {
     background-color: #fecaca;
+}
+
+.bg-gray-100 {
+    background-color: #f3f4f6;
+}
+
+.text-gray-700 {
+    color: #374151;
+}
+
+.bg-blue-100 {
+    background-color: #dbeafe;
+}
+
+.text-blue-700 {
+    color: #1d4ed8;
+}
+
+.hover\:bg-blue-200:hover {
+    background-color: #bfdbfe;
 }
 
 /* Ensure topic item name row and tree line container alignment */

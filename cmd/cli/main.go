@@ -473,6 +473,8 @@ Usage:
   gct topics update <id> [--name X] [--prompt Y|--prompt-file F] [--parent ID|--no-parent] [--sort N] [--json]
   gct topics delete <id> [--yes]
   gct topics move   <id> --parent ID|--no-parent [--position N] [--json]
+  gct topics archive   <id> [--json]   # move topic + subtree into the Archive root
+  gct topics unarchive <id> [--json]   # move it back to where it was archived from
 
 Global flags (apply to every subcommand):
   --server URL    Server base URL (overrides config)
@@ -503,6 +505,8 @@ func runTopics(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runTopicsDelete(rest, stdin, stdout, stderr)
 	case "move":
 		return runTopicsMove(rest, stdout, stderr)
+	case "archive", "unarchive":
+		return runTopicsArchive(sub, rest, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "gct topics: unknown subcommand %q\n\n", sub)
 		fmt.Fprint(stderr, topicsUsage)
@@ -936,6 +940,49 @@ func runTopicsMove(args []string, stdout, stderr io.Writer) int {
 		parentName = *topic.ParentID
 	}
 	fmt.Fprintf(stdout, "Moved topic %s under %s (sort=%d)\n", topic.ID, parentName, topic.SortOrder)
+	return 0
+}
+
+// runTopicsArchive handles `topics archive` and `topics unarchive`.
+func runTopicsArchive(sub string, args []string, stdout, stderr io.Writer) int {
+	name := "gct topics " + sub
+	fs := flag.NewFlagSet("topics "+sub, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	cf := registerCommonFlags(fs)
+	if err := fs.Parse(reorderArgs(args)); err != nil {
+		return 2
+	}
+	if fs.NArg() != 1 {
+		fmt.Fprintf(stderr, "%s: expected exactly one topic id, got %d\n", name, fs.NArg())
+		return 2
+	}
+
+	client, code := resolveClient(name, cf, stderr)
+	if client == nil {
+		return code
+	}
+	var topic *cli.Topic
+	var err error
+	if sub == "archive" {
+		topic, err = client.ArchiveTopic(fs.Arg(0))
+	} else {
+		topic, err = client.UnarchiveTopic(fs.Arg(0))
+	}
+	if err != nil {
+		return printAPIError(name, err, stderr)
+	}
+	if *cf.jsonOut {
+		return writeJSON(stdout, topic)
+	}
+	if sub == "archive" {
+		fmt.Fprintf(stdout, "Archived topic %s (%s)\n", topic.ID, topic.Name)
+		return 0
+	}
+	parentName := "root"
+	if topic.ParentID != nil {
+		parentName = *topic.ParentID
+	}
+	fmt.Fprintf(stdout, "Restored topic %s (%s) under %s\n", topic.ID, topic.Name, parentName)
 	return 0
 }
 
