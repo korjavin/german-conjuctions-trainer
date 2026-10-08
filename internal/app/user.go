@@ -85,3 +85,21 @@ func (a *App) handleUserExerciseStats(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }
+
+// handleTopicProgress returns the user's direct per-topic counts:
+// GET /api/topics/progress -> {"topics": {"<id>": {exercises, seen, due, mastered}}}.
+// Counts are not rolled up; the client sums them over its topic tree.
+func (a *App) handleTopicProgress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "", false)
+		return
+	}
+	progress, err := a.DB.GetTopicProgress(getUserIDFromRequest(r))
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "PROGRESS_LOOKUP_FAILED", "Failed to get topic progress", err.Error(), true)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	json.NewEncoder(w).Encode(map[string]map[string]*storage.TopicProgress{"topics": progress})
+}

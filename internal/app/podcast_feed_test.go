@@ -259,6 +259,10 @@ func TestPodcastEpisodesListsWholeSubtree(t *testing.T) {
 	if got := listEpisodes(t, app, bob.ID, "t1"); len(got) != 1 || got[0].TopicName != "Bob's" {
 		t.Errorf("bob lists %+v, want only his own", got)
 	}
+	// No topic_id = All topics: every live episode of the user, unfiltered.
+	if got := listEpisodes(t, app, alice.ID, ""); len(got) != 4 {
+		t.Errorf("all topics lists %d episodes, want 4: %+v", len(got), got)
+	}
 
 	// A deleted file drops the episode from the list.
 	os.Remove(filepath.Join(podcastDir, built[0].ID+".mp3"))

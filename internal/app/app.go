@@ -182,6 +182,7 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/api/explain", a.withOptionalAuth(a.handleExplain))
 	http.HandleFunc("/api/topics", a.withOptionalAuth(a.handleTopics))
 	http.HandleFunc("/api/topics/", a.withOptionalAuth(a.handleTopicByID))
+	http.HandleFunc("/api/topics/progress", a.withAuth(a.handleTopicProgress))
 	http.HandleFunc("/api/versions/", a.withOptionalAuth(a.handleVersions))
 	http.HandleFunc("/api/last-refined-prompt", a.withAuth(a.adminOnly(a.handleGetLastRefinedPrompt)))
 	http.HandleFunc("/api/last-generation-debug", a.withAuth(a.adminOnly(a.handleGetLastGenerationDebug)))

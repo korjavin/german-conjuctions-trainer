@@ -1433,11 +1433,72 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 	return stats, nil
 }
 
+// GetTopicProgress returns direct (non-rolled-up) counts per topic: cached
+// exercises, and the user's seen / due / mastered exercises. Due uses the same
+// SRS rule as GetUserExerciseStats but skips hidden exercises; mastered means
+// repetition_counter >= 3.
+func (s *SQLiteStorage) GetTopicProgress(userID string) (map[string]*TopicProgress, error) {
+	progress := make(map[string]*TopicProgress)
+	get := func(topicID string) *TopicProgress {
+		p, ok := progress[topicID]
+		if !ok {
+			p = &TopicProgress{}
+			progress[topicID] = p
+		}
+		return p
+	}
+
+	rows, err := s.db.Query("SELECT topic_id, COUNT(*) FROM exercises GROUP BY topic_id")
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var topicID string
+		var n int
+		if err := rows.Scan(&topicID, &n); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		get(topicID).Exercises = n
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	rows, err = s.db.Query(`
+		SELECT e.topic_id,
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN NOT uev.is_hidden
+				AND (julianday('now') - julianday(uev.last_viewed)) * 24 >= (uev.repetition_counter * uev.repetition_counter)
+				THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN uev.repetition_counter >= 3 THEN 1 ELSE 0 END), 0)
+		FROM user_exercise_views uev
+		JOIN exercises e ON uev.exercise_id = e.id
+		WHERE uev.user_id = ?
+		GROUP BY e.topic_id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var topicID string
+		var seen, due, mastered int
+		if err := rows.Scan(&topicID, &seen, &due, &mastered); err != nil {
+			return nil, err
+		}
+		p := get(topicID)
+		p.Seen, p.Due, p.Mastered = seen, due, mastered
+	}
+	return progress, rows.Err()
+}
+
 // GetUserExerciseHistory returns the practice history for all exercises a user has attempted
 func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error) {
 	query := `
 		SELECT
 			uev.exercise_id,
+			e.topic_id,
 			t.name AS topic_name,
 			e.exercise_json,
 			uev.last_viewed,
@@ -1492,6 +1553,7 @@ func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*Exerc
 
 		if err := rows.Scan(
 			&item.ExerciseID,
+			&item.TopicID,
 			&item.TopicName,
 			&exerciseJSON,
 			&item.LastViewed,
