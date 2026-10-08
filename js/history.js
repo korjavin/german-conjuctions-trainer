@@ -1,10 +1,11 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
 import { loadExerciseHistoryAPI, toggleHideExerciseAPI } from './api.js';
+import { toast } from './ui.js';
 
 export async function showExerciseHistory() {
     if (!state.isLoggedIn) {
-        alert("Please log in to view your exercise history.");
+        toast({ tone: 'danger', text: "Please log in to view your exercise history." })
         return;
     }
 
@@ -81,11 +82,11 @@ export async function showExerciseHistory() {
         dom.historyControlsContainer.classList.add('hidden');
         dom.historyReviewChart.classList.add('hidden');
         if (error.status === 401) {
-            alert("Your session has expired. Please log in again.");
+            toast({ tone: 'danger', text: "Your session has expired. Please log in again." })
             dom.historyModal.close();
             return;
         }
-        alert('Could not load exercise history. Please try again later.');
+        toast({ tone: 'danger', text: 'Could not load exercise history. Please try again later.' })
     }
 }
 

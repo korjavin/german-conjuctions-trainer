@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { loadTopics, TOPICS_CACHE_KEY } from '../topics.js';
 import { state } from '../state.js';
 import * as api from '../api.js';
+import { toast } from '../ui.js';
 
 vi.mock('../api.js', () => ({
     fetchTopicsAPI: vi.fn(),
@@ -25,7 +26,7 @@ describe('topics.js offline fallback', () => {
         vi.clearAllMocks();
         localStorage.clear();
         state.topics = [];
-        globalThis.alert.mockClear();
+        toast.mockClear();
     });
 
     it('caches the topics payload after a successful load', async () => {
@@ -44,7 +45,7 @@ describe('topics.js offline fallback', () => {
         await loadTopics();
 
         expect(state.topics.map(t => t.id)).toEqual(['t1']);
-        expect(globalThis.alert).not.toHaveBeenCalled();
+        expect(toast).not.toHaveBeenCalled();
     });
 
     it('alerts only when there is no cached payload', async () => {
@@ -52,7 +53,7 @@ describe('topics.js offline fallback', () => {
 
         await loadTopics();
 
-        expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('Failed to load topics'));
+        expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', text: expect.stringContaining('Failed to load topics') }));
     });
 });
 

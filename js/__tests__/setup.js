@@ -3,8 +3,11 @@ import { vi } from 'vitest';
 // Mock fetch globally
 globalThis.fetch = vi.fn();
 
-// Mock alert globally
-globalThis.alert = vi.fn();
+// js/ui.js feedback (toast/confirm) is mocked for every spec; ui.test.js loads the real module.
+vi.mock('../ui.js', () => ({
+  toast: vi.fn(),
+  confirm: vi.fn(async () => null)
+}));
 
 // Mock localStorage globally
 const localStorageMock = (() => {
@@ -149,6 +152,10 @@ vi.mock('../dom.js', () => {
       podcastFeedCopyBtn: createMockElement('button'),
       podcastFeedRegenerateBtn: createMockElement('button'),
       podcastFeedError: createMockElement('div'),
+
+      // js/ui.js hosts
+      toastRoot: createMockElement('div'),
+      confirmDialog: createMockDialog(),
     }
   };
 });

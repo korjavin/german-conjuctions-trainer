@@ -1,3 +1,4 @@
+import { toast } from './ui.js';
 const AUDIO_ENABLED_STORAGE_KEY = 'audioEnabled';
 const WORD_AUDIO_CACHE_STORAGE_KEY = 'wordAudioCacheV1';
 const TOPIC_COLLAPSE_STATE_STORAGE_KEY = 'topicCollapseState';
@@ -9,7 +10,7 @@ let localStorageErrorShown = false; // Prevent multiple notifications for localS
 export function showLocalStorageError(context) {
     if (!localStorageErrorShown) {
         localStorageErrorShown = true;
-        alert(`Warning: Unable to save your preferences to local storage. Your changes may not persist after closing the browser.\n\nContext: ${context}`);
+        toast({ tone: 'danger', text: `Your preferences could not be saved in this browser, so changes may be lost when you close it. Check that site storage is allowed. (${context})` })
     }
 }
 

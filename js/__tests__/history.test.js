@@ -3,6 +3,7 @@ import { showExerciseHistory, renderHistoryPage, updateHistoryFilterUI, bucketRe
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 import * as api from '../api.js';
+import { toast } from '../ui.js';
 
 vi.mock('../api.js', () => ({
     loadExerciseHistoryAPI: vi.fn()
@@ -78,14 +79,14 @@ describe('history.js', () => {
         dom.historySortErrors.innerHTML = '<span class="sort-dir"></span>';
         dom.historySortDate.innerHTML = '<span class="sort-dir"></span>';
 
-        globalThis.alert.mockClear();
+        toast.mockClear();
     });
 
     describe('showExerciseHistory', () => {
         it('requires login', async () => {
             state.isLoggedIn = false;
             await showExerciseHistory();
-            expect(globalThis.alert).toHaveBeenCalledWith("Please log in to view your exercise history.");
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', text: "Please log in to view your exercise history." }));
             expect(api.loadExerciseHistoryAPI).not.toHaveBeenCalled();
         });
 

@@ -2435,3 +2435,27 @@ button:disabled.is-audio-off {
     font-weight: 600;
     flex-shrink: 0;
 }
+/* v2 feedback hosts for js/ui.js: toast() bottom-center, confirm() dialog.
+   --toast-bottom is raised to 76px by the app shell when the mobile tab bar exists. */
+#toast-root {
+    inset: auto 0 var(--toast-bottom, 24px) 0;
+    width: fit-content;
+    max-width: calc(100% - 32px);
+    margin: 0 auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+}
+#confirm-dialog {
+    width: min(420px, calc(100% - 40px));
+    max-width: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+}
+#confirm-dialog::backdrop {
+    background: rgba(67, 40, 27, .38);
+    backdrop-filter: blur(2px);
+}

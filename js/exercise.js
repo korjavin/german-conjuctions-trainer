@@ -2,6 +2,7 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 import { isPunctuation, playWordAudio, playSentenceAudio, preloadExerciseWordAudio } from './audio.js';
 import { toggleFavoriteAPI, toggleHideExerciseAPI, fetchExplainAPI } from './api.js';
+import { toast } from './ui.js';
 
 let _onSessionComplete = () => {};
 
@@ -475,7 +476,7 @@ export async function handleExplainClick() {
         }
     } catch (error) {
         console.error('Error fetching explanation:', error);
-        alert('Failed to load explanation. Please try again.');
+        toast({ tone: 'danger', text: 'Failed to load the explanation. Please try again.' })
     } finally {
         state.isExplaining = false;
         dom.explainBtn.disabled = false;
@@ -532,7 +533,7 @@ export async function handleHideExercise() {
         await toggleHideExerciseAPI(exerciseId);
     } catch (error) {
         console.error('Error hiding exercise:', error);
-        alert('Failed to remove exercise. Please try again.');
+        toast({ tone: 'danger', text: 'Failed to remove the exercise. Please try again.' })
         return;
     }
 
@@ -577,7 +578,7 @@ export async function handleToggleFavorite() {
         // Revert on error
         exercise.is_favorite = !newStatus;
         updateFavoriteButtonState(exercise.is_favorite);
-        alert('Failed to update favorite status.');
+        toast({ tone: 'danger', text: 'Failed to update the favorite. Please try again.' })
     }
 }
 

@@ -13,7 +13,8 @@
     <meta name="theme-color" content="#A33F11">
     <link rel="manifest" href="/manifest.json">
     <link href="/css/colors_and_type.css" rel="stylesheet">
-    <link href="style.css?v=202610090001" rel="stylesheet">
+    <link href="/css/components.css" rel="stylesheet">
+    <link href="style.css?v=202610090002" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 </head>
 <body class="app-body">
@@ -650,6 +651,10 @@ gct whoami</pre>
     <div id="topic-dropdown" class="topic-dropdown hidden">
         <!-- Topic items will be dynamically inserted here -->
     </div>
+
+    <!-- v2 feedback hosts (js/ui.js) -->
+    <div id="toast-root" popover="manual"></div>
+    <dialog id="confirm-dialog" aria-labelledby="confirm-dialog-title"></dialog>
 
     <script src="/js/icons.js"></script>
     <script type="module" src="js/main.js"></script>

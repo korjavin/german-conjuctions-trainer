@@ -3,6 +3,7 @@ import { fetchExercises, saveUserStats } from '../session.js';
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 import * as api from '../api.js';
+import { toast } from '../ui.js';
 import { OFFLINE_STASH_KEY, readQueue } from '../offline.js';
 
 vi.mock('../api.js', () => ({
@@ -46,7 +47,7 @@ describe('session.js', () => {
         dom.generateBtn.disabled = false;
         dom.timer.textContent = '';
 
-        globalThis.alert.mockClear();
+        toast.mockClear();
         localStorage.clear();
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
         vi.useFakeTimers();
@@ -101,7 +102,7 @@ describe('session.js', () => {
             await fetchExercises();
 
             expect(state.exercises.length).toBe(0);
-            expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('No exercises could be retrieved'));
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', text: expect.stringContaining('No exercises could be retrieved') }));
         });
 
         it('handles 429 error appropriately', async () => {
@@ -112,7 +113,7 @@ describe('session.js', () => {
 
             await fetchExercises();
 
-            expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('Rate Limit Exceeded'));
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', text: expect.stringContaining('Rate Limit Exceeded') }));
             expect(dom.loadingSpinner.classList.add).toHaveBeenCalledWith('hidden');
         });
 
@@ -123,7 +124,7 @@ describe('session.js', () => {
 
             await fetchExercises();
 
-            expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('The AI provider took too long'));
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', text: expect.stringContaining('The AI provider took too long') }));
         });
 
         it('handles generic errors', async () => {
@@ -133,8 +134,8 @@ describe('session.js', () => {
 
             await fetchExercises();
 
-            expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('Failed to fetch new exercises'));
-            expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('You can retry this request'));
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', text: expect.stringContaining('Failed to fetch new exercises') }));
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', text: expect.stringContaining('You can retry this request') }));
         });
     });
 
@@ -151,7 +152,7 @@ describe('session.js', () => {
             await fetchExercises();
 
             expect(state.exercises.map(e => e.id)).toEqual(['stashed1']);
-            expect(globalThis.alert).not.toHaveBeenCalled();
+            expect(toast).not.toHaveBeenCalled();
             // Served exercises are consumed from the stash
             expect(JSON.parse(localStorage.getItem(OFFLINE_STASH_KEY)).exercises).toEqual([]);
         });
@@ -171,7 +172,7 @@ describe('session.js', () => {
 
             await fetchExercises();
 
-            expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('no exercises are cached'));
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', text: expect.stringContaining('no exercises are cached') }));
         });
 
         it('still reports the original error when online and the stash is empty', async () => {
@@ -180,7 +181,7 @@ describe('session.js', () => {
 
             await fetchExercises();
 
-            expect(globalThis.alert).toHaveBeenCalledWith(expect.stringContaining('Failed to fetch new exercises'));
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', text: expect.stringContaining('Failed to fetch new exercises') }));
         });
     });
 

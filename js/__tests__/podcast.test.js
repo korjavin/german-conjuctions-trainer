@@ -3,6 +3,7 @@ import { formatDuration, describeEpisode, mergeEpisodes, openPodcastDialog, gene
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 import * as api from '../api.js';
+import { confirm } from '../ui.js';
 
 vi.mock('../api.js', () => ({
     generatePodcastAPI: vi.fn(),
@@ -249,11 +250,11 @@ describe('podcast.js', () => {
         });
 
         it('regenerates only after confirmation', async () => {
-            window.confirm = vi.fn().mockReturnValueOnce(false);
+            confirm.mockResolvedValueOnce(null);
             await regeneratePodcastFeed();
             expect(api.regeneratePodcastFeedAPI).not.toHaveBeenCalled();
 
-            window.confirm.mockReturnValueOnce(true);
+            confirm.mockResolvedValueOnce('regenerate');
             api.regeneratePodcastFeedAPI.mockResolvedValueOnce({ feed_url: feedURL });
             await regeneratePodcastFeed();
             expect(dom.podcastFeedUrl.value).toBe(feedURL);
@@ -264,7 +265,7 @@ describe('podcast.js', () => {
             let finishLoad;
             api.getPodcastFeedAPI.mockReturnValueOnce(new Promise((resolve) => { finishLoad = resolve; }));
             const load = loadPodcastFeed();
-            window.confirm = vi.fn().mockReturnValueOnce(true);
+            confirm.mockResolvedValueOnce('regenerate');
             api.regeneratePodcastFeedAPI.mockResolvedValueOnce({ feed_url: feedURL });
             await regeneratePodcastFeed();
             finishLoad({ feed_url: 'https://gct.example/podcast/feed/revoked.xml' });
