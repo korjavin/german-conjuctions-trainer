@@ -151,6 +151,17 @@ func (s *SQLiteStorage) runMigrations() error {
 			PRIMARY KEY(user_id, batch_id),
 			FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 		)`,
+		// No FK on exercise/topic: the log is history and outlives deleted exercises.
+		`CREATE TABLE IF NOT EXISTS practice_log (
+			id INTEGER PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			exercise_id TEXT NOT NULL,
+			topic_id TEXT NOT NULL,
+			completed_at DATETIME NOT NULL,
+			hints INTEGER NOT NULL DEFAULT 0,
+			mistakes INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_practice_log_user_time ON practice_log(user_id, completed_at)`,
 		`CREATE TABLE IF NOT EXISTS podcast_episodes (
 			id TEXT PRIMARY KEY,
 			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1240,7 +1251,7 @@ func (s *SQLiteStorage) UpdateUserExerciseViews(viewsToUpdate []*UserExerciseVie
 // It reports false (and writes nothing) when batchID was already recorded —
 // i.e. the client replayed a batch that has already been applied. An empty
 // batchID skips the marker and always applies.
-func (s *SQLiteStorage) ApplyCompletionBatch(userID, batchID string, viewsToUpdate []*UserExerciseView) (bool, error) {
+func (s *SQLiteStorage) ApplyCompletionBatch(userID, batchID string, viewsToUpdate []*UserExerciseView, completed []PracticeLogEntry) (bool, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return false, err
@@ -1267,7 +1278,66 @@ func (s *SQLiteStorage) ApplyCompletionBatch(userID, batchID string, viewsToUpda
 	if err := upsertUserExerciseViews(tx, viewsToUpdate); err != nil {
 		return false, err
 	}
+	if err := insertPracticeLog(tx, userID, completed); err != nil {
+		return false, err
+	}
 	return true, tx.Commit()
+}
+
+// insertPracticeLog appends one row per completion; topic_id is copied from
+// the exercise, and completions of unknown exercises are not logged.
+// ponytail: completed_at is server time, so offline batches are logged on the
+// sync day; upgrade path is a client timestamp per completion in the batch.
+func insertPracticeLog(tx *sql.Tx, userID string, completed []PracticeLogEntry) error {
+	stmt, err := tx.Prepare(`
+		INSERT INTO practice_log(user_id, exercise_id, topic_id, completed_at, hints, mistakes)
+		SELECT ?, id, topic_id, ?, ?, ? FROM exercises WHERE id = ?`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	now := time.Now().UTC()
+	for _, c := range completed {
+		if _, err := stmt.Exec(userID, now, c.Hints, c.Mistakes, c.ExerciseID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *SQLiteStorage) GetPracticeActivity(userID string, topicIDs []string, days int, now time.Time) ([]DayCount, error) {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	start := today.AddDate(0, 0, -(days - 1))
+	out := make([]DayCount, days)
+	index := make(map[string]int, days)
+	for i := range out {
+		out[i].Date = start.AddDate(0, 0, i).Format("2006-01-02")
+		index[out[i].Date] = i
+	}
+
+	query := `SELECT completed_at FROM practice_log WHERE user_id = ? AND completed_at >= ?`
+	args := []interface{}{userID, start.UTC()}
+	if len(topicIDs) > 0 {
+		query += ` AND topic_id IN (?` + strings.Repeat(",?", len(topicIDs)-1) + `)`
+		for _, id := range topicIDs {
+			args = append(args, id)
+		}
+	}
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var at time.Time
+		if err := rows.Scan(&at); err != nil {
+			return nil, err
+		}
+		if i, ok := index[at.In(now.Location()).Format("2006-01-02")]; ok {
+			out[i].Count++
+		}
+	}
+	return out, rows.Err()
 }
 
 func upsertUserExerciseViews(tx *sql.Tx, viewsToUpdate []*UserExerciseView) error {

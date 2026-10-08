@@ -111,6 +111,19 @@ type TopicProgress struct {
 	Mastered  int `json:"mastered"`
 }
 
+// PracticeLogEntry is one completed exercise, appended to practice_log.
+type PracticeLogEntry struct {
+	ExerciseID string
+	Hints      int
+	Mistakes   int
+}
+
+// DayCount is the number of completions on one calendar day (YYYY-MM-DD).
+type DayCount struct {
+	Date  string `json:"date"`
+	Count int    `json:"count"`
+}
+
 // ExerciseHistoryItem represents an exercise with its practice history
 type ExerciseHistoryItem struct {
 	ExerciseID         string    `json:"exercise_id"`
@@ -205,8 +218,13 @@ type Storage interface {
 	// ApplyCompletionBatch writes view updates and records the client-supplied
 	// batchID atomically. It reports false (writing nothing) when the batch was
 	// already recorded, i.e. the client replayed it. An empty batchID always
-	// applies, matching the pre-idempotency behavior.
-	ApplyCompletionBatch(userID, batchID string, viewsToUpdate []*UserExerciseView) (bool, error)
+	// applies, matching the pre-idempotency behavior. Each completed entry is
+	// appended to practice_log in the same transaction.
+	ApplyCompletionBatch(userID, batchID string, viewsToUpdate []*UserExerciseView, completed []PracticeLogEntry) (bool, error)
+	// GetPracticeActivity returns per-day completion counts for the `days`
+	// calendar days ending on now's day (in now's location), oldest first and
+	// zero-filled. Empty topicIDs means all topics.
+	GetPracticeActivity(userID string, topicIDs []string, days int, now time.Time) ([]DayCount, error)
 
 	// CLI Tokens
 	CreateCLIToken(userID, tokenHash, label string) (*CLIToken, error)

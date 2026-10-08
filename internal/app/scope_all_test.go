@@ -146,3 +146,62 @@ func TestHandleTopicProgress(t *testing.T) {
 		t.Errorf("progress = %+v, body %s", got, rr.Body.String())
 	}
 }
+
+func TestHandleUserActivity(t *testing.T) {
+	app, cleanup := setupIntegrationApp(t)
+	defer cleanup()
+
+	user, _ := app.DB.CreateUser("g-activity")
+	parent, _ := app.DB.CreateTopic("P", "p", nil, 0)
+	child, _ := app.DB.CreateTopic("C", "c", &parent.ID, 0)
+	other, _ := app.DB.CreateTopic("O", "o", nil, 0)
+	ex, _ := app.DB.CreateExercise(child.ID, "h", `{}`, "")
+
+	// Two completions today, then a replay of the first batch.
+	for _, batch := range []string{"b1", "b2", "b1"} {
+		if rr := postCompletion(t, app, user.ID, ex.ID, batch, 0); rr.Code != http.StatusOK {
+			t.Fatalf("completion %s: %d %s", batch, rr.Code, rr.Body.String())
+		}
+	}
+
+	get := func(query string) []storage.DayCount {
+		t.Helper()
+		rr := httptest.NewRecorder()
+		app.handleUserActivity(rr, asUser(httptest.NewRequest(http.MethodGet, "/api/user/activity"+query, nil), user.ID))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s: status %d: %s", query, rr.Code, rr.Body.String())
+		}
+		var resp struct {
+			Days []storage.DayCount `json:"days"`
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+			t.Fatal(err)
+		}
+		return resp.Days
+	}
+
+	for query, wantToday := range map[string]int{"": 2, "?topic_id=" + parent.ID: 2, "?topic_id=" + other.ID: 0} {
+		days := get(query)
+		if len(days) != 7 || days[6].Date != time.Now().Format("2006-01-02") {
+			t.Fatalf("%q: bad days %+v", query, days)
+		}
+		for i, d := range days {
+			want := 0
+			if i == 6 {
+				want = wantToday
+			}
+			if d.Count != want {
+				t.Errorf("%q: day %s count %d, want %d", query, d.Date, d.Count, want)
+			}
+		}
+	}
+
+	if days := get("?days=3"); len(days) != 3 {
+		t.Errorf("days=3 returned %d days", len(days))
+	}
+	rr := httptest.NewRecorder()
+	app.handleUserActivity(rr, asUser(httptest.NewRequest(http.MethodGet, "/api/user/activity?days=0", nil), user.ID))
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("days=0: status %d, want 400", rr.Code)
+	}
+}

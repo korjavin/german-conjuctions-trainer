@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
+	"time"
 
 	"german-conjunctions-trainer/pkg/storage"
 )
@@ -102,4 +104,41 @@ func (a *App) handleTopicProgress(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	json.NewEncoder(w).Encode(map[string]map[string]*storage.TopicProgress{"topics": progress})
+}
+
+// handleUserActivity returns per-day completion counts for the week card:
+// GET /api/user/activity?topic_id=&days=7 -> {"days": [{"date": "2026-10-03", "count": 12}, ...]}.
+// Days are oldest-first, zero-filled, and bucketed by the SERVER's local day.
+// topic_id scopes to that topic's subtree; empty means all topics.
+func (a *App) handleUserActivity(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "", false)
+		return
+	}
+	q := r.URL.Query()
+	days := 7
+	if s := q.Get("days"); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 1 || n > 366 {
+			writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST", "days must be 1-366", "", false)
+			return
+		}
+		days = n
+	}
+	var topicIDs []string
+	if id := q.Get("topic_id"); id != "" {
+		var err error
+		if topicIDs, err = a.subtreeTopicIDs(id); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "ACTIVITY_LOOKUP_FAILED", "Failed to get activity", err.Error(), true)
+			return
+		}
+	}
+	counts, err := a.DB.GetPracticeActivity(getUserIDFromRequest(r), topicIDs, days, time.Now())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "ACTIVITY_LOOKUP_FAILED", "Failed to get activity", err.Error(), true)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	json.NewEncoder(w).Encode(map[string][]storage.DayCount{"days": counts})
 }

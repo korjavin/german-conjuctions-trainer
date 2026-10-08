@@ -379,6 +379,7 @@ func (a *App) handleExercisesComplete(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	var viewsToUpdate []*storage.UserExerciseView
+	var completed []storage.PracticeLogEntry
 
 	for _, completion := range req.Completions {
 		view, exists := userViews[completion.ExerciseID]
@@ -415,11 +416,14 @@ func (a *App) handleExercisesComplete(w http.ResponseWriter, r *http.Request) {
 		}
 
 		viewsToUpdate = append(viewsToUpdate, view)
+		completed = append(completed, storage.PracticeLogEntry{
+			ExerciseID: completion.ExerciseID, Hints: completion.HintsUsed, Mistakes: completion.Mistakes,
+		})
 	}
 
 	// The batch marker is written in the same transaction as the stats, so a
 	// replayed batch (applied == false) leaves attempts and SRS counters alone.
-	applied, err := a.DB.ApplyCompletionBatch(userID, req.ClientBatchID, viewsToUpdate)
+	applied, err := a.DB.ApplyCompletionBatch(userID, req.ClientBatchID, viewsToUpdate, completed)
 	if err != nil {
 		log.Printf("ERROR: failed to update user exercise views: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to update views: %v", err), http.StatusInternalServerError)

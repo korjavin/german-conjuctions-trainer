@@ -25,13 +25,13 @@ func TestApplyCompletionBatch(t *testing.T) {
 		}}
 	}
 
-	applied, err := store.ApplyCompletionBatch(user.ID, "b1", view(user.ID, 1))
+	applied, err := store.ApplyCompletionBatch(user.ID, "b1", view(user.ID, 1), nil)
 	if err != nil || !applied {
 		t.Fatalf("first apply: applied=%v err=%v", applied, err)
 	}
 
 	// Replay: reports not applied and must not write.
-	applied, err = store.ApplyCompletionBatch(user.ID, "b1", view(user.ID, 99))
+	applied, err = store.ApplyCompletionBatch(user.ID, "b1", view(user.ID, 99), nil)
 	if err != nil {
 		t.Fatalf("replay returned error: %v", err)
 	}
@@ -47,12 +47,12 @@ func TestApplyCompletionBatch(t *testing.T) {
 	}
 
 	// Batch IDs are scoped per user.
-	if applied, err = store.ApplyCompletionBatch(other.ID, "b1", view(other.ID, 1)); err != nil || !applied {
+	if applied, err = store.ApplyCompletionBatch(other.ID, "b1", view(other.ID, 1), nil); err != nil || !applied {
 		t.Errorf("same batch id for another user should apply: applied=%v err=%v", applied, err)
 	}
 
 	// No batch ID: always applies.
-	if applied, err = store.ApplyCompletionBatch(user.ID, "", view(user.ID, 2)); err != nil || !applied {
+	if applied, err = store.ApplyCompletionBatch(user.ID, "", view(user.ID, 2), nil); err != nil || !applied {
 		t.Errorf("empty batch id should always apply: applied=%v err=%v", applied, err)
 	}
 	views, _ = store.GetUserExerciseViews(user.ID)
