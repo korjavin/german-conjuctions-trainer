@@ -140,6 +140,12 @@ export async function generatePodcastAPI(topicId, favoritesOnly = false) {
     return response.json();
 }
 
+// The user's live episodes of a topic and its subtopics, newest first ({episodes}).
+export async function listPodcastEpisodesAPI(topicId) {
+    const response = await apiFetch(`/api/podcast/episodes?topic_id=${encodeURIComponent(topicId)}`);
+    return response.json();
+}
+
 // The user's private podcast RSS feed URL ({feed_url}); created on first call.
 export async function getPodcastFeedAPI() {
     const response = await apiFetch('/api/podcast/feed');

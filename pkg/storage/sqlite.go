@@ -163,6 +163,8 @@ func (s *SQLiteStorage) runMigrations() error {
 			created_at DATETIME NOT NULL
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_podcast_episodes_user ON podcast_episodes(user_id, created_at)`,
+		`ALTER TABLE podcast_episodes ADD COLUMN recall_repeats INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE podcast_episodes ADD COLUMN phrases_json TEXT NOT NULL DEFAULT ''`,
 		`CREATE TABLE IF NOT EXISTS podcast_feed_tokens (
 			user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 			token TEXT NOT NULL UNIQUE,
@@ -1619,16 +1621,16 @@ func (s *SQLiteStorage) ListCLITokensForUser(userID string) ([]*CLIToken, error)
 
 func (s *SQLiteStorage) CreatePodcastEpisode(ep *PodcastEpisode) error {
 	_, err := s.db.Exec(
-		`INSERT INTO podcast_episodes(id, user_id, topic_id, title, favorites_only, duration_seconds, size_bytes, phrase_count, created_at)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		ep.ID, ep.UserID, ep.TopicID, ep.Title, ep.FavoritesOnly, ep.DurationSeconds, ep.SizeBytes, ep.PhraseCount, ep.CreatedAt.UTC(),
+		`INSERT INTO podcast_episodes(id, user_id, topic_id, title, favorites_only, duration_seconds, size_bytes, phrase_count, recall_repeats, phrases_json, created_at)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ep.ID, ep.UserID, ep.TopicID, ep.Title, ep.FavoritesOnly, ep.DurationSeconds, ep.SizeBytes, ep.PhraseCount, ep.RecallRepeats, ep.PhrasesJSON, ep.CreatedAt.UTC(),
 	)
 	return err
 }
 
 func (s *SQLiteStorage) ListPodcastEpisodes(userID string, since time.Time) ([]*PodcastEpisode, error) {
 	rows, err := s.db.Query(
-		`SELECT id, user_id, topic_id, title, favorites_only, duration_seconds, size_bytes, phrase_count, created_at
+		`SELECT id, user_id, topic_id, title, favorites_only, duration_seconds, size_bytes, phrase_count, recall_repeats, phrases_json, created_at
 		 FROM podcast_episodes WHERE user_id = ? AND created_at > ?
 		 ORDER BY created_at DESC`,
 		userID, since.UTC(),
@@ -1640,7 +1642,7 @@ func (s *SQLiteStorage) ListPodcastEpisodes(userID string, since time.Time) ([]*
 	var episodes []*PodcastEpisode
 	for rows.Next() {
 		var ep PodcastEpisode
-		if err := rows.Scan(&ep.ID, &ep.UserID, &ep.TopicID, &ep.Title, &ep.FavoritesOnly, &ep.DurationSeconds, &ep.SizeBytes, &ep.PhraseCount, &ep.CreatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.UserID, &ep.TopicID, &ep.Title, &ep.FavoritesOnly, &ep.DurationSeconds, &ep.SizeBytes, &ep.PhraseCount, &ep.RecallRepeats, &ep.PhrasesJSON, &ep.CreatedAt); err != nil {
 			return nil, err
 		}
 		episodes = append(episodes, &ep)

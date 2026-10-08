@@ -385,11 +385,40 @@ type podcastResponse struct {
 	ID              string          `json:"id"`
 	URL             string          `json:"url"`
 	DownloadURL     string          `json:"download_url"`
+	TopicID         string          `json:"topic_id"`
 	TopicName       string          `json:"topic_name"`
 	DurationSeconds int             `json:"duration_seconds"`
+	CreatedAt       time.Time       `json:"created_at"`
 	ExpiresAt       time.Time       `json:"expires_at"`
 	Phrases         []podcastPhrase `json:"phrases"`
+	PhraseCount     int             `json:"phrase_count"`
 	RecallRepeats   int             `json:"recall_repeats"`
+}
+
+// newPodcastResponse describes an episode for the client, from a fresh build
+// or a stored row.
+func newPodcastResponse(ep *storage.PodcastEpisode, phrases []podcastPhrase) podcastResponse {
+	topicName := ep.Title
+	if ep.FavoritesOnly {
+		topicName += " (favorites)"
+	}
+	if phrases == nil {
+		phrases = []podcastPhrase{}
+	}
+	name := fmt.Sprintf("podcast-%s-%s", podcastFileSlug(topicName), ep.CreatedAt.Format("2006-01-02"))
+	return podcastResponse{
+		ID:              ep.ID,
+		URL:             "/api/podcast/" + ep.ID + ".mp3",
+		DownloadURL:     "/api/podcast/" + ep.ID + ".mp3?download=" + url.QueryEscape(name),
+		TopicID:         ep.TopicID,
+		TopicName:       topicName,
+		DurationSeconds: ep.DurationSeconds,
+		CreatedAt:       ep.CreatedAt.UTC(),
+		ExpiresAt:       podcastExpiry(ep.CreatedAt).UTC(),
+		Phrases:         phrases,
+		PhraseCount:     ep.PhraseCount,
+		RecallRepeats:   ep.RecallRepeats,
+	}
 }
 
 // handlePodcast builds an episode: POST /api/podcast {"topic_id": "...", "favorites_only": false}.
@@ -542,12 +571,6 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "PODCAST_SAVE_FAILED", "Failed to save podcast.", err.Error(), false)
 		return
 	}
-	a.recordPodcastEpisode(&storage.PodcastEpisode{
-		ID: id, UserID: userID, TopicID: topic.ID, Title: topic.Name, FavoritesOnly: req.FavoritesOnly,
-		DurationSeconds: int(duration.Round(time.Second).Seconds()), SizeBytes: int64(len(audio)),
-		PhraseCount: len(phrases), CreatedAt: time.Now(),
-	})
-
 	repeats := 0
 	for _, s := range steps {
 		if s.Recall {
@@ -556,21 +579,14 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	}
 	repeats -= len(phrases)
 
-	topicName := topic.Name
-	if req.FavoritesOnly {
-		topicName += " (favorites)"
+	phrasesJSON, _ := json.Marshal(phrases)
+	ep := &storage.PodcastEpisode{
+		ID: id, UserID: userID, TopicID: topic.ID, Title: topic.Name, FavoritesOnly: req.FavoritesOnly,
+		DurationSeconds: int(duration.Round(time.Second).Seconds()), SizeBytes: int64(len(audio)),
+		PhraseCount: len(phrases), RecallRepeats: repeats, PhrasesJSON: string(phrasesJSON), CreatedAt: time.Now(),
 	}
-	name := fmt.Sprintf("podcast-%s-%s", podcastFileSlug(topicName), time.Now().Format("2006-01-02"))
-	resp := podcastResponse{
-		ID:              id,
-		URL:             "/api/podcast/" + id + ".mp3",
-		DownloadURL:     "/api/podcast/" + id + ".mp3?download=" + url.QueryEscape(name),
-		TopicName:       topicName,
-		DurationSeconds: int(duration.Round(time.Second).Seconds()),
-		ExpiresAt:       podcastExpiry(time.Now()).UTC(),
-		Phrases:         phrases,
-		RecallRepeats:   repeats,
-	}
+	a.recordPodcastEpisode(ep)
+	resp := newPodcastResponse(ep, phrases)
 	log.Printf("[PODCAST] Built episode %s for topic %s userID='%s': %d phrases, %d repeats, %s, %d KB in %s",
 		id, topic.ID, userID, len(phrases), repeats, duration.Round(time.Second), len(audio)/1024, time.Since(started).Round(time.Millisecond))
 
@@ -615,4 +631,53 @@ func (a *App) handlePodcastFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "audio/mpeg")
 	w.Header().Set("Cache-Control", fmt.Sprintf("private, max-age=%d, immutable", int(remaining.Seconds())))
 	http.ServeContent(w, r, id+".mp3", info.ModTime(), f)
+}
+
+// handlePodcastEpisodes lists the user's live episodes of a topic and all its
+// subtopics, newest first: GET /api/podcast/episodes?topic_id=<id>.
+func (a *App) handlePodcastEpisodes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "", false)
+		return
+	}
+	topicID := r.URL.Query().Get("topic_id")
+	if topicID == "" {
+		writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST", "topic_id is required", "", false)
+		return
+	}
+	descendants, err := a.DB.GetDescendantTopicIDs(topicID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "TOPIC_LOOKUP_FAILED", "Failed to get subtopics", err.Error(), true)
+		return
+	}
+	inSubtree := map[string]bool{topicID: true}
+	for _, id := range descendants {
+		inSubtree[id] = true
+	}
+
+	episodes, err := a.DB.ListPodcastEpisodes(getUserIDFromRequest(r), time.Now().Add(-podcastMaxAge))
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "PODCAST_LIST_FAILED", "Failed to load your podcasts.", err.Error(), true)
+		return
+	}
+	resp := []podcastResponse{}
+	for _, ep := range episodes {
+		if !inSubtree[ep.TopicID] {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(podcastDir, ep.ID+".mp3")); err != nil {
+			continue
+		}
+		var phrases []podcastPhrase
+		if ep.PhrasesJSON != "" {
+			if err := json.Unmarshal([]byte(ep.PhrasesJSON), &phrases); err != nil {
+				log.Printf("[PODCAST] Episode %s has an unreadable transcript: %v", ep.ID, err)
+			}
+		}
+		resp = append(resp, newPodcastResponse(ep, phrases))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	json.NewEncoder(w).Encode(map[string][]podcastResponse{"episodes": resp})
 }
