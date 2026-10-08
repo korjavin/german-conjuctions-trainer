@@ -476,7 +476,7 @@ export async function handleExplainClick() {
         }
     } catch (error) {
         console.error('Error fetching explanation:', error);
-        toast({ tone: 'danger', text: 'Failed to load the explanation. Please try again.' })
+        toast({ tone: 'danger', text: 'Failed to load the explanation. Please try again.' });
     } finally {
         state.isExplaining = false;
         dom.explainBtn.disabled = false;
@@ -533,7 +533,7 @@ export async function handleHideExercise() {
         await toggleHideExerciseAPI(exerciseId);
     } catch (error) {
         console.error('Error hiding exercise:', error);
-        toast({ tone: 'danger', text: 'Failed to remove the exercise. Please try again.' })
+        toast({ tone: 'danger', text: 'Failed to remove the exercise. Please try again.' });
         return;
     }
 
@@ -578,7 +578,7 @@ export async function handleToggleFavorite() {
         // Revert on error
         exercise.is_favorite = !newStatus;
         updateFavoriteButtonState(exercise.is_favorite);
-        toast({ tone: 'danger', text: 'Failed to update the favorite. Please try again.' })
+        toast({ tone: 'danger', text: 'Failed to update the favorite. Please try again.' });
     }
 }
 

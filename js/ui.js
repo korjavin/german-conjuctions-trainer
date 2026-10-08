@@ -35,7 +35,10 @@ export function toast({ text, tone, icon: iconName, action } = {}) {
     }
     clearTimeout(toastTimer);
     root.replaceChildren(el);
-    // Re-show so the toast lands on top of any modal opened since the last one.
+    // A modal dialog makes everything outside it inert, so host the toast inside the
+    // topmost open dialog (if any); re-show so it lands above that dialog in the top layer.
+    const host = [...document.querySelectorAll('dialog[open]')].pop() || document.body;
+    if (root.parentNode !== host) host.append(root);
     root.hidePopover?.();
     root.showPopover?.();
     toastTimer = setTimeout(hideToast, TOAST_MS);
@@ -71,6 +74,7 @@ export function confirm({ title, body = '', actions = [] }) {
         box.append(h, p, list);
         dlg.replaceChildren(box);
         dlg.onclick = (e) => { if (e.target === dlg) dlg.close(); }; // click on the backdrop
+        dlg.onkeydown = (e) => e.stopPropagation(); // keep Enter/Space away from the document-level practice shortcuts
         dlg.onclose = () => { dlg.onclose = null; resolve(value); };
         dlg.showModal();
     });

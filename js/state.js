@@ -10,7 +10,7 @@ let localStorageErrorShown = false; // Prevent multiple notifications for localS
 export function showLocalStorageError(context) {
     if (!localStorageErrorShown) {
         localStorageErrorShown = true;
-        toast({ tone: 'danger', text: `Your preferences could not be saved in this browser, so changes may be lost when you close it. Check that site storage is allowed. (${context})` })
+        toast({ tone: 'danger', text: `Your preferences could not be saved in this browser, so changes may be lost when you close it. Check that site storage is allowed. (${context})` });
     }
 }
 

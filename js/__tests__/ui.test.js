@@ -34,6 +34,17 @@ describe('ui.toast', () => {
         expect(dom.toastRoot.querySelector('.gct-toast').getAttribute('role')).toBe('alert');
     });
 
+    it('hosts the toast inside an open modal so it is not inert', () => {
+        const modal = document.createElement('dialog');
+        modal.setAttribute('open', '');
+        document.body.append(modal);
+        toast({ text: 'Failed', tone: 'danger' });
+        expect(dom.toastRoot.parentNode).toBe(modal);
+        modal.remove();
+        toast({ text: 'Again' });
+        expect(dom.toastRoot.parentNode).toBe(document.body);
+    });
+
     it('runs the action callback and dismisses', () => {
         const run = vi.fn();
         toast({ text: 'Hidden', action: { label: 'Undo', run } });

@@ -5,7 +5,7 @@ import { toast } from './ui.js';
 
 export async function showExerciseHistory() {
     if (!state.isLoggedIn) {
-        toast({ tone: 'danger', text: "Please log in to view your exercise history." })
+        toast({ tone: 'danger', text: "Please log in to view your exercise history." });
         return;
     }
 
@@ -82,11 +82,11 @@ export async function showExerciseHistory() {
         dom.historyControlsContainer.classList.add('hidden');
         dom.historyReviewChart.classList.add('hidden');
         if (error.status === 401) {
-            toast({ tone: 'danger', text: "Your session has expired. Please log in again." })
-            dom.historyModal.close();
+            dom.historyModal.close(); // close first: an open modal would host (and then hide) the toast
+            toast({ tone: 'danger', text: "Your session has expired. Please log in again." });
             return;
         }
-        toast({ tone: 'danger', text: 'Could not load exercise history. Please try again later.' })
+        toast({ tone: 'danger', text: 'Could not load exercise history. Please try again later.' });
     }
 }
 
