@@ -21,6 +21,9 @@ func (a *App) backfillKeyTerms() {
 		return
 	}
 	for _, topic := range topics {
+		if topic.IsArchive {
+			continue
+		}
 		promptHash := storage.GetPromptHash(topic.Prompt)
 		existing, err := a.DB.GetTopicKeyTerms(topic.ID, promptHash)
 		if err != nil {
@@ -332,9 +335,46 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, errMsg, http.StatusNotFound)
 				case strings.Contains(errMsg, "invalid parent") || strings.Contains(errMsg, "cycle"):
 					http.Error(w, errMsg, http.StatusBadRequest)
+				case errors.Is(err, storage.ErrTopicNameConflict):
+					http.Error(w, errMsg, http.StatusConflict)
 				default:
 					log.Printf("Failed to move topic: %v", err)
 					http.Error(w, "Failed to move topic. Please try again.", http.StatusInternalServerError)
+				}
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(topic)
+		}).ServeHTTP(w, r)
+		return
+	}
+
+	if subresource == "archive" || subresource == "unarchive" {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		a.adminOnly(func(w http.ResponseWriter, r *http.Request) {
+			var topic *storage.Topic
+			var err error
+			if subresource == "archive" {
+				topic, err = a.DB.ArchiveTopic(topicID)
+			} else {
+				topic, err = a.DB.UnarchiveTopic(topicID)
+			}
+			if err != nil {
+				switch {
+				case errors.Is(err, storage.ErrTopicArchiveState):
+					http.Error(w, err.Error(), http.StatusBadRequest)
+				case errors.Is(err, storage.ErrTopicNameConflict):
+					http.Error(w, err.Error(), http.StatusConflict)
+				case strings.Contains(err.Error(), "not found"):
+					http.Error(w, err.Error(), http.StatusNotFound)
+				default:
+					log.Printf("Failed to %s topic: %v", subresource, err)
+					http.Error(w, fmt.Sprintf("Failed to %s topic. Please try again.", subresource), http.StatusInternalServerError)
 				}
 				return
 			}
@@ -476,6 +516,11 @@ func (a *App) handleTopicByID(w http.ResponseWriter, r *http.Request) {
 			}
 			if len(prompt) > 10000 {
 				http.Error(w, "Prompt must be less than 10000 characters", http.StatusBadRequest)
+				return
+			}
+
+			if existingTopic.IsArchive && parentID != nil {
+				http.Error(w, "the archive must stay at the root level", http.StatusBadRequest)
 				return
 			}
 

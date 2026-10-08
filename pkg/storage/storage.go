@@ -16,6 +16,8 @@ type Topic struct {
 	SortOrder int       `json:"sort_order"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// IsArchive marks the archive root (ID ArchiveTopicID).
+	IsArchive bool `json:"is_archive,omitempty"`
 }
 
 type PromptVersion struct {
@@ -150,6 +152,10 @@ type Storage interface {
 	GetDescendantTopicIDs(topicID string) ([]string, error)
 	UpdateTopic(topicID, name, prompt string, parentID *string, sortOrder int) (*Topic, error)
 	MoveTopic(topicID, parentID string, position *int) (*Topic, error)
+	// ArchiveTopic moves a topic and its subtree under the archive root.
+	ArchiveTopic(topicID string) (*Topic, error)
+	// UnarchiveTopic moves an archived topic back to where it was archived from.
+	UnarchiveTopic(topicID string) (*Topic, error)
 	DeleteTopic(topicID string) error
 
 	// Key Terms

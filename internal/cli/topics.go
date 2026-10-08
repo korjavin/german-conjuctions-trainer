@@ -18,6 +18,7 @@ type Topic struct {
 	SortOrder int       `json:"sort_order"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	IsArchive bool      `json:"is_archive,omitempty"`
 }
 
 // TopicUpdate is a sparse representation of fields the caller wants to change
@@ -131,6 +132,30 @@ func (c *Client) MoveTopic(id, parentID string, position *int) (*Topic, error) {
 	}
 	var t Topic
 	if err := c.Do(http.MethodPut, "/api/topics/"+url.PathEscape(id)+"/move", body, &t); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// ArchiveTopic moves a topic and its subtree under the archive root (the
+// server creates it on first use). Archived topics keep their exercises but
+// are hidden from the practice topic picker.
+func (c *Client) ArchiveTopic(id string) (*Topic, error) {
+	return c.archiveAction(id, "archive")
+}
+
+// UnarchiveTopic moves an archived topic back to the parent it was archived
+// from, or to the root level when that parent is gone.
+func (c *Client) UnarchiveTopic(id string) (*Topic, error) {
+	return c.archiveAction(id, "unarchive")
+}
+
+func (c *Client) archiveAction(id, action string) (*Topic, error) {
+	if id == "" {
+		return nil, errors.New("topic id is required")
+	}
+	var t Topic
+	if err := c.Do(http.MethodPost, "/api/topics/"+url.PathEscape(id)+"/"+action, nil, &t); err != nil {
 		return nil, err
 	}
 	return &t, nil
