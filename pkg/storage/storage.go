@@ -103,9 +103,18 @@ type UserExerciseStats struct {
 	ReadyToRepeatCount int `json:"ready_to_repeat"`
 }
 
+// TopicProgress holds a user's direct (non-rolled-up) counts for one topic.
+type TopicProgress struct {
+	Exercises int `json:"exercises"`
+	Seen      int `json:"seen"`
+	Due       int `json:"due"`
+	Mastered  int `json:"mastered"`
+}
+
 // ExerciseHistoryItem represents an exercise with its practice history
 type ExerciseHistoryItem struct {
 	ExerciseID         string    `json:"exercise_id"`
+	TopicID            string    `json:"topic_id"`
 	TopicName          string    `json:"topic_name"`
 	GermanSentence     string    `json:"german_sentence"`
 	EnglishHint        string    `json:"english_hint"`
@@ -131,11 +140,11 @@ type TopicKeyTerms struct {
 
 // DatabaseStats holds aggregate statistics about the database.
 type DatabaseStats struct {
-	TotalExercises      int                `json:"total_exercises"`
-	TotalTopics         int                `json:"total_topics"`
-	AudioCacheSizeMB    float64            `json:"audio_cache_size_mb"`
-	AudioCacheFileCount int                `json:"audio_cache_file_count"`
-	DatabaseSizeMB      float64            `json:"database_size_mb"`
+	TotalExercises      int                  `json:"total_exercises"`
+	TotalTopics         int                  `json:"total_topics"`
+	AudioCacheSizeMB    float64              `json:"audio_cache_size_mb"`
+	AudioCacheFileCount int                  `json:"audio_cache_file_count"`
+	DatabaseSizeMB      float64              `json:"database_size_mb"`
 	ExercisesPerTopic   []TopicExerciseCount `json:"exercises_per_topic"`
 }
 
@@ -187,6 +196,8 @@ type Storage interface {
 	UpdateUserStats(stats *UserStats) error
 	UpdateUserSetting(userID, lastTopicID string) error
 	GetUserExerciseStats(userID string) (*UserExerciseStats, error)
+	// GetTopicProgress returns direct per-topic counts for the user, keyed by topic ID.
+	GetTopicProgress(userID string) (map[string]*TopicProgress, error)
 	GetUserExerciseHistory(userID, topicID string) ([]*ExerciseHistoryItem, error)
 	ToggleFavorite(userID, exerciseID string) (bool, error)
 	ToggleHideExercise(userID, exerciseID string) (bool, error)

@@ -86,14 +86,15 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	topic, err := a.DB.GetTopic(req.TopicID)
-	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "TOPIC_NOT_FOUND", "Topic not found", err.Error(), false)
+	topicIDs, allExercises, ok := a.loadScopeExercises(w, req.TopicID)
+	if !ok {
 		return
 	}
-	if topic.IsArchive {
-		writeJSONError(w, http.StatusBadRequest, "TOPIC_IS_ARCHIVE", "The archive folder cannot be practiced; pick a topic inside it.", "", false)
-		return
+	log.Printf("[EXERCISES] Found %d exercises in cache for topics %v", len(allExercises), topicIDs)
+	if req.TopicID == "" {
+		// All topics: there is no single prompt to generate from, so serve
+		// what is cached and due.
+		req.SkipGeneration = true
 	}
 
 	userID := getUserIDFromRequest(r)
@@ -106,13 +107,6 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 			limit = maxExerciseBatchLimit
 		}
 	}
-
-	topicIDs, allExercises, err := a.loadSubtreeExercises(topic)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "EXERCISE_LOOKUP_FAILED", "Failed to get exercises", err.Error(), false)
-		return
-	}
-	log.Printf("[EXERCISES] Found %d exercises in cache for topics %v", len(allExercises), topicIDs)
 
 	var finalExercises []*storage.Exercise
 	userViews := make(map[string]*storage.UserExerciseView)
@@ -206,31 +200,87 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[EXERCISES] Completed request for topic %s userID='%s' with %d exercises in %s", req.TopicID, userID, len(responseExercises), time.Since(requestStartedAt).Round(time.Millisecond))
 }
 
-// loadSubtreeExercises returns the IDs of topic and all its descendants, plus
-// the cached exercises of that subtree that match each topic's *current*
-// prompt (stale exercises from older prompt versions are dropped).
-func (a *App) loadSubtreeExercises(topic *storage.Topic) ([]string, []*storage.Exercise, error) {
-	descendants, err := a.DB.GetDescendantTopicIDs(topic.ID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get descendant topics: %w", err)
+// loadScopeExercises resolves a practice scope — a topic and its subtree, or
+// every non-archived topic when topicID is empty — and loads its exercises.
+// On failure it writes the error response and returns ok=false.
+func (a *App) loadScopeExercises(w http.ResponseWriter, topicID string) (topicIDs []string, exercises []*storage.Exercise, ok bool) {
+	var err error
+	if topicID == "" {
+		topicIDs, err = a.nonArchivedTopicIDs()
+	} else {
+		topic, terr := a.DB.GetTopic(topicID)
+		if terr != nil {
+			writeJSONError(w, http.StatusNotFound, "TOPIC_NOT_FOUND", "Topic not found", terr.Error(), false)
+			return nil, nil, false
+		}
+		if topic.IsArchive {
+			writeJSONError(w, http.StatusBadRequest, "TOPIC_IS_ARCHIVE", "The archive folder cannot be practiced; pick a topic inside it.", "", false)
+			return nil, nil, false
+		}
+		topicIDs, err = a.subtreeTopicIDs(topic.ID)
 	}
+	if err == nil {
+		exercises, err = a.loadTopicsExercises(topicIDs)
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "EXERCISE_LOOKUP_FAILED", "Failed to get exercises", err.Error(), false)
+		return nil, nil, false
+	}
+	return topicIDs, exercises, true
+}
 
-	topicIDs := append([]string{topic.ID}, descendants...)
+// subtreeTopicIDs returns topicID followed by all its descendants.
+func (a *App) subtreeTopicIDs(topicID string) ([]string, error) {
+	descendants, err := a.DB.GetDescendantTopicIDs(topicID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get descendant topics: %w", err)
+	}
+	return append([]string{topicID}, descendants...), nil
+}
+
+// nonArchivedTopicIDs returns every topic outside the archive subtree: the
+// "All topics" scope.
+func (a *App) nonArchivedTopicIDs() ([]string, error) {
+	topics, err := a.DB.GetAllTopics()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get topics: %w", err)
+	}
+	archived, err := a.subtreeTopicIDs(storage.ArchiveTopicID)
+	if err != nil {
+		return nil, err
+	}
+	skip := make(map[string]bool, len(archived))
+	for _, id := range archived {
+		skip[id] = true
+	}
+	var ids []string
+	for _, t := range topics {
+		if !skip[t.ID] && !t.IsArchive {
+			ids = append(ids, t.ID)
+		}
+	}
+	return ids, nil
+}
+
+// loadTopicsExercises returns the cached exercises of topicIDs that match each
+// topic's *current* prompt (stale exercises from older prompt versions are
+// dropped).
+func (a *App) loadTopicsExercises(topicIDs []string) ([]*storage.Exercise, error) {
 	log.Printf("[EXERCISES] Fetching exercises from %d topics: %v", len(topicIDs), topicIDs)
 
 	// GetExercisesForTopics only accepts a single prompt hash filter, so fetch
 	// everything and filter per topic in memory.
-	topicHashFilters := map[string]string{topic.ID: storage.GetPromptHash(topic.Prompt)}
-	for _, descID := range descendants {
-		descTopic, err := a.DB.GetTopic(descID)
+	topicHashFilters := make(map[string]string, len(topicIDs))
+	for _, id := range topicIDs {
+		t, err := a.DB.GetTopic(id)
 		if err == nil {
-			topicHashFilters[descID] = storage.GetPromptHash(descTopic.Prompt)
+			topicHashFilters[id] = storage.GetPromptHash(t.Prompt)
 		}
 	}
 
 	rawExercises, err := a.DB.GetExercisesForTopics(topicIDs, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get exercises: %w", err)
+		return nil, fmt.Errorf("failed to get exercises: %w", err)
 	}
 
 	var exercises []*storage.Exercise
@@ -239,7 +289,7 @@ func (a *App) loadSubtreeExercises(topic *storage.Topic) ([]string, []*storage.E
 			exercises = append(exercises, ex)
 		}
 	}
-	return topicIDs, exercises, nil
+	return exercises, nil
 }
 
 // generateForSubtree generates and caches a new batch of exercises for a

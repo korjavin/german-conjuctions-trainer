@@ -70,6 +70,8 @@ func TestGetUserExerciseHistory_Descendants(t *testing.T) {
 	}
 	if len(history) != 1 || history[0].ExerciseID != exGrandchild1.ID {
 		t.Errorf("Leaf topic filter failed. Expected 1 exercise (exGrandchild1), got %d", len(history))
+	} else if history[0].TopicID != grandchild1.ID {
+		t.Errorf("history row topic_id = %q, want %q", history[0].TopicID, grandchild1.ID)
 	}
 
 	// Test Case 2: Filter by parent topic with children (Child1)

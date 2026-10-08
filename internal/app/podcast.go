@@ -34,6 +34,8 @@ import (
 
 const (
 	podcastPhraseCount = 25
+	// podcastAllTopicsTitle names episodes built from the "All topics" scope.
+	podcastAllTopicsTitle = "All topics"
 	// podcastMaxRecallRepeats caps how many weak phrases get a second recall.
 	podcastMaxRecallRepeats = 5
 	// podcastMaxGenerationRounds bounds LLM calls when the subtree is small.
@@ -405,7 +407,7 @@ func newPodcastResponse(ep *storage.PodcastEpisode, phrases []podcastPhrase) pod
 	if phrases == nil {
 		phrases = []podcastPhrase{}
 	}
-	name := fmt.Sprintf("podcast-%s-%s", podcastFileSlug(topicName), ep.CreatedAt.Format("2006-01-02"))
+	name := fmt.Sprintf("podcast-%s-%s", podcastFileSlug(topicName), ep.CreatedAt.UTC().Format("2006-01-02"))
 	return podcastResponse{
 		ID:              ep.ID,
 		URL:             "/api/podcast/" + ep.ID + ".mp3",
@@ -423,6 +425,7 @@ func newPodcastResponse(ep *storage.PodcastEpisode, phrases []podcastPhrase) pod
 
 // handlePodcast builds an episode: POST /api/podcast {"topic_id": "...", "favorites_only": false}.
 // favorites_only (logged-in users) builds it from starred phrases only, with no LLM generation.
+// An empty topic_id draws cached phrases from all non-archived topics, also without generation.
 func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "", false)
@@ -434,18 +437,25 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		TopicID       string `json:"topic_id"`
 		FavoritesOnly bool   `json:"favorites_only"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.TopicID == "" {
-		writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST_BODY", "topic_id is required", "", false)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST_BODY", "Invalid request body", err.Error(), false)
 		return
 	}
-	topic, err := a.DB.GetTopic(req.TopicID)
-	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "TOPIC_NOT_FOUND", "Topic not found", err.Error(), false)
-		return
-	}
-	if topic.IsArchive {
-		writeJSONError(w, http.StatusBadRequest, "TOPIC_IS_ARCHIVE", "The archive folder cannot be practiced; pick a topic inside it.", "", false)
-		return
+	// An empty topic_id is the "All topics" scope: phrases come from every
+	// non-archived topic, cached only (there is no single prompt to generate from).
+	allTopics := req.TopicID == ""
+	title := podcastAllTopicsTitle
+	if !allTopics {
+		topic, err := a.DB.GetTopic(req.TopicID)
+		if err != nil {
+			writeJSONError(w, http.StatusNotFound, "TOPIC_NOT_FOUND", "Topic not found", err.Error(), false)
+			return
+		}
+		if topic.IsArchive {
+			writeJSONError(w, http.StatusBadRequest, "TOPIC_IS_ARCHIVE", "The archive folder cannot be practiced; pick a topic inside it.", "", false)
+			return
+		}
+		title = topic.Name
 	}
 
 	userID := getUserIDFromRequest(r)
@@ -473,14 +483,14 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), a.podcast.timeout())
 	defer cancel()
 
-	topicIDs, exercises, err := a.loadSubtreeExercises(topic)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "EXERCISE_LOOKUP_FAILED", "Failed to get exercises", err.Error(), false)
+	topicIDs, exercises, ok := a.loadScopeExercises(w, req.TopicID)
+	if !ok {
 		return
 	}
 
 	var views map[string]*storage.UserExerciseView
 	if userID != "" {
+		var err error
 		views, err = a.DB.GetUserExerciseViews(userID)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, "USER_VIEWS_LOOKUP_FAILED", "Failed to get user exercise views", err.Error(), false)
@@ -501,8 +511,8 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 	// The LLM call itself cannot be cancelled (it has its own
 	// OPENAI_TIMEOUT_SECONDS); the deadline stops further rounds. Generated
 	// phrases are never favorites, so favorites mode skips this.
-	for round := 0; !req.FavoritesOnly && len(pool) < podcastPhraseCount && round < podcastMaxGenerationRounds && ctx.Err() == nil; round++ {
-		log.Printf("[PODCAST] Topic %s has %d phrases, generating more (round %d)", topic.ID, len(pool), round+1)
+	for round := 0; !req.FavoritesOnly && !allTopics && len(pool) < podcastPhraseCount && round < podcastMaxGenerationRounds && ctx.Err() == nil; round++ {
+		log.Printf("[PODCAST] Topic %s has %d phrases, generating more (round %d)", req.TopicID, len(pool), round+1)
 		generated, genErr := a.generateForSubtree(topicIDs, exercises)
 		if genErr != nil {
 			if len(pool) == 0 {
@@ -521,6 +531,10 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 		}
 		exercises = append(exercises, generated...)
 		pool, poolViews = podcastPool(exercises, views)
+	}
+	if len(pool) == 0 && allTopics {
+		writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST", "No phrases in any topic yet; pick a topic to build an episode from.", "", false)
+		return
 	}
 	if len(pool) == 0 {
 		writeJSONError(w, http.StatusNotFound, "NO_PHRASES", "This topic has no phrases yet.", "", false)
@@ -543,7 +557,7 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusGatewayTimeout, "UPSTREAM_TIMEOUT", "Building the podcast took too long. Please try again.", err.Error(), true)
 			return
 		case errors.Is(err, context.Canceled):
-			log.Printf("[PODCAST] Client went away, build for topic %s cancelled", topic.ID)
+			log.Printf("[PODCAST] Client went away, build for topic %q cancelled", req.TopicID)
 			return
 		}
 		writeJSONError(w, status, "TTS_FAILED", "Failed to synthesize podcast audio.", err.Error(), true)
@@ -585,14 +599,14 @@ func (a *App) handlePodcast(w http.ResponseWriter, r *http.Request) {
 
 	phrasesJSON, _ := json.Marshal(phrases)
 	ep := &storage.PodcastEpisode{
-		ID: id, UserID: userID, TopicID: topic.ID, Title: topic.Name, FavoritesOnly: req.FavoritesOnly,
+		ID: id, UserID: userID, TopicID: req.TopicID, Title: title, FavoritesOnly: req.FavoritesOnly,
 		DurationSeconds: int(duration.Round(time.Second).Seconds()), SizeBytes: int64(len(audio)),
 		PhraseCount: len(phrases), RecallRepeats: repeats, PhrasesJSON: string(phrasesJSON), CreatedAt: time.Now(),
 	}
 	a.recordPodcastEpisode(ep)
 	resp := newPodcastResponse(ep, phrases)
 	log.Printf("[PODCAST] Built episode %s for topic %s userID='%s': %d phrases, %d repeats, %s, %d KB in %s",
-		id, topic.ID, userID, len(phrases), repeats, duration.Round(time.Second), len(audio)/1024, time.Since(started).Round(time.Millisecond))
+		id, req.TopicID, userID, len(phrases), repeats, duration.Round(time.Second), len(audio)/1024, time.Since(started).Round(time.Millisecond))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -638,25 +652,26 @@ func (a *App) handlePodcastFile(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePodcastEpisodes lists the user's live episodes of a topic and all its
-// subtopics, newest first: GET /api/podcast/episodes?topic_id=<id>.
+// subtopics, newest first: GET /api/podcast/episodes?topic_id=<id>. Without
+// topic_id it lists all of the user's episodes.
 func (a *App) handlePodcastEpisodes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeJSONError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Method not allowed", "", false)
 		return
 	}
+	// An empty topic_id is the "All topics" scope: no filter.
 	topicID := r.URL.Query().Get("topic_id")
-	if topicID == "" {
-		writeJSONError(w, http.StatusBadRequest, "INVALID_REQUEST", "topic_id is required", "", false)
-		return
-	}
-	descendants, err := a.DB.GetDescendantTopicIDs(topicID)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "TOPIC_LOOKUP_FAILED", "Failed to get subtopics", err.Error(), true)
-		return
-	}
-	inSubtree := map[string]bool{topicID: true}
-	for _, id := range descendants {
-		inSubtree[id] = true
+	var inSubtree map[string]bool
+	if topicID != "" {
+		ids, err := a.subtreeTopicIDs(topicID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "TOPIC_LOOKUP_FAILED", "Failed to get subtopics", err.Error(), true)
+			return
+		}
+		inSubtree = make(map[string]bool, len(ids))
+		for _, id := range ids {
+			inSubtree[id] = true
+		}
 	}
 
 	episodes, err := a.DB.ListPodcastEpisodes(getUserIDFromRequest(r), time.Now().Add(-podcastMaxAge))
@@ -666,7 +681,7 @@ func (a *App) handlePodcastEpisodes(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := []podcastResponse{}
 	for _, ep := range episodes {
-		if !inSubtree[ep.TopicID] {
+		if inSubtree != nil && !inSubtree[ep.TopicID] {
 			continue
 		}
 		if _, err := os.Stat(filepath.Join(podcastDir, ep.ID+".mp3")); err != nil {
