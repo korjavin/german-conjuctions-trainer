@@ -34,6 +34,7 @@ COPY --from=builder /app/main .
 # These files are also present in the build context.
 COPY index.html app.js privacy.html style.css favicon.svg favicon-32x32.svg sw.js manifest.json ./static/
 COPY js/ ./static/js/
+COPY css/ ./static/css/
 
 # Make the binary executable and change ownership
 RUN chmod +x ./main && chown -R appuser:appuser /app

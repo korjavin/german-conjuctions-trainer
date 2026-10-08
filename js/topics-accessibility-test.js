@@ -499,9 +499,9 @@
     console.log('='.repeat(60));
 
     if (failed === 0) {
-        console.log('%c✓ All accessibility tests passed!', 'color: #16a34a; font-weight: bold;');
+        console.log('%c✓ All accessibility tests passed!', 'color: #2f7f4f; font-weight: bold;');
     } else {
-        console.error('%c✗ Some accessibility tests failed!', 'color: #dc2626; font-weight: bold;');
+        console.error('%c✗ Some accessibility tests failed!', 'color: #b23a2c; font-weight: bold;');
     }
 
     // Export results for potential automated testing

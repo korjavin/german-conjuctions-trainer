@@ -1,0 +1,158 @@
+/* German Conjunctions Trainer — Design System v2 (October 2026)
+   Colors, type, spacing, radii, shadows, motion.
+   v2: one warm palette. No Tailwind gray, no blue. Info = brand orange tint. */
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,500;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,600;1,6..12,700&display=swap');
+@import url('components.css');
+
+:root {
+  /* Orange scale */
+  --color-orange-900:     #6c290d;
+  --color-orange-dark:    #a33f11;
+  --color-orange:         #d86424;
+  --color-orange-bright:  #ef8639;
+  --color-orange-light:   #f59e44;
+  --color-orange-tint:    #ffeedd;
+
+  /* Cream scale */
+  --color-cream-page:     #fffaf4;
+  --color-cream:          #fff8ef;
+  --color-cream-soft:     #fff2df;
+  --color-cream-medium:   #ffe5c2;
+  --color-cream-strong:   #ffd49a;
+  --color-surface:        #fffcf7;
+
+  /* Warm neutrals (replace Tailwind gray) */
+  --color-text-primary:   #43281b;
+  --color-text-secondary: #7a5a47;
+  --color-text-tertiary:  #8a6652;
+  --color-neutral-bg:     #f6ece0;
+  --color-neutral-border: #e8d8c6;
+  --color-neutral-dot:    #b59a87;
+
+  /* Lines */
+  --color-border:         rgba(163, 63, 17, 0.14);
+  --color-border-strong:  rgba(163, 63, 17, 0.28);
+  --color-shadow:         rgba(105, 45, 18, 0.22);
+  --color-focus:          rgba(239, 134, 57, 0.45);
+
+  /* States — warm-tuned. Each has text / bg / border / dot. */
+  --color-success:        #2f7f4f;
+  --color-success-bg:     #e8f3e6;
+  --color-success-border: #bcdcbf;
+  --color-success-dot:    #2f9f59;
+  --color-warning:        #8a5a00;
+  --color-warning-bg:     #fdf0cf;
+  --color-warning-border: #f0d58f;
+  --color-warning-dot:    #d9a21b;
+  --color-danger:         #b23a2c;
+  --color-danger-bg:      #fde6df;
+  --color-danger-border:  #f5c2b6;
+  --color-danger-dot:     #d84d3e;
+  --color-info:           #a33f11;
+  --color-info-bg:        #ffeedd;
+  --color-info-border:    #f6cfa8;
+  --color-info-dot:       #ef8639;
+
+  /* Learning-outcome aliases (badges, summary tiles, charts) */
+  --outcome-perfect:      var(--color-success-dot);
+  --outcome-hints:        var(--color-warning-dot);
+  --outcome-mistakes:     var(--color-danger-dot);
+
+  /* Header gradient */
+  --color-header-start:   rgba(108, 41, 13, 0.96);
+  --color-header-mid:     rgba(163, 63, 17, 0.96);
+  --color-header-end:     rgba(216, 100, 36, 0.94);
+
+  /* Semantic aliases */
+  --bg-body:              var(--color-cream-page);
+  --bg-card:              var(--color-surface);
+  --bg-glass:             rgba(255, 252, 247, 0.86);
+  --bg-input:             #fffaf3;
+  --bg-hover:             #fff2dc;
+  --fg-primary:           var(--color-text-primary);
+  --fg-secondary:         var(--color-text-secondary);
+  --fg-muted:             var(--color-text-tertiary);
+  --fg-on-dark:           #fff8f0;
+  --accent:               var(--color-orange);
+  --accent-dark:          var(--color-orange-dark);
+  --accent-bright:        var(--color-orange-bright);
+  --gradient-primary:     linear-gradient(145deg, #a33f11, #d86424 60%, #ef8639); /* @kind color */
+  --gradient-header:      linear-gradient(110deg, var(--color-header-start), var(--color-header-mid) 55%, var(--color-header-end));
+  --gradient-page:        radial-gradient(circle at 8% 0%, rgba(239,134,57,0.16), transparent 40%), linear-gradient(170deg, #fffaf4 0%, #fff1de 60%, #ffe8cb 100%); /* @kind color */
+
+  /* Type */
+  --font-sans:    'Nunito Sans', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font-mono:    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --text-xs:    0.75rem;    /* 12px — minimum in v2 */
+  --text-sm:    0.8125rem;  /* 13px */
+  --text-base:  1rem;       /* 16px */
+  --text-md:    1.125rem;   /* 18px */
+  --text-lg:    1.25rem;    /* 20px */
+  --text-xl:    1.5rem;     /* 24px */
+  --text-2xl:   1.875rem;   /* 30px */
+  --text-3xl:   2.25rem;    /* 36px */
+  --text-display: 3.5rem;   /* 56px — due count, session score */
+  --weight-normal:    400;
+  --weight-medium:    500;
+  --weight-semibold:  600;
+  --weight-bold:      700;
+  --weight-heavy:     800;
+  --leading-tight:  1.25;
+  --leading-snug:   1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed:1.625;
+
+  /* Spacing (8-pt) */
+  --space-1:   0.25rem;
+  --space-2:   0.5rem;
+  --space-3:   0.75rem;
+  --space-4:   1rem;
+  --space-5:   1.25rem;
+  --space-6:   1.5rem;
+  --space-8:   2rem;
+  --space-12:  3rem;
+  --space-16:  4rem;
+
+  /* Radius */
+  --radius-sm:    0.375rem;
+  --radius-md:    0.5rem;
+  --radius-lg:    0.75rem;
+  --radius-xl:    1rem;
+  --radius-full:  9999px;
+
+  /* Shadows — warm brown only */
+  --shadow-sm:    0 1px 2px rgba(105, 45, 18, 0.06);
+  --shadow-md:    0 4px 10px rgba(105, 45, 18, 0.08);
+  --shadow-lg:    0 12px 28px rgba(105, 45, 18, 0.12);
+  --shadow-card:  0 14px 32px rgba(105, 45, 18, 0.09);
+  --shadow-header:0 8px 24px rgba(73, 27, 8, 0.22);
+  --shadow-btn:   0 6px 14px rgba(105, 45, 18, 0.22);
+  --shadow-pop:   0 18px 44px rgba(73, 27, 8, 0.22);
+
+  /* Motion */
+  --transition-fast:  150ms cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+  --transition-base:  250ms cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+  --transition-slow:  300ms cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+
+  /* Layout */
+  --container-max:    1120px;
+  --app-width:        48rem;
+  --topbar-height:    56px;
+  --tabbar-height:    64px;
+  --hit-min:          44px;
+}
+
+h1, .h1 { font-family: var(--font-sans); font-size: var(--text-2xl); font-weight: var(--weight-heavy); line-height: var(--leading-tight); color: var(--fg-primary); letter-spacing: -0.01em; }
+h2, .h2 { font-family: var(--font-sans); font-size: var(--text-xl); font-weight: var(--weight-bold); line-height: var(--leading-snug); color: var(--fg-primary); }
+h3, .h3 { font-family: var(--font-sans); font-size: var(--text-md); font-weight: var(--weight-bold); line-height: var(--leading-snug); color: var(--fg-primary); }
+p, .body { font-family: var(--font-sans); font-size: var(--text-base); line-height: var(--leading-relaxed); color: var(--fg-primary); }
+.body-sm { font-family: var(--font-sans); font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--fg-secondary); }
+.label { font-family: var(--font-sans); font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--fg-primary); }
+.caption { font-family: var(--font-sans); font-size: var(--text-xs); font-weight: var(--weight-bold); letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); }
+.de { font-weight: var(--weight-semibold); color: var(--fg-primary); }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; background: rgba(163, 63, 17, 0.08); padding: 0.125em 0.35em; border-radius: var(--radius-sm); color: var(--color-orange-dark); }
+.proverb { font-family: var(--font-sans); font-size: var(--text-lg); font-weight: var(--weight-bold); font-style: italic; color: var(--color-orange-dark); }
+a { color: var(--color-orange-dark); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { color: var(--color-orange); }
+:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
