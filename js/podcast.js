@@ -2,12 +2,16 @@
 // subtree, to play in the browser or download for a phone's player.
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { generatePodcastAPI, getPodcastFeedAPI, regeneratePodcastFeedAPI } from './api.js';
+import { generatePodcastAPI, listPodcastEpisodesAPI, getPodcastFeedAPI, regeneratePodcastFeedAPI } from './api.js';
 import { getTopicPath } from './topics.js';
 import { handleVoiceToggle } from './voice.js';
 
-let episode = null; // last built episode: server response + topicId
+let current = null; // episode loaded in the player (server response)
+let sessionEpisodes = []; // built in this page session, newest first
+let listedEpisodes = []; // what the episode list shows now
 let isGenerating = false;
+// Bumped by every list load so a slow one cannot overwrite a newer list.
+let listRequest = 0;
 
 const FAVORITES_ONLY_KEY = 'podcastFavoritesOnly';
 
@@ -32,8 +36,12 @@ export function formatDuration(totalSeconds) {
     return `${m}:${s}`;
 }
 
+function phraseCount(data) {
+    return data.phrase_count || data.phrases?.length || 0;
+}
+
 export function describeEpisode(data) {
-    const parts = [`${data.phrases.length} phrases`, formatDuration(data.duration_seconds)];
+    const parts = [`${phraseCount(data)} phrases`, formatDuration(data.duration_seconds)];
     if (data.recall_repeats > 0) {
         parts.push(`${data.recall_repeats} tricky ${data.recall_repeats === 1 ? 'phrase' : 'phrases'} repeated`);
     }
@@ -82,36 +90,128 @@ function updateMediaSession(data) {
     navigator.mediaSession.metadata = new window.MediaMetadata({
         title: `Podcast: ${data.topic_name}`,
         artist: 'German Trainer',
-        album: `${data.phrases.length} phrases`,
+        album: `${phraseCount(data)} phrases`,
     });
+}
+
+// IDs of topicId and all its descendants, from the loaded topic tree.
+function subtreeTopicIds(topicId) {
+    const ids = new Set([topicId]);
+    const queue = [topicId];
+    while (queue.length) {
+        const parent = queue.shift();
+        for (const t of state.topics || []) {
+            if (t.parent_id === parent && !ids.has(t.id)) {
+                ids.add(t.id);
+                queue.push(t.id);
+            }
+        }
+    }
+    return ids;
+}
+
+// Merges episode lists by id, newest first.
+export function mergeEpisodes(...lists) {
+    const byId = new Map();
+    for (const list of lists) {
+        for (const ep of list) {
+            if (!byId.has(ep.id)) byId.set(ep.id, ep);
+        }
+    }
+    return [...byId.values()].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+}
+
+function formatCreated(createdAt) {
+    const date = new Date(createdAt);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderEpisodeList() {
+    const items = listedEpisodes.map((ep) => {
+        const li = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'podcast-episode';
+        if (current && current.id === ep.id) {
+            btn.classList.add('podcast-episode-active');
+            btn.setAttribute('aria-current', 'true');
+        }
+        const title = document.createElement('span');
+        title.className = 'podcast-episode-title';
+        title.textContent = ep.topic_name;
+        const meta = document.createElement('span');
+        meta.className = 'podcast-episode-meta';
+        meta.textContent = [formatCreated(ep.created_at), describeEpisode(ep)].filter(Boolean).join(' · ');
+        btn.append(title, meta);
+        btn.addEventListener('click', () => selectEpisode(ep, { play: true }));
+        li.appendChild(btn);
+        return li;
+    });
+    dom.podcastEpisodeList.replaceChildren(...items);
+    dom.podcastEpisodesSummary.textContent = `Your episodes (${listedEpisodes.length})`;
+    dom.podcastEpisodes.classList.toggle('hidden', listedEpisodes.length === 0);
+    dom.podcastGenerateBtn.textContent = listedEpisodes.length || current ? 'Generate a new episode' : 'Generate podcast';
 }
 
 function renderEpisode(data) {
     dom.podcastAudio.src = data.url;
     dom.podcastDownloadLink.href = data.download_url;
     dom.podcastMeta.textContent = describeEpisode(data);
-    dom.podcastTranscriptSummary.textContent = `Phrases (${data.phrases.length})`;
-    renderPhraseList(data.phrases);
+    const phrases = data.phrases || [];
+    dom.podcastTranscriptSummary.textContent = `Phrases (${phrases.length})`;
+    dom.podcastTranscript.classList.toggle('hidden', phrases.length === 0);
+    renderPhraseList(phrases);
     dom.podcastResult.classList.remove('hidden');
-    dom.podcastGenerateBtn.textContent = 'Generate a new episode';
+}
+
+// Loads an episode into the player; play starts it (a click is a user gesture).
+function selectEpisode(data, { play = false } = {}) {
+    current = data;
+    renderEpisode(data);
+    updateMediaSession(data);
+    renderEpisodeList();
+    if (play) {
+        dom.podcastAudio.play?.()?.catch?.(() => { /* autoplay refused: the controls still work */ });
+    }
+}
+
+// Lists every episode of the current topic and its subtopics: the user's
+// stored ones (logged in) plus the ones built in this page session.
+export async function loadPodcastEpisodes() {
+    const topicId = state.currentTopicId;
+    const request = ++listRequest;
+    const subtree = topicId ? subtreeTopicIds(topicId) : new Set();
+    const local = sessionEpisodes.filter((ep) => subtree.has(ep.topic_id));
+    listedEpisodes = local;
+    renderEpisodeList();
+    if (!topicId || !state.isLoggedIn || navigator.onLine === false) return;
+    try {
+        const data = await listPodcastEpisodesAPI(topicId);
+        if (request !== listRequest) return;
+        listedEpisodes = mergeEpisodes(data.episodes || [], sessionEpisodes.filter((ep) => subtree.has(ep.topic_id)));
+        renderEpisodeList();
+    } catch (error) {
+        console.error('Failed to load podcast episodes:', error);
+    }
 }
 
 export function openPodcastDialog() {
     dom.podcastTopicName.textContent = currentTopicLabel() || 'No topic selected';
-    // An episode built for another topic stays playable but is labelled as such.
-    const stale = episode && episode.topicId !== state.currentTopicId;
-    if (!episode) {
+    // An episode of another topic stays playable but is labelled as such.
+    if (!current) {
         dom.podcastResult.classList.add('hidden');
-        dom.podcastGenerateBtn.textContent = 'Generate podcast';
-    } else if (stale) {
-        dom.podcastMeta.textContent = `Previous episode: ${episode.data.topic_name} · ${describeEpisode(episode.data)}`;
-        dom.podcastGenerateBtn.textContent = 'Generate podcast for this topic';
+    } else if (state.currentTopicId && !subtreeTopicIds(state.currentTopicId).has(current.topic_id)) {
+        dom.podcastMeta.textContent = `Previous episode: ${current.topic_name} · ${describeEpisode(current)}`;
+    } else {
+        dom.podcastMeta.textContent = describeEpisode(current);
     }
     // Favorites are per user, so guests don't get the option.
     dom.podcastFavoritesOption.classList.toggle('hidden', !state.isLoggedIn);
     dom.podcastFavoritesOnly.checked = state.isLoggedIn && loadFavoritesOnly();
     if (!isGenerating) setError('');
     dom.podcastModal.showModal();
+    loadPodcastEpisodes();
 }
 
 export async function generatePodcast() {
@@ -140,9 +240,13 @@ export async function generatePodcast() {
 
     try {
         const data = await generatePodcastAPI(topicId, favoritesOnly);
-        episode = { topicId, data };
-        renderEpisode(data);
-        updateMediaSession(data);
+        // Older servers don't echo these back.
+        const ep = { topic_id: topicId, created_at: new Date().toISOString(), ...data };
+        sessionEpisodes = mergeEpisodes([ep], sessionEpisodes);
+        if (state.currentTopicId && subtreeTopicIds(state.currentTopicId).has(ep.topic_id)) {
+            listedEpisodes = mergeEpisodes([ep], listedEpisodes);
+        }
+        selectEpisode(ep);
     } catch (error) {
         console.error('Podcast generation failed:', error);
         setError(error.message || 'Failed to build the podcast.');
@@ -152,6 +256,14 @@ export async function generatePodcast() {
         dom.podcastGenerateBtn.disabled = false;
         isGenerating = false;
     }
+}
+
+// Test hook: forget the episodes of this page session.
+export function resetPodcastSession() {
+    current = null;
+    sessionEpisodes = [];
+    listedEpisodes = [];
+    listRequest++;
 }
 
 // --- Private RSS feed (Settings) ---

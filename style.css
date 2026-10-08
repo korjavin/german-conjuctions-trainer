@@ -828,6 +828,53 @@ textarea:focus-visible,
     color: var(--mr-orange-dark);
 }
 
+.podcast-episodes {
+    margin-top: var(--spacing-6);
+    border-top: 1px solid var(--mr-border);
+    padding-top: var(--spacing-4);
+}
+
+.podcast-episodes-title {
+    font-weight: 600;
+    color: var(--mr-text);
+}
+
+.podcast-episode-list {
+    margin-top: var(--spacing-3);
+    max-height: 18rem;
+    overflow-y: auto;
+}
+
+.podcast-episode {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    text-align: left;
+    padding: var(--spacing-2) var(--spacing-3);
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: none;
+    cursor: pointer;
+}
+
+.podcast-episode:hover {
+    border-color: var(--mr-border);
+}
+
+.podcast-episode-active {
+    border-color: var(--mr-orange-dark);
+}
+
+.podcast-episode-title {
+    color: var(--mr-text);
+    font-weight: 600;
+}
+
+.podcast-episode-meta {
+    color: var(--mr-text-muted);
+    font-size: 0.875rem;
+}
+
 /* Topic Management */
 .section-title {
     font-size: 1.125rem;

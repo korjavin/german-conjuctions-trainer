@@ -207,6 +207,7 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/api/tts", a.withOptionalAuth(a.handleTTS))
 	http.HandleFunc("/api/podcast", a.withOptionalAuth(a.handlePodcast))
 	http.HandleFunc("/api/podcast/", a.handlePodcastFile)
+	http.HandleFunc("/api/podcast/episodes", a.withAuth(a.handlePodcastEpisodes))
 	http.HandleFunc("/api/podcast/feed", a.withAuth(a.handlePodcastFeedURL))
 	http.HandleFunc("/api/podcast/feed/regenerate", a.withAuth(a.handlePodcastFeedRegenerate))
 	http.HandleFunc("/podcast/feed/", a.handlePodcastFeed)

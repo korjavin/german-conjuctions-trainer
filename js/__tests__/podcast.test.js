@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { formatDuration, describeEpisode, openPodcastDialog, generatePodcast, loadPodcastFeed, regeneratePodcastFeed } from '../podcast.js';
+import { formatDuration, describeEpisode, mergeEpisodes, openPodcastDialog, generatePodcast, loadPodcastEpisodes, resetPodcastSession, loadPodcastFeed, regeneratePodcastFeed } from '../podcast.js';
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 import * as api from '../api.js';
 
 vi.mock('../api.js', () => ({
     generatePodcastAPI: vi.fn(),
+    listPodcastEpisodesAPI: vi.fn(),
     getPodcastFeedAPI: vi.fn(),
     regeneratePodcastFeedAPI: vi.fn()
 }));
@@ -40,6 +41,8 @@ describe('podcast.js', () => {
         state.isLoggedIn = false;
         dom.podcastFavoritesOnly.checked = false;
         localStorage.clear();
+        resetPodcastSession();
+        api.listPodcastEpisodesAPI.mockResolvedValue({ episodes: [] });
     });
 
     it('formats durations as m:ss', () => {
@@ -115,6 +118,105 @@ describe('podcast.js', () => {
         await generatePodcast();
         expect(api.generatePodcastAPI).not.toHaveBeenCalled();
         expect(dom.podcastError.textContent).toBe('Please select a topic first.');
+    });
+
+    describe('episode list', () => {
+        const ep = (id, topicId, createdAt, extra = {}) => ({
+            ...episode, id, url: `/api/podcast/${id}.mp3`, topic_id: topicId, created_at: createdAt, ...extra,
+        });
+
+        beforeEach(() => {
+            state.topics = [
+                { id: 'topic1', name: 'Konjunktionen' },
+                { id: 'child', name: 'Weil', parent_id: 'topic1' },
+                { id: 'grandchild', name: 'Weil 2', parent_id: 'child' },
+                { id: 'other', name: 'Other' },
+            ];
+        });
+
+        it('keeps every episode built in the session instead of replacing the first', async () => {
+            api.generatePodcastAPI.mockResolvedValueOnce(ep('first', 'topic1', '2026-10-08T10:00:00Z'));
+            await generatePodcast();
+            api.generatePodcastAPI.mockResolvedValueOnce(ep('second', 'topic1', '2026-10-08T11:00:00Z'));
+            await generatePodcast();
+
+            const items = dom.podcastEpisodeList.querySelectorAll('li');
+            expect(items).toHaveLength(2);
+            expect(dom.podcastEpisodes.classList.contains('hidden')).toBe(false);
+            expect(dom.podcastEpisodesSummary.textContent).toBe('Your episodes (2)');
+            // The newest is on top and loaded in the player.
+            expect(items[0].querySelector('.podcast-episode-active')).not.toBeNull();
+            expect(items[1].querySelector('.podcast-episode-active')).toBeNull();
+            expect(dom.podcastAudio.getAttribute('src') || dom.podcastAudio.src).toContain('/api/podcast/second.mp3');
+
+            // Picking the older one loads it into the player.
+            items[1].querySelector('button').dispatchEvent(new Event('click'));
+            expect(dom.podcastAudio.getAttribute('src') || dom.podcastAudio.src).toContain('/api/podcast/first.mp3');
+            expect(dom.podcastEpisodeList.querySelectorAll('li')[1].querySelector('.podcast-episode-active')).not.toBeNull();
+        });
+
+        it('shows guests the session episodes of the topic and its subtopics only', async () => {
+            state.currentTopicId = 'grandchild';
+            api.generatePodcastAPI.mockResolvedValueOnce(ep('deep', 'grandchild', '2026-10-08T10:00:00Z'));
+            await generatePodcast();
+            state.currentTopicId = 'other';
+            api.generatePodcastAPI.mockResolvedValueOnce(ep('elsewhere', 'other', '2026-10-08T11:00:00Z'));
+            await generatePodcast();
+
+            state.currentTopicId = 'topic1';
+            await loadPodcastEpisodes();
+            const items = dom.podcastEpisodeList.querySelectorAll('li');
+            expect(items).toHaveLength(1);
+            expect(items[0].textContent).toContain('Konjunktionen');
+            expect(api.listPodcastEpisodesAPI).not.toHaveBeenCalled();
+        });
+
+        it('loads stored episodes of the subtree for a logged-in user', async () => {
+            state.isLoggedIn = true;
+            api.listPodcastEpisodesAPI.mockResolvedValueOnce({
+                episodes: [
+                    ep('stored-new', 'child', '2026-10-07T10:00:00Z', { topic_name: 'Weil', phrases: [], phrase_count: 25 }),
+                    ep('stored-old', 'topic1', '2026-10-01T10:00:00Z'),
+                ],
+            });
+            openPodcastDialog();
+            await vi.waitFor(() => expect(dom.podcastEpisodeList.querySelectorAll('li')).toHaveLength(2));
+
+            expect(api.listPodcastEpisodesAPI).toHaveBeenCalledWith('topic1');
+            const items = dom.podcastEpisodeList.querySelectorAll('li');
+            expect(items[0].textContent).toContain('Weil');
+            expect(items[0].textContent).toContain('25 phrases');
+
+            // An episode without a stored transcript hides the phrase list.
+            items[0].querySelector('button').dispatchEvent(new Event('click'));
+            expect(dom.podcastTranscript.classList.contains('hidden')).toBe(true);
+            items[1].querySelector('button').dispatchEvent(new Event('click'));
+            expect(dom.podcastTranscript.classList.contains('hidden')).toBe(false);
+        });
+
+        it('does not drop a just-built episode when an older list load finishes late', async () => {
+            state.isLoggedIn = true;
+            let finishLoad;
+            api.listPodcastEpisodesAPI.mockReturnValueOnce(new Promise((resolve) => { finishLoad = resolve; }));
+            const load = loadPodcastEpisodes();
+            api.generatePodcastAPI.mockResolvedValueOnce(ep('fresh', 'topic1', '2026-10-08T12:00:00Z'));
+            await generatePodcast();
+            finishLoad({ episodes: [ep('stored', 'topic1', '2026-10-01T10:00:00Z')] });
+            await load;
+
+            const items = dom.podcastEpisodeList.querySelectorAll('li');
+            expect(items).toHaveLength(2);
+            expect(items[0].querySelector('.podcast-episode-active')).not.toBeNull();
+            expect(dom.podcastAudio.getAttribute('src') || dom.podcastAudio.src).toContain('/api/podcast/fresh.mp3');
+        });
+
+        it('merges lists by id, newest first', () => {
+            const merged = mergeEpisodes(
+                [ep('a', 't', '2026-10-01T00:00:00Z'), ep('b', 't', '2026-10-03T00:00:00Z')],
+                [ep('b', 't', '2026-10-03T00:00:00Z'), ep('c', 't', '2026-10-02T00:00:00Z')],
+            );
+            expect(merged.map((e) => e.id)).toEqual(['b', 'c', 'a']);
+        });
     });
 
     describe('RSS feed', () => {
