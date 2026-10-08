@@ -32,11 +32,20 @@ Before building, show the user a short table: marked phrase / correction → whe
 
 ## 3. Map onto the tree
 
+A lesson scenario (Straßenfest, Klinikbesuch, Mira's wedding …) is just one of ~20 possible exam themes.
+
 - Builder: `<builder>` (idempotent; `NODES.append((key, parent_key, name, leaf(...), sort))`). Read its `NODES.append` lines first to see the existing branches.
 - Check which marked phrases are already covered: `grep -c "<phrase in ae/oe/ue/ss spelling>" <builder>`.
-- Rule: generic leaves stay as they are. For each lesson add **"Fokus DD.MM" leaves** under the matching branch (next free letter, e.g. `G1c`, `G2d`), one per exam part touched. Each Fokus leaf contains: the red-marked phrases verbatim, the corrections (wrong → right, stated explicitly), and the lesson's scenario (e.g. Kochaktion, Fitnessstudio) as examples — but rotate topics in the english_hint rule so it transfers.
-- Only change an existing leaf (`./gct topics update <id> --prompt-file -`, and edit its NODES entry to match) when it is factually wrong.
-- New exam part not yet in the tree → new folder node (like `G1`) + leaves.
+
+**telc — update leaves, never add per-lesson/per-scenario topics.** Leaves = exam part × communicative move; lessons only enrich them.
+  - `python3 tmp/build_telc.py` — create missing keys; `--update K ...` — push edited name+prompt; `--delete K ...` — delete (children first)
+  - Tree: G1 Teil 1 (G1-ich, G1-fragen), G2 Teil 2 (G2-wiedergeben, G2-position, G2-diskussion), G3 Teil 3 (G3-vorschlagen, G3-reagieren, G3-verteilen, G3-abschluss), E-antwort (informelle Antwort-Mail), D8 Sprachbausteine, H Meine typischen Fehler; older generic branches A/B/D/E/F.
+  - Per finding: new phrase → matching block (or a new block) of the leaf for that move; the lesson's scenario → append to the rotation list in the leaf's clarity rule; teacher correction → hard rule in the leaf's clarity + wrong→right entry in **H**; repeated error → mark "wiederholter Fehler" in both places.
+  - Split a leaf only when it exceeds ~6 blocks; a new leaf only for a genuinely new move or exam part. Then `--update` every touched key.
+
+**Goethe — per-lesson "Fokus DD.MM" leaves.** Generic leaves stay as they are. For each lesson add Fokus leaves under the matching branch (next free letter, e.g. `S1c`), one per exam part touched. Each contains: the red-marked phrases verbatim, the corrections (wrong → right, stated explicitly), and the lesson's scenario as examples — but rotate topics in the english_hint rule so it transfers.
+  - Only change an existing leaf (`./gct topics update <id> --prompt-file -`, and edit its NODES entry to match) when it is factually wrong.
+  - New exam part not yet in the tree → new folder node + leaves.
 
 ## 4. Leaf prompt convention (keep exactly)
 
@@ -49,8 +58,9 @@ Use `leaf(guidelines, wortfeld, vocab, clarity)` from the builder:
 ## 5. Build and verify
 
 ```bash
-python3 <builder> | grep -v skip            # creates only new keys
-./gct exercises generate <new-id> --watch           # per new leaf
+python3 <builder> | grep -v skip                    # creates only new keys
+python3 tmp/build_telc.py --update <keys>           # telc: touched leaves
+./gct exercises generate <id> --watch               # per new/touched leaf, SEQUENTIALLY (server 429 → sleep 65, retry)
 ./gct exercises generate <id> --json | python3 -c "import json,sys;[print(e['exercise_json']['correct_german_sentence']) for e in json.load(sys.stdin)]"
 ```
 
@@ -59,8 +69,8 @@ Read the sample sentences: they must contain the marked phrases and correct form
 ## 6. Report (in the user's language)
 
 - Что учитель отметил (фразы по разделам) и какие ошибки исправил.
-- Какие листы созданы/обновлены (name + id), 2–3 примера сгенерированных предложений.
+- Какие листы созданы/обновлены (что добавлено) (name + id), 2–3 примера сгенерированных предложений.
 - Что выучить наизусть к следующему уроку (the teacher's "Next steps").
-- Update the active exam's project memory note with the new leaves (one line per lesson).
+- Update the active exam's project memory note: one line per lesson (date, new/touched keys, homework).
 
 Server and user: `./gct whoami`. Root topic id and builder live in local, untracked `tmp/`; don't delete it.

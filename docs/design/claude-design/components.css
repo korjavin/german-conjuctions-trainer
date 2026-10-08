@@ -1,0 +1,104 @@
+/* GCT v2 component layer — framework-free CSS for the vanilla JS app.
+   Requires colors_and_type.css. All classes prefixed gct-. */
+
+.gct-card{background:var(--bg-card);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card)}
+
+/* Buttons — one primary per view */
+.gct-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 18px;border-radius:var(--radius-md);font:700 var(--text-sm)/1 var(--font-sans);font-size:14px;border:1px solid transparent;cursor:pointer;white-space:nowrap;transition:transform var(--transition-fast),box-shadow var(--transition-fast),background var(--transition-fast)}
+.gct-btn--primary{background:var(--gradient-primary);color:var(--fg-on-dark);box-shadow:var(--shadow-btn)}
+.gct-btn--primary:hover{transform:translateY(-1px);box-shadow:0 10px 20px rgba(105,45,18,.26)}
+.gct-btn--secondary{background:var(--color-surface);color:var(--color-orange-dark);border-color:var(--color-border-strong)}
+.gct-btn--secondary:hover{background:var(--bg-hover)}
+.gct-btn--ghost{background:transparent;color:var(--color-orange-dark)}
+.gct-btn--ghost:hover{background:var(--bg-hover)}
+.gct-btn--danger{background:var(--color-danger-dot);color:#fff}
+.gct-btn--lg{min-height:48px;padding:0 24px;font-size:16px}
+.gct-btn--sm{min-height:32px;padding:0 12px;font-size:13px}
+.gct-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.gct-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:var(--radius-md);border:1px solid transparent;background:transparent;color:var(--fg-secondary);cursor:pointer}
+.gct-icon-btn:hover{background:var(--bg-hover);color:var(--color-orange-dark)}
+.gct-icon-btn[aria-pressed="true"]{background:var(--color-orange-tint);color:var(--color-orange-dark);border-color:var(--color-info-border)}
+
+/* Badge — the only status pill. Tones: neutral info success warning danger */
+.gct-badge{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:var(--radius-full);font:700 12px/1 var(--font-sans);border:1px solid;white-space:nowrap}
+.gct-badge__dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.gct-badge--neutral{color:var(--color-text-secondary);background:var(--color-neutral-bg);border-color:var(--color-neutral-border)}
+.gct-badge--neutral .gct-badge__dot{background:var(--color-neutral-dot)}
+.gct-badge--info{color:var(--color-info);background:var(--color-info-bg);border-color:var(--color-info-border)}
+.gct-badge--info .gct-badge__dot{background:var(--color-info-dot)}
+.gct-badge--success{color:var(--color-success);background:var(--color-success-bg);border-color:var(--color-success-border)}
+.gct-badge--success .gct-badge__dot{background:var(--color-success-dot)}
+.gct-badge--warning{color:var(--color-warning);background:var(--color-warning-bg);border-color:var(--color-warning-border)}
+.gct-badge--warning .gct-badge__dot{background:var(--color-warning-dot)}
+.gct-badge--danger{color:var(--color-danger);background:var(--color-danger-bg);border-color:var(--color-danger-border)}
+.gct-badge--danger .gct-badge__dot{background:var(--color-danger-dot)}
+.gct-badge--quiet{background:transparent;border-color:transparent;padding:0}
+
+/* Filter pill = toggle button built on badge geometry */
+.gct-pill{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:var(--radius-full);border:1px solid var(--color-border-strong);background:var(--color-surface);color:var(--fg-primary);font:600 13px/1 var(--font-sans);cursor:pointer}
+.gct-pill__count{font-weight:700;color:var(--fg-muted)}
+.gct-pill[aria-pressed="true"]{background:var(--color-orange-dark);border-color:var(--color-orange-dark);color:var(--fg-on-dark)}
+.gct-pill[aria-pressed="true"] .gct-pill__count{color:var(--color-cream-strong)}
+
+/* Word chip */
+.gct-chip{position:relative;display:inline-flex;align-items:center;height:44px;padding:0 16px;border-radius:var(--radius-md);background:#fff;border:2px solid rgba(175,83,36,.22);color:var(--fg-primary);font:600 16px/1 var(--font-sans);box-shadow:0 4px 10px rgba(105,45,18,.07);cursor:pointer}
+.gct-chip__key{position:absolute;top:-8px;left:-8px;width:20px;height:20px;border-radius:50%;background:var(--color-orange);color:#fff;font:800 11px/20px var(--font-sans);text-align:center;border:2px solid #fff}
+.gct-chip--hint{background:var(--color-orange-tint);border-color:var(--color-orange-bright)}
+.gct-chip--wrong{border-color:var(--color-danger-dot);background:var(--color-danger-bg);color:var(--color-danger)}
+.gct-chip--used{opacity:.25;pointer-events:none}
+.gct-chip--placed{background:var(--color-surface);border-color:transparent;box-shadow:none}
+
+/* Toast */
+.gct-toast{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:10px 14px 10px 12px;border-radius:var(--radius-lg);background:var(--color-text-primary);color:var(--fg-on-dark);font:600 14px/1.3 var(--font-sans);box-shadow:var(--shadow-pop)}
+.gct-toast__icon{color:var(--color-orange-light);display:flex}
+.gct-toast--success .gct-toast__icon{color:#8fd3a5}
+.gct-toast--danger .gct-toast__icon{color:#f5a394}
+.gct-toast__action{margin-left:6px;color:var(--color-cream-strong);font-weight:800;background:none;border:0;cursor:pointer}
+
+/* Confirm dialog */
+.gct-dialog{width:min(420px,100%);background:var(--color-surface);border-radius:var(--radius-xl);box-shadow:var(--shadow-pop);padding:24px;display:flex;flex-direction:column;gap:12px}
+.gct-dialog__title{font:800 20px/1.3 var(--font-sans);color:var(--fg-primary)}
+.gct-dialog__body{font:400 15px/1.5 var(--font-sans);color:var(--fg-secondary)}
+.gct-dialog__actions{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.gct-scrim{background:rgba(67,40,27,.38);backdrop-filter:blur(2px)}
+
+/* Offline chip */
+.gct-offline{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:var(--radius-full);background:var(--color-warning-bg);color:var(--color-warning);border:1px solid var(--color-warning-border);font:700 12px/1 var(--font-sans)}
+.gct-offline--on-dark{background:rgba(255,248,240,.14);color:var(--fg-on-dark);border-color:rgba(255,248,240,.3)}
+
+/* Audio player */
+.gct-player{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;padding:16px;border-radius:var(--radius-lg);background:var(--color-surface);border:1px solid var(--color-border)}
+.gct-player__play{width:56px;height:56px;border-radius:50%;background:var(--gradient-primary);color:#fff;border:0;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-btn);cursor:pointer}
+.gct-player__track{height:6px;border-radius:3px;background:var(--color-cream-medium);position:relative}
+.gct-player__fill{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--color-orange)}
+.gct-player__knob{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;border:3px solid var(--color-orange);box-shadow:var(--shadow-sm)}
+.gct-player__time{font:600 12px/1 var(--font-sans);color:var(--fg-muted);font-variant-numeric:tabular-nums}
+
+/* Inputs */
+.gct-input{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--color-border-strong);border-radius:var(--radius-md);background:var(--bg-input);color:var(--fg-primary);font:400 15px/1.4 var(--font-sans)}
+.gct-input:focus{outline:3px solid var(--color-focus);outline-offset:1px;border-color:var(--color-orange)}
+.gct-input--error{border-color:var(--color-danger-dot)}
+.gct-field-error{font:600 12px/1.4 var(--font-sans);color:var(--color-danger)}
+.gct-switch{position:relative;width:40px;height:24px;border-radius:12px;background:var(--color-neutral-border);border:0;cursor:pointer;flex:none}
+.gct-switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:var(--shadow-sm);transition:transform var(--transition-fast)}
+.gct-switch[aria-checked="true"]{background:var(--color-orange)}
+.gct-switch[aria-checked="true"]::after{transform:translateX(16px)}
+
+/* Motion helpers — voice + wrong answer */
+@keyframes gct-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+.gct-shake{animation:gct-shake 300ms cubic-bezier(.4,0,.2,1)}
+@keyframes gct-pulse{0%{transform:scale(.9);opacity:.55}100%{transform:scale(1.6);opacity:0}}
+.gct-pulse{position:absolute;inset:0;border-radius:var(--radius-md);background:var(--color-orange-bright);animation:gct-pulse 1.4s ease-out infinite;pointer-events:none}
+@keyframes gct-eq{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
+.gct-eq{display:inline-flex;align-items:center;gap:2px;height:14px}.gct-eq i{display:block;width:3px;height:14px;border-radius:2px;background:var(--color-orange);animation:gct-eq .9s ease-in-out infinite;transform-origin:center}.gct-eq i:nth-child(2){animation-delay:.15s}.gct-eq i:nth-child(3){animation-delay:.3s}.gct-eq i:nth-child(4){animation-delay:.45s}
+@media (prefers-reduced-motion:reduce){.gct-shake,.gct-pulse,.gct-eq i{animation:none}}
+
+/* Tree rows (Manage) — actions on hover, always on touch */
+.gct-tree-row .gct-grip,.gct-tree-row .gct-row-more{opacity:0;transition:opacity var(--transition-fast)}
+.gct-tree-row:hover .gct-grip,.gct-tree-row:hover .gct-row-more,.gct-tree--touch .gct-row-more{opacity:1}
+.gct-tree-row:hover{background:var(--bg-hover)}
+.gct-tree--touch .gct-grip{display:none!important}
+
+/* Progress */
+.gct-progress{height:6px;border-radius:3px;background:var(--color-cream-medium);overflow:hidden}
+.gct-progress__fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--color-orange-bright),var(--color-orange))}
