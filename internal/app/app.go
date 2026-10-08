@@ -202,6 +202,7 @@ func (a *App) RegisterRoutes() {
 	http.HandleFunc("/api/user/stats", a.withAuth(a.handleUserStats))
 	http.HandleFunc("/api/user/settings", a.withAuth(a.handleUserSettings))
 	http.HandleFunc("/api/user/exercisestats", a.withAuth(a.handleUserExerciseStats))
+	http.HandleFunc("/api/user/activity", a.withAuth(a.handleUserActivity))
 
 	http.HandleFunc("/api/db/stats", a.withAuth(a.adminOnly(a.handleDatabaseStats)))
 
