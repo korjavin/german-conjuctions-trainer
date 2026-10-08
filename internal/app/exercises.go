@@ -91,6 +91,10 @@ func (a *App) handleExercises(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusNotFound, "TOPIC_NOT_FOUND", "Topic not found", err.Error(), false)
 		return
 	}
+	if topic.IsArchive {
+		writeJSONError(w, http.StatusBadRequest, "TOPIC_IS_ARCHIVE", "The archive folder cannot be practiced; pick a topic inside it.", "", false)
+		return
+	}
 
 	userID := getUserIDFromRequest(r)
 

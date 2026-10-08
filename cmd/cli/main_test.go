@@ -1021,3 +1021,35 @@ func TestPrintVersionWithCommit(t *testing.T) {
 	}
 }
 
+func TestTopicsArchiveAndUnarchive(t *testing.T) {
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s", r.Method)
+		}
+		paths = append(paths, r.URL.Path)
+		if strings.HasSuffix(r.URL.Path, "/unarchive") {
+			_, _ = w.Write([]byte(`{"id":"t1","name":"Weil","parent_id":"p"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":"t1","name":"Weil","parent_id":"archive"}`))
+	}))
+	defer srv.Close()
+	withConfig(t, cliConfig{ServerURL: srv.URL, Token: "tok"})
+
+	code, stdout, stderr := runTopicsCmd(t, nil, "archive", "t1")
+	if code != 0 || !strings.Contains(stdout, "Archived topic t1") {
+		t.Fatalf("archive: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	code, stdout, stderr = runTopicsCmd(t, nil, "unarchive", "t1")
+	if code != 0 || !strings.Contains(stdout, "under p") {
+		t.Fatalf("unarchive: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if strings.Join(paths, ",") != "/api/topics/t1/archive,/api/topics/t1/unarchive" {
+		t.Errorf("paths = %v", paths)
+	}
+
+	if code, _, _ := runTopicsCmd(t, nil, "archive"); code != 2 {
+		t.Errorf("archive without id: code = %d, want 2", code)
+	}
+}

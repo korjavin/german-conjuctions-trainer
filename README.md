@@ -19,6 +19,7 @@ An interactive German language learning application that helps B1-level students
 - **Custom API Support**: Compatible with any OpenAI-compatible API.
 - **Responsive Design**: Fully functional on both desktop and mobile devices.
 - **Topics Management**: Create, edit, and delete grammar topics.
+- **Topic Archive**: The **Archive** button in the settings tree moves a topic, with all its subtopics, into a separate `Archive` root. Archived topics disappear from the practice topic picker on the main screen but keep their exercises, audio cache and podcasts; inside the archive they behave like any other branch (drag, edit, delete). **Restore** puts a topic back under the parent it was archived from (or at the root level if that parent is gone). API: `POST /api/topics/<id>/archive` and `/unarchive`.
 - **Prompt Customization**: Tailor exercise generation prompts for each topic.
 - **Version History**: Track and restore the last 10 versions of a prompt.
 - **Persistent Storage**: Uses SQLite for fast and reliable data storage.

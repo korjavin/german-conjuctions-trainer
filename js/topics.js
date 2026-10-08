@@ -6,6 +6,8 @@ import {
     deleteTopicAPI,
     updateTopicAPI,
     moveTopicAPI,
+    archiveTopicAPI,
+    unarchiveTopicAPI,
     fetchVersionsAPI,
     restoreVersionAPI,
     fetchLastGenerationDebugAPI,
@@ -333,6 +335,14 @@ export function getFolderIcon() {
     </svg>`;
 }
 
+export function getArchiveIcon() {
+    return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1.5" y="2.5" width="13" height="3" rx="0.5" fill="#e5e7eb" stroke="#6b7280" stroke-width="1"/>
+        <path d="M2.5 5.5H13.5V13C13.5 13.28 13.28 13.5 13 13.5H3C2.72 13.5 2.5 13.28 2.5 13V5.5Z" fill="#f3f4f6" stroke="#6b7280" stroke-width="1"/>
+        <line x1="6" y1="8" x2="10" y2="8" stroke="#6b7280" stroke-width="1.2" stroke-linecap="round"/>
+    </svg>`;
+}
+
 export function getFileIcon() {
     return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="topic-icon-file">
         <path d="M3 2.5C3 1.67157 3.67157 1 4.5 1H9.5L13 4.5V13.5C13 14.3284 12.3284 15 11.5 15H4.5C3.67157 15 3 14.3284 3 13.5V2.5Z" fill="#6b7280" fill-opacity="0.1" stroke="#6b7280" stroke-width="1.5"/>
@@ -344,6 +354,38 @@ export function getFileIcon() {
 }
 
 export const TOPICS_CACHE_KEY = 'topicsCacheV1';
+
+// Fixed ID of the archive root (pkg/storage ArchiveTopicID). The archive is an
+// ordinary root topic in the settings tree, but it and everything under it are
+// left out of the practice topic picker.
+export const ARCHIVE_TOPIC_ID = 'archive';
+
+export function isArchiveRoot(topic) {
+    return Boolean(topic) && (topic.is_archive === true || topic.id === ARCHIVE_TOPIC_ID);
+}
+
+// IDs of the archive root and all of its descendants.
+export function getArchivedTopicIds(topics = state.topics) {
+    const archived = new Set();
+    const root = topics.find(isArchiveRoot);
+    if (!root) return archived;
+    const stack = [root.id];
+    while (stack.length > 0) {
+        const id = stack.pop();
+        if (archived.has(id)) continue;
+        archived.add(id);
+        for (const t of topics) {
+            if (t.parent_id === id) stack.push(t.id);
+        }
+    }
+    return archived;
+}
+
+// Topics offered for practice: everything outside the archive.
+export function getPracticeTopics(topics = state.topics) {
+    const archived = getArchivedTopicIds(topics);
+    return archived.size === 0 ? topics : topics.filter(t => !archived.has(t.id));
+}
 
 function cacheTopicsPayload(data) {
     try {
@@ -385,24 +427,27 @@ export async function loadTopics() {
 
         renderTopicsList();
 
+        // Archived topics are not offered for practice, so a saved selection
+        // that has been archived falls back to the first practice topic.
+        const practiceTopics = getPracticeTopics(state.topics);
         try {
             const savedTopicId = localStorage.getItem('selectedTopicId');
-            if (savedTopicId && state.topics.find(t => t.id === savedTopicId)) {
+            if (savedTopicId && practiceTopics.find(t => t.id === savedTopicId)) {
                 state.currentTopicId = savedTopicId;
-            } else if (state.topics.length > 0) {
-                state.currentTopicId = state.topics[0].id;
+            } else if (practiceTopics.length > 0) {
+                state.currentTopicId = practiceTopics[0].id;
+            } else {
+                state.currentTopicId = '';
             }
         } catch (error) {
             console.error('Failed to load selected topic ID:', error);
-            if (state.topics.length > 0) {
-                state.currentTopicId = state.topics[0].id;
+            if (practiceTopics.length > 0) {
+                state.currentTopicId = practiceTopics[0].id;
             }
         }
 
-        const currentTopic = state.topics.find(t => t.id === state.currentTopicId);
-        if (currentTopic) {
-            dom.topicSearch.value = getTopicPath(currentTopic.id, state.topics);
-        }
+        const currentTopic = practiceTopics.find(t => t.id === state.currentTopicId);
+        dom.topicSearch.value = currentTopic ? getTopicPath(currentTopic.id, state.topics) : '';
     } catch (error) {
         console.error('Error rendering topics:', error);
     }
@@ -485,6 +530,7 @@ export function buildTopicTree(topics, sortOrder = state.topicSortOrder || 'tree
             parent_id: topic.parent_id || '',
             sort_order: topic.sort_order,
             created_at: topic.created_at,
+            is_archive: isArchiveRoot(topic),
             children: []
         };
         nodesById.set(topic.id, node);
@@ -506,6 +552,11 @@ export function buildTopicTree(topics, sortOrder = state.topicSortOrder || 'tree
     }
 
     sortTreeNodes(roots, sortOrder);
+    // The archive is always the last root, whatever the sort order.
+    const archiveIndex = roots.findIndex(node => node.is_archive);
+    if (archiveIndex !== -1 && archiveIndex !== roots.length - 1) {
+        roots.push(roots.splice(archiveIndex, 1)[0]);
+    }
     return { roots, nodesById };
 }
 
@@ -593,14 +644,32 @@ function flattenTopicTree(roots, nodesById, searchExpandedIds = new Set()) {
     return flattened;
 }
 
+// True when parentId is inside the archive below its first level: such topics
+// travel with their archived ancestor and get neither Archive nor Restore.
+function parentIsArchived(parentId, nodesById) {
+    let cursor = parentId;
+    const visited = new Set();
+    while (cursor && !visited.has(cursor)) {
+        if (cursor === ARCHIVE_TOPIC_ID) return true;
+        visited.add(cursor);
+        cursor = nodesById.get(cursor)?.parent_id;
+    }
+    return false;
+}
+
 function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, nodesById) {
     // Create a single topic item element
     // This is extracted from renderTopicsList to avoid code duplication
     // nodesById is passed as a parameter to avoid rebuilding the tree on every call
 
+    const isArchive = topic.is_archive;
+    const isArchiveChild = parentId === ARCHIVE_TOPIC_ID;
+
     const topicDiv = document.createElement('div');
     topicDiv.className = 'topic-list-item topic-tree-item flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 mb-2 rounded border border-gray-200';
-    topicDiv.draggable = true;
+    if (isArchive) topicDiv.classList.add('topic-archive-root');
+    // The archive root stays put; everything else (archived topics included) can be dragged.
+    topicDiv.draggable = !isArchive;
     topicDiv.dataset.topicId = topic.id;
     topicDiv.style.marginLeft = `${depth * 20}px`;
 
@@ -636,19 +705,26 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
                     </svg>
                 </button>` : '<span class="w-6 mr-2" aria-hidden="true"></span>'}
                 <span class="topic-icon mr-2" data-topic-id="${topic.id}" aria-hidden="true">
-                    ${hasChildren ? getFolderIcon() : getFileIcon()}
+                    ${isArchive ? getArchiveIcon() : hasChildren ? getFolderIcon() : getFileIcon()}
                 </span>
-                <span class="text-gray-400 mr-2 select-none" aria-hidden="true">::</span>
+                ${isArchive ? '' : '<span class="text-gray-400 mr-2 select-none" aria-hidden="true">::</span>'}
                 <span class="truncate">${displayName}</span>
                 ${childBadge}
             </div>
-            <div class="topic-item-date" id="topic-date-${topic.id}">Created: ${new Date(topic.created_at).toLocaleDateString()}</div>
+            <div class="topic-item-date" id="topic-date-${topic.id}">${isArchive
+                ? 'Not shown in the practice topic list'
+                : `Created: ${new Date(topic.created_at).toLocaleDateString()}`}</div>
         </div>
-        <div class="flex gap-2 mt-2 sm:mt-0" role="toolbar" aria-label="Topic actions">
+        ${isArchive ? '' : `<div class="flex gap-2 mt-2 sm:mt-0" role="toolbar" aria-label="Topic actions">
             <button class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 add-child-btn" data-topic-id="${topic.id}" aria-label="Add child topic to ${escapeHtml(topic.name)}">Add child</button>
             <button class="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 edit-topic-btn" data-topic-id="${topic.id}" aria-label="Edit topic ${escapeHtml(topic.name)}">Edit</button>
+            ${isArchiveChild
+                ? `<button class="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 unarchive-topic-btn" data-topic-id="${topic.id}" aria-label="Restore topic ${escapeHtml(topic.name)} from the archive">Restore</button>`
+                : parentIsArchived(parentId, nodesById)
+                    ? ''
+                    : `<button class="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 archive-topic-btn" data-topic-id="${topic.id}" aria-label="Archive topic ${escapeHtml(topic.name)}">Archive</button>`}
             <button class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 delete-topic-btn" data-topic-id="${topic.id}" aria-label="Delete topic ${escapeHtml(topic.name)}">Delete</button>
-        </div>
+        </div>`}
     `;
 
     // Add tree lines for visual hierarchy
@@ -672,19 +748,31 @@ function createTopicItem(topic, depth, parentId, indexInParent, totalSiblings, n
 
     const addChildBtn = topicDiv.querySelector('.add-child-btn');
     const editBtn = topicDiv.querySelector('.edit-topic-btn');
+    const archiveBtn = topicDiv.querySelector('.archive-topic-btn');
+    const unarchiveBtn = topicDiv.querySelector('.unarchive-topic-btn');
     const deleteBtn = topicDiv.querySelector('.delete-topic-btn');
 
-    addChildBtn.addEventListener('click', (e) => {
+    addChildBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
         showAddTopicForm(e.currentTarget.dataset.topicId);
     });
 
-    editBtn.addEventListener('click', (e) => {
+    editBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
         showPromptEditor(e.currentTarget.dataset.topicId);
     });
 
-    deleteBtn.addEventListener('click', (e) => {
+    archiveBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        archiveTopic(e.currentTarget.dataset.topicId);
+    });
+
+    unarchiveBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        unarchiveTopic(e.currentTarget.dataset.topicId);
+    });
+
+    deleteBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteTopic(e.currentTarget.dataset.topicId);
     });
@@ -1438,6 +1526,41 @@ async function deleteTopic(topicId) {
     }
 }
 
+async function archiveTopic(topicId) {
+    const topic = state.topics.find(t => t.id === topicId);
+    if (!topic) {
+        alert('Topic not found. Please refresh and try again.');
+        return;
+    }
+    try {
+        await archiveTopicAPI(topicId);
+        // loadTopics moves the practice selection off the archived subtree.
+        await loadTopics();
+        announceToScreenReader(`${topic.name} moved to the archive`);
+    } catch (error) {
+        console.error('Error archiving topic:', error);
+        await loadTopics();
+        alert(`Failed to archive topic. ${error.message || ''}`.trim());
+    }
+}
+
+async function unarchiveTopic(topicId) {
+    const topic = state.topics.find(t => t.id === topicId);
+    if (!topic) {
+        alert('Topic not found. Please refresh and try again.');
+        return;
+    }
+    try {
+        await unarchiveTopicAPI(topicId);
+        await loadTopics();
+        announceToScreenReader(`${topic.name} restored from the archive`);
+    } catch (error) {
+        console.error('Error restoring topic:', error);
+        await loadTopics();
+        alert(`Failed to restore topic. ${error.message || ''}`.trim());
+    }
+}
+
 async function updateTopicDetails(topicId, name, prompt, parentId, sortOrder) {
     try {
         await updateTopicAPI(topicId, name, prompt, parentId, sortOrder);
@@ -1723,14 +1846,17 @@ export function renderTopicDropdown(searchQuery = '') {
     lastDropdownQuery = searchQuery;
     dom.topicDropdown.innerHTML = '';
 
+    // The archive and its subtree are not offered for practice.
+    const practiceTopics = state.topics ? getPracticeTopics(state.topics) : [];
+
     // Check if topics are loaded
-    if (!state.topics || state.topics.length === 0) {
+    if (practiceTopics.length === 0) {
         dom.topicDropdown.innerHTML = '<div style="padding: 0.5rem; color: #6b7280;">No topics available.</div>';
         return;
     }
 
     // Build the topic tree
-    const { roots, nodesById } = buildTopicTree(state.topics);
+    const { roots, nodesById } = buildTopicTree(practiceTopics);
 
     // If searching, find matching topics and their parent IDs to auto-expand
     let matchingIds = new Set();
