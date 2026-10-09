@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   srs:
-    image: ghcr.io/korjavin/german-conjuctions-trainer:master
+    image: ghcr.io/korjavin/german-conjuctions-trainer:a13bac6a5f3020e391bcda8e3ba469dbb4a1731a
     container_name: gct
     networks:
       - vaultwarden_default
