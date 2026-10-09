@@ -9,7 +9,7 @@
  * IMPORTANT: bump CACHE_VERSION whenever a shell file changes, otherwise
  * returning visitors keep the old cached copy until the cache is evicted.
  */
-const CACHE_VERSION = 'gct-shell-v25';
+const CACHE_VERSION = 'gct-shell-v26';
 
 const SHELL_ASSETS = [
     '/',
@@ -22,6 +22,7 @@ const SHELL_ASSETS = [
     '/css/today.css',
     '/css/history.css',
     '/css/listen.css',
+    '/css/topics.css',
     '/manifest.json',
     '/favicon.svg',
     '/favicon-32x32.svg',
@@ -43,6 +44,7 @@ const SHELL_ASSETS = [
     '/js/session.js',
     '/js/today.js',
     '/js/topics.js',
+    '/js/topics-browser.js',
     '/js/ui.js',
     '/js/voice.js',
     // Third-party shell dependencies — best effort, a failure here is fine.

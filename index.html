@@ -21,6 +21,7 @@
     <link href="/css/today.css" rel="stylesheet">
     <link href="/css/history.css" rel="stylesheet">
     <link href="/css/listen.css" rel="stylesheet">
+    <link href="/css/topics.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 </head>
 <body class="app-body">
@@ -93,9 +94,17 @@
             </div>
         </section>
 
-        <section data-screen="topics" hidden>
-            <h1 class="gct-page-title">Topics</h1>
-            <p class="section-desc">Coming soon.</p>
+        <section data-screen="topics" id="screen-topics" class="gct-topics" hidden>
+            <nav id="topics-crumbs" class="gct-topics__crumbs" aria-label="Topic path"></nav>
+            <div class="gct-topics__head">
+                <div class="gct-topics__grow">
+                    <h1 id="topics-browser-title" class="gct-page-title">Topics</h1>
+                    <div id="topics-browser-sub" class="gct-topics__sub"></div>
+                </div>
+                <div id="topics-search-wrap" class="gct-topics__search"><i data-icon="search" data-size="18"></i><input id="topics-browser-search" class="gct-input" type="search" placeholder="Search topics…" aria-label="Search topics" autocomplete="off"></div>
+                <div id="topics-actions" class="gct-topics__actions"></div>
+            </div>
+            <div id="topics-body"></div>
         </section>
 
         <section data-screen="practice" hidden>
