@@ -78,7 +78,7 @@ export async function deleteTopicAPI(topicId) {
     const response = await fetch(`/api/topics/${topicId}`, { method: 'DELETE' });
     if (!response.ok) {
         if (response.status === 409) {
-            throw new Error('Topic has children and cannot be deleted.');
+            throw Object.assign(new Error('Topic has children and cannot be deleted.'), { status: 409 });
         }
         throw new Error('Failed to delete topic.');
     }

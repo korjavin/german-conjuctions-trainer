@@ -23,7 +23,7 @@ An interactive German language learning application that helps B1-level students
 - **Prompt Customization**: Tailor exercise generation prompts for each topic.
 - **Version History**: Track and restore the last 10 versions of a prompt.
 - **Persistent Storage**: Uses SQLite for fast and reliable data storage.
-- **Database Statistics** (Admin): View total exercises, topics, audio cache size/file count, database size, and per-topic exercise counts from the settings modal.
+- **Database Statistics** (Admin): View total exercises, topics, audio cache size/file count, database size, and per-topic exercise counts on the Manage screen (Database tab).
 - **Legacy Airtable Integration**: Support for Airtable (Deprecated).
 - **Optional Google Login**: Allows users to log in with their Google account to enable the SRS feature and save settings.
 - **Podcast Mode**: Turns the selected topic (with its subtopics) into a listen-only MP3 episode for commuting or walking. See [Podcast Mode](#podcast-mode).
@@ -175,28 +175,7 @@ go test -cover ./...
 
 ### Frontend Tests (JavaScript)
 
-JavaScript tests are designed for browser-based verification:
-
-1. **Browser Console Tests**:
-   - Open the application in your browser
-   - Open Developer Tools (F12)
-   - Go to Console tab
-   - Paste the contents of any test file from `js/topics-*-test.js`
-   - Tests will run automatically and report results
-
-2. **Performance Test Runner**:
-   - Open `js/topics-performance-test-runner.html` in your browser
-   - Click "Run All Tests" button
-   - Results appear in console and on the page
-
-3. **Test Guides**: Each feature has a corresponding test guide:
-   - `js/topics-accessibility-test-guide.md` - Accessibility feature verification
-   - `js/topics-collapse-test-guide.md` - Expand/collapse functionality
-   - `js/topics-dragdrop-test-guide.md` - Drag-and-drop behavior
-   - `js/topics-form-test-guide.md` - Form validation and UX
-   - `js/topics-icon-test-guide.md` - Topic icons rendering
-   - `js/topics-search-test-guide.md` - Search functionality
-   - `js/topics-sort-test-guide.md` - Sorting behavior
+Vitest unit suites live in `js/__tests__/` (happy-dom) and run in CI on every pull request (`pnpm test`).
 
 ### Test Coverage
 
@@ -204,8 +183,7 @@ The comprehensive test suite covers:
 - Backend API validation and error handling
 - Database operations and migrations
 - Frontend UI interactions
-- Accessibility compliance (WCAG, ARIA)
-- Performance characteristics (virtual scrolling, debouncing)
+- Topic tree rendering, search, keyboard navigation and Manage actions (vitest)
 - User workflows (CRUD operations, drag-and-drop)
 
 ## Airtable Setup (Deprecated)
@@ -231,18 +209,18 @@ Topics can be organized hierarchically in a tree structure with advanced feature
 **Topic Hierarchy Features:**
 
 - **Visual Tree Lines**: Clear visual connectors show parent-child relationships at any depth level
-- **Expand/Collapse**: Collapse branches to reduce clutter, with state persisted across sessions. Collapse All / Expand All buttons in the toolbar for quick bulk toggling
-- **Topic Icons**: Folder icons for topics with children, file icons for leaf topics
-- **Search & Filter**: Instant search with auto-expansion of parent topics and text highlighting
-- **Top-Level Sorting**: Sort top-level topics by name (A-Z, Z-A), date (newest/oldest), or custom order without affecting nested children
-- **Enhanced Drag-and-Drop**: Improved visual feedback with ghost preview, drop zone indicators, and animations
-- **Better Form UX**: Real-time validation, hierarchy preview, recently-used topics quick-select, and keyboard shortcuts (Ctrl+Enter to save, Escape to cancel)
-- **Accessibility**: Full keyboard navigation (Arrow keys, Home, End, Enter/Space to expand), ARIA attributes, and screen reader announcements
-- **Performance**: Virtual scrolling for large topic lists (100+ topics) and debounced search input
+- **Expand/Collapse**: Collapse branches to reduce clutter, with state persisted across sessions
+- **Topic Icons**: Folder icons for topics with children, leaf icons for leaf topics
+- **Search & Filter**: Instant search (Ctrl/Cmd+F in Manage) with auto-expansion of parent topics and text highlighting
+- **Top-Level Sorting**: Tree (custom order), A–Z, Z–A, Newest, Oldest, without affecting nested children
+- **Drag-and-Drop** (desktop): drag a row onto a gap to reorder or onto a row to nest it, with a ghost preview
+- **Row menu**: each row's ⋯ menu offers Add child, Rename, Archive/Restore and Delete (with an "Archive instead" option)
+- **Editor**: real-time validation, recently-used parent quick-select, prompt version history with Restore, Ctrl+Enter to save
+- **Accessibility**: keyboard navigation (Arrow keys, Home, End, Left/Right to collapse/expand, Space to toggle, Enter to open), ARIA tree attributes, and screen reader announcements
 
 **Topic Name Uniqueness:** Topic names must be unique at the same parent level (case-insensitive). You cannot create two topics with the same name that share the same parent, but you can reuse names at different levels (e.g., "Grammar" -> "Verbs" and "Adjectives" -> "Verbs" are both allowed).
 
-**Sort Order Field:** Topics have a `sort_order` field that determines their display position within their parent. Lower values appear first. When using the "Custom Order" sort option, topics are displayed based on their `sort_order` value.
+**Sort Order Field:** Topics have a `sort_order` field that determines their display position within their parent. Lower values appear first. When using the "Tree" sort option, topics are displayed based on their `sort_order` value.
 
 **Tree Depth Limit:** Topic trees are limited to a maximum depth of 100 levels to prevent performance issues.
 
