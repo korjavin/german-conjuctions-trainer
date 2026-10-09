@@ -2,9 +2,66 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 import { isPunctuation, playWordAudio, playSentenceAudio, preloadExerciseWordAudio } from './audio.js';
 import { toggleFavoriteAPI, toggleHideExerciseAPI, fetchExplainAPI } from './api.js';
-import { toast } from './ui.js';
+import { toast, confirm } from './ui.js';
+import { short } from './scope.js';
 
 let _onSessionComplete = () => {};
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const svg = (name, size = 16) => (typeof window.gctIconSvg === 'function' ? window.gctIconSvg(name, size) : '');
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const WRONG_MS = 900;
+let wrongTimer = 0;
+
+const currentPerf = () => state.exercisePerformance.get(state.exerciseIds[state.currentExerciseIndex]) || { mistakes: 0, hints: 0 };
+
+// SRS (server: next review after counter² hours): the counter after this answer.
+export function nextReviewHours(exercise, perf) {
+    const old = exercise.repetition_counter || 0;
+    const next = perf.mistakes > 0 ? Math.max(0, old - 1) : perf.hints > 0 ? old : old + 1;
+    return next * next;
+}
+
+// 0 -> 'now', 4 -> 'in 4 h', 30 -> 'in 2 d'
+export function reviewIn(hours) {
+    if (hours <= 0) return 'now';
+    return hours < 24 ? `in ${hours} h` : `in ${Math.ceil(hours / 24)} d`;
+}
+
+// Outcome of a finished sentence: [badge tone, label].
+export function outcome(perf) {
+    if (perf.mistakes > 0) return ['danger', perf.mistakes === 1 ? 'With 1 mistake' : `With ${perf.mistakes} mistakes`];
+    if (perf.hints > 0) return ['warning', 'With hints'];
+    return ['success', 'Perfect'];
+}
+
+// Progress = answered / total, so the bar is 0% before the first answer.
+export function setProgress(answered, total = state.exercises.length) {
+    const pct = total ? Math.min(100, (answered / total) * 100) : 0;
+    if (dom.progressBar) dom.progressBar.style.width = `${pct}%`;
+    if (dom.progressPercentage) dom.progressPercentage.textContent = `${Math.round(pct)}%`;
+}
+
+// Status line under the word bank: a wrong pick, else "N mistakes · N hints" (css swaps in the voice commands while listening).
+function renderStatus(wrong = '') {
+    const el = dom.practiceStatus;
+    if (!el) return;
+    const perf = currentPerf();
+    el.classList.toggle('is-wrong', Boolean(wrong));
+    el.innerHTML = wrong
+        ? `${svg('x', 14)}<span>“${esc(wrong)}” doesn’t go here yet</span>`
+        : `<span class="gct-practice__counts">${plural(perf.mistakes, 'mistake')} · ${plural(perf.hints, 'hint')}</span>`
+            + '<span class="gct-practice__listening">Listening · or say <b>weiter</b>, <b>hinweis</b>, <b>überspringen</b></span>';
+}
+
+function renderSentence() {
+    dom.constructedSentenceEl.innerHTML = state.userSentence.map((w) => (isPunctuation(w)
+        ? `<span class="gct-practice__punct">${esc(w)}</span>`
+        : `<span class="gct-chip gct-chip--placed">${esc(w)}</span>`)).join('');
+    const started = state.userSentence.some((w) => !isPunctuation(w));
+    dom.answerPrompt.classList.toggle('hidden', started);
+    dom.answerArea?.classList.toggle('is-started', started);
+}
 
 const PROVERBS = [
     { de: 'Übung macht den Meister', en: 'Practice makes perfect' },
@@ -55,6 +112,7 @@ function stopProverbRotation() {
 }
 
 function spawnConfetti() {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     const burst = document.createElement('div');
     burst.className = 'confetti-burst';
     for (let i = 0; i < 10; i++) {
@@ -95,19 +153,22 @@ export function addPunctuationIfNeeded(exercise, userSentence) {
 export function renderExercise() {
     state.isLocked = false;
     state.userSentence = [];
+    clearTimeout(wrongTimer);
 
-    // Hide control buttons by default and show hint/skip buttons
+    // Pending state: word bank + Skip/Hint row; the finished block stays hidden.
     dom.exerciseControls.classList.add('hidden');
     dom.hintBtn.classList.remove('hidden');
     dom.skipExerciseBtn.classList.remove('hidden');
     dom.scrambledWordsContainer.classList.remove('hidden');
     if (dom.scrambledWordsHeader) dom.scrambledWordsHeader.classList.remove('hidden');
+    dom.answerArea?.classList.remove('is-done', 'is-mistakes');
 
     if (state.exercises.length === 0) {
         dom.exerciseContent.classList.add('hidden');
         dom.emptyStateContainer.classList.remove('hidden');
         dom.exerciseCounter.classList.add('hidden');
         dom.hintBtn.classList.add('hidden');
+        setProgress(0);
         startProverbRotation();
         return;
     }
@@ -122,58 +183,30 @@ export function renderExercise() {
     addPunctuationIfNeeded(exercise, state.userSentence);
 
     dom.exerciseCounter.textContent = `${state.currentExerciseIndex + 1} of ${state.exercises.length}`;
+    setProgress(state.currentExerciseIndex);
 
-    // Update favorite button state
     updateFavoriteButtonState(exercise.is_favorite);
 
-    // Update progress bar
-    const progress = ((state.currentExerciseIndex + 1) / state.exercises.length) * 100;
-    if (dom.progressBar) {
-        dom.progressBar.style.width = `${progress}%`;
-    }
-    if (dom.progressPercentage) {
-        dom.progressPercentage.textContent = `${Math.round(progress)}%`;
-    }
-
-    // Reset UI
     dom.englishHintEl.textContent = exercise.english_hint;
     dom.scrambledWordsContainer.innerHTML = '';
-    dom.constructedSentenceEl.innerHTML = '';
     dom.correctSentenceDisplay.textContent = '';
+    if (dom.nextReviewLabel) dom.nextReviewLabel.textContent = '';
 
-    // Reset explanation state
     dom.explanationContainer.classList.add('hidden');
     dom.explainBtn.classList.add('hidden');
     state.explanationText = '';
 
-    // Handle exercise topic label
-    if (exercise.topic_id && exercise.topic_id !== state.currentTopicId) {
-        const topic = state.topics.find(t => t.id === exercise.topic_id);
-        if (topic && dom.exerciseTopicLabel) {
-            dom.exerciseTopicLabel.textContent = topic.name;
-            dom.exerciseTopicLabel.classList.remove('invisible');
-        } else if (dom.exerciseTopicLabel) {
-            dom.exerciseTopicLabel.textContent = '';
-            dom.exerciseTopicLabel.classList.add('invisible');
-        }
-    } else if (dom.exerciseTopicLabel) {
-        dom.exerciseTopicLabel.textContent = '';
-        dom.exerciseTopicLabel.classList.add('invisible');
+    // Card caption: the exercise's topic (mobile always; desktop only when it differs from the practised topic).
+    const topic = state.topics.find(t => t.id === (exercise.topic_id || state.currentTopicId));
+    if (dom.exerciseTopicLabel) {
+        dom.exerciseTopicLabel.textContent = topic ? short(topic.name) : '';
+        dom.exerciseTopicLabel.classList.toggle('is-other', Boolean(topic && exercise.topic_id && exercise.topic_id !== state.currentTopicId));
     }
 
-    // Display initial punctuation if any
-    if (state.userSentence.length > 0) {
-        dom.answerPrompt.classList.add('hidden');
-        state.userSentence.forEach(w => {
-            const span = document.createElement('span');
-            span.textContent = w;
-            dom.constructedSentenceEl.appendChild(span);
-        });
-    } else {
-        dom.answerPrompt.classList.remove('hidden');
-    }
+    renderSentence();
+    renderStatus();
 
-    // Tokenize the correct sentence to create word buttons, then shuffle them.
+    // Tokenize the correct sentence to create word chips, then shuffle them.
     const allTokens = exercise.correct_german_sentence.match(/[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu) || [];
     const wordsToDisplay = allTokens.filter(token => !isPunctuation(token));
     for (let i = wordsToDisplay.length - 1; i > 0; i--) {
@@ -181,27 +214,16 @@ export function renderExercise() {
         [wordsToDisplay[i], wordsToDisplay[j]] = [wordsToDisplay[j], wordsToDisplay[i]];
     }
 
-    // Create and display word buttons with hotkeys
+    // Word chips; the hotkey badge is only shown with a keyboard (css/practice.css).
     wordsToDisplay.forEach((word, index) => {
         const button = document.createElement('button');
         const hotkey = getHotkey(index);
-
-        const hotkeySpan = document.createElement('span');
-        hotkeySpan.textContent = hotkey;
-        hotkeySpan.className = 'hotkey-indicator';
-
-        const wordSpan = document.createElement('span');
-        wordSpan.textContent = word;
-
-        button.appendChild(hotkeySpan);
-        button.appendChild(wordSpan);
-
-        button.className = 'btn-word';
+        button.type = 'button';
+        button.className = 'btn-word gct-chip'; // .btn-word / .word-collected / .hint-word: hooks for voice.js and hints
         button.dataset.hotkey = hotkey;
         button.dataset.word = word;
-
+        button.innerHTML = `<span class="gct-chip__key" aria-hidden="true">${esc(hotkey)}</span>${esc(word)}`;
         button.addEventListener('click', () => handleWordClick(word, button));
-
         dom.scrambledWordsContainer.appendChild(button);
     });
 
@@ -233,18 +255,12 @@ export function handleWordClick(word, button) {
         state.userSentence.push(word);
         addPunctuationIfNeeded(exercise, state.userSentence);
 
-        // Hide the clicked button without changing layout
+        // The chip stays in the bank, dimmed (gct-chip--used look), so the layout doesn't jump.
         button.classList.add('word-collected');
-
-        // Update constructed sentence display
-        dom.constructedSentenceEl.innerHTML = '';
-        dom.answerPrompt.classList.add('hidden');
-
-        state.userSentence.forEach(w => {
-            const span = document.createElement('span');
-            span.textContent = w;
-            dom.constructedSentenceEl.appendChild(span);
-        });
+        button.classList.remove('hint-word');
+        clearTimeout(wrongTimer);
+        renderSentence();
+        renderStatus();
 
         // Check if sentence is complete
         if (state.userSentence.length === correctWordArray.length) {
@@ -277,10 +293,16 @@ export function handleWordClick(word, button) {
             perf.mistakes++;
         }
 
-        button.classList.add('incorrect-answer-feedback');
-        setTimeout(() => {
-            button.classList.remove('incorrect-answer-feedback');
-        }, 500);
+        // Wrong chip: red + 300ms shake; the status line names it for WRONG_MS.
+        dom.scrambledWordsContainer.querySelectorAll('.gct-chip--wrong').forEach((b) => b.classList.remove('gct-chip--wrong', 'gct-shake'));
+        button.classList.add('gct-chip--wrong');
+        button.classList.add('gct-shake');
+        renderStatus(word);
+        clearTimeout(wrongTimer);
+        wrongTimer = setTimeout(() => {
+            button.classList.remove('gct-chip--wrong', 'gct-shake');
+            renderStatus();
+        }, WRONG_MS);
     }
 }
 
@@ -289,53 +311,18 @@ async function handleSentenceCompletion(exercise, correctWordArray, lastWord = '
     const isCorrect = state.userSentence.join(' ') === correctWordArray.join(' ');
 
     if (isCorrect) {
-        spawnConfetti();
-        dom.correctSentenceDisplay.textContent = ''; // Hide the green text
-        
         const exerciseId = state.exerciseIds[state.currentExerciseIndex];
         const perf = state.exercisePerformance.get(exerciseId) || { mistakes: 0, hints: 0 };
-        
-        // Build combined status pill: icon + next review time
-        let iconSvg, statusClass, statusTitle;
-        if (perf.mistakes > 0) {
-            iconSvg = '<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
-            statusClass = 'status-mistakes';
-            statusTitle = 'Completed with mistakes';
-        } else if (perf.hints > 0) {
-            iconSvg = '<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>';
-            statusClass = 'status-hints';
-            statusTitle = 'Completed with hints';
-        } else {
-            iconSvg = '<svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
-            statusClass = 'status-perfect';
-            statusTitle = 'Perfect';
-        }
+        const [tone, label] = outcome(perf);
+        if (tone === 'success') spawnConfetti(); // confetti only for Perfect
+        dom.correctSentenceDisplay.textContent = '';
 
-        let reviewLabel = '';
-        if (state.isLoggedIn) {
-            const oldCounter = exercise.repetition_counter || 0;
-            let newCounter;
-            if (perf.mistakes > 0) {
-                newCounter = Math.max(0, oldCounter - 1);
-            } else if (perf.hints > 0) {
-                newCounter = oldCounter;
-            } else {
-                newCounter = oldCounter + 1;
-            }
-            const nextReviewHours = newCounter * newCounter;
-            if (nextReviewHours === 0) {
-                reviewLabel = 'now';
-            } else if (nextReviewHours < 24) {
-                reviewLabel = `in ${nextReviewHours}h`;
-            } else {
-                reviewLabel = `in ${Math.ceil(nextReviewHours / 24)}d`;
-            }
+        dom.completionStatusIndicator.innerHTML = `<span class="gct-badge gct-badge--${tone}"><span class="gct-badge__dot"></span>${label}</span>`;
+        if (dom.nextReviewLabel) {
+            dom.nextReviewLabel.textContent = state.isLoggedIn ? `Next review ${reviewIn(nextReviewHours(exercise, perf))}` : '';
         }
-
-        dom.completionStatusIndicator.className = `completion-status-pill ${statusClass}`;
-        dom.completionStatusIndicator.title = statusTitle;
-        dom.completionStatusIndicator.innerHTML = iconSvg +
-            (reviewLabel ? `<span class="status-pill-text">${reviewLabel}</span>` : '');
+        dom.answerArea?.classList.add('is-done');
+        dom.answerArea?.classList.toggle('is-mistakes', perf.mistakes > 0);
 
         state.lastAudioUrl = exercise.audio_file_path;
         state.lastAudioText = exercise.correct_german_sentence;
@@ -343,33 +330,31 @@ async function handleSentenceCompletion(exercise, correctWordArray, lastWord = '
         if (exerciseId) {
             state.completedExerciseIds.add(exerciseId);
         }
+        setProgress(state.currentExerciseIndex + 1);
 
-        if (lastWord) {
-            await playWordAudio(lastWord);
-        }
-        if (state.autoplaySentence) playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
-
-        // Show exercise controls and hide hint/skip buttons
+        // Finished block replaces the word bank and the Skip/Hint row.
         dom.exerciseControls.classList.remove('hidden');
         dom.hintBtn.classList.add('hidden');
         dom.skipExerciseBtn.classList.add('hidden');
         dom.scrambledWordsContainer.classList.add('hidden');
         if (dom.scrambledWordsHeader) dom.scrambledWordsHeader.classList.add('hidden');
 
-        // Show explain button if mistakes were made on this exercise using actual ID
+        // Explain only when this exercise had mistakes.
         if (state.exerciseMistakes[exerciseId] && state.exerciseMistakes[exerciseId].size > 0) {
             dom.explainBtn.classList.remove('hidden');
         }
+
+        if (lastWord) {
+            await playWordAudio(lastWord);
+        }
+        if (state.autoplaySentence) playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
     } else {
         state.mistakes++;
 
-        // Show incorrect feedback
         const wrongWords = dom.scrambledWordsContainer.querySelectorAll('.btn-word.word-collected');
         wrongWords.forEach(btn => {
-            btn.classList.add('incorrect-answer-feedback');
-            setTimeout(() => {
-                btn.classList.remove('incorrect-answer-feedback');
-            }, 500);
+            btn.classList.add('gct-chip--wrong', 'gct-shake');
+            setTimeout(() => btn.classList.remove('gct-chip--wrong', 'gct-shake'), WRONG_MS);
         });
 
         // Reset for another try
@@ -405,10 +390,7 @@ export function handleHintClick() {
                     const perf = state.exercisePerformance.get(exerciseId);
                     perf.hints++;
                 }
-
-                setTimeout(() => {
-                    button.classList.remove('hint-word');
-                }, 2000);
+                renderStatus(); // the hint stays highlighted until that chip is picked
                 break;
             }
         }
@@ -453,11 +435,11 @@ export async function handleExplainClick() {
 
     // UI Loading state
     dom.explainBtn.disabled = true;
-    const btnText = dom.explainBtn.querySelector('span:first-child');
-    const spinner = dom.explainBtn.querySelector('.loading-spinner');
+    const btnText = dom.explainBtn.querySelector('.gct-practice__explain-text');
+    const spinner = dom.explainBtn.querySelector('.gct-practice__spinner');
 
     if (btnText && spinner) {
-        btnText.textContent = 'Explaining...';
+        btnText.textContent = 'Explaining…';
         spinner.classList.remove('hidden');
     }
 
@@ -482,7 +464,7 @@ export async function handleExplainClick() {
         dom.explainBtn.disabled = false;
 
         if (btnText && spinner) {
-            btnText.textContent = '💡 Explain Mistakes';
+            btnText.textContent = 'Explain mistakes';
             spinner.classList.add('hidden');
         }
     }
@@ -583,18 +565,22 @@ export async function handleToggleFavorite() {
 }
 
 export function updateFavoriteButtonState(isFavorite) {
-    const svg = dom.toggleFavoriteBtn.querySelector('svg');
-    if (isFavorite) {
-        dom.favoriteBtnText.textContent = 'Remove from Favorites';
-        dom.toggleFavoriteBtn.classList.remove('btn-secondary');
-        dom.toggleFavoriteBtn.classList.add('btn-primary');
-        dom.toggleFavoriteBtn.classList.add('filter-active-yellow');
-        svg.setAttribute('fill', 'currentColor');
-    } else {
-        dom.favoriteBtnText.textContent = 'Add to Favorites';
-        dom.toggleFavoriteBtn.classList.remove('filter-active-yellow');
-        dom.toggleFavoriteBtn.classList.remove('btn-primary');
-        dom.toggleFavoriteBtn.classList.add('btn-secondary');
-        svg.setAttribute('fill', 'none');
-    }
+    const on = Boolean(isFavorite);
+    dom.toggleFavoriteBtn.setAttribute('aria-pressed', String(on)); // css fills the star
+    dom.toggleFavoriteBtn.title = on ? 'Remove from favorites' : 'Add to favorites';
 }
+
+// Skip button: skip for now, or (logged in) hide it from every future session.
+export async function confirmSkip() {
+    const actions = [{ label: 'Skip for now', kind: 'primary', value: 'skip' }];
+    if (state.isLoggedIn) actions.push({ label: 'Never show again', kind: 'secondary', value: 'hide' });
+    actions.push({ label: 'Cancel', kind: 'ghost' });
+    const choice = await confirm({
+        title: 'Skip this sentence?',
+        body: state.isLoggedIn ? 'Skipping keeps it in your reviews. Hiding removes it from every future session.' : 'It stays in the pool for a later session.',
+        actions,
+    });
+    if (choice === 'skip') handleSkipExercise();
+    else if (choice === 'hide') handleHideExercise();
+}
+

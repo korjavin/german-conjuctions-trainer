@@ -98,6 +98,8 @@ export function setScope(id) {
 // Practice a topic (null = All topics; cached due items only) without changing the scope.
 export function startPractice(topicId = state.scopeId) {
     state.currentTopicId = topicId || '';
+    const crumbs = document.getElementById('practice-crumbs'); // practice bar breadcrumb (desktop)
+    if (crumbs) crumbs.innerHTML = labelHtml(4, topicId);
     resetForNewSession();
 }
 
@@ -130,8 +132,8 @@ function onTopicsChange() {
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const svg = (name, size = 16) => (typeof window.gctIconSvg === 'function' ? window.gctIconSvg(name, size) : '');
 
-function labelHtml(max = 2) {
-    const c = path(state.scopeId).map((n) => short(n.name));
+function labelHtml(max = 2, id = state.scopeId) {
+    const c = path(id).map((n) => short(n.name));
     if (!c.length) return '<span class="gct-scope-label"><b>All topics</b></span>';
     const shown = c.length > max ? [c[0], '…', ...c.slice(-(max - 1))] : c;
     return '<span class="gct-scope-label">' + shown.map((x, i) => (i ? svg('chevron-right', 13) : '')

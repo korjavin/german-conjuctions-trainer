@@ -63,7 +63,6 @@ vi.mock('../dom.js', () => {
   return {
     dom: {
       audioToggleBtn: createMockElement('button'),
-      audioToggleIcon: createMockElement('span'),
       replayAudioBtn: createMockElement('button'),
       scrambledWordsContainer: createMockElement('div'),
       scrambledWordsHeader: createMockElement('div'),
@@ -74,8 +73,11 @@ vi.mock('../dom.js', () => {
       explanationContainer: createMockElement('div'),
       explanationText: createMockElement('div'),
       toggleFavoriteBtn: createMockElement('button'),
-      favoriteBtnText: createMockElement('span'),
       completionStatusIndicator: createMockElement('div'),
+      nextReviewLabel: createMockElement('span'),
+      practiceStatus: createMockElement('span'),
+      answerArea: createMockElement('div'),
+      exerciseContainer: createMockElement('div'),
       loadingSpinner: createMockElement('div'),
       exerciseContent: createMockElement('div'),
       generateBtn: createMockElement('button'),
@@ -85,7 +87,6 @@ vi.mock('../dom.js', () => {
       loginBtn: createMockElement('button'),
       logoutBtn: createMockElement('button'),
       settingsBtn: createMockElement('button'),
-      skipRemoveBtn: createMockElement('button'),
       offlineCacheBtn: createMockElement('button'),
       offlineCacheStatus: createMockElement('span'),
       offlineCacheCount: createMockElement('div'),

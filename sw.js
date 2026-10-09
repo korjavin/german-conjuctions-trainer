@@ -4,12 +4,12 @@
  *   - shell (/, css, js modules, favicons, manifest): cache-first, precached on install
  *   - /audio_cache/*: cache-first (content-addressed + immutable), silent miss offline
  *   - /api/*: never touched — always network
- *   - CDN chart.js + Google Fonts: runtime cache-first, best effort (opaque responses)
+ *   - Google Fonts: runtime cache-first, best effort (opaque responses)
  *
  * IMPORTANT: bump CACHE_VERSION whenever a shell file changes, otherwise
  * returning visitors keep the old cached copy until the cache is evicted.
  */
-const CACHE_VERSION = 'gct-shell-v23';
+const CACHE_VERSION = 'gct-shell-v24';
 
 const SHELL_ASSETS = [
     '/',
@@ -20,6 +20,7 @@ const SHELL_ASSETS = [
     '/css/me.css',
     '/css/today.css',
     '/css/history.css',
+    '/css/practice.css',
     '/manifest.json',
     '/favicon.svg',
     '/favicon-32x32.svg',
@@ -43,12 +44,10 @@ const SHELL_ASSETS = [
     '/js/ui.js',
     '/js/voice.js',
     // Third-party shell dependencies — best effort, a failure here is fine.
-    'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js',
     'https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,500;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,600;1,6..12,700&display=swap',
 ];
 
 const RUNTIME_CACHE_HOSTS = [
-    'cdnjs.cloudflare.com',
     'fonts.googleapis.com',
     'fonts.gstatic.com',
 ];

@@ -19,7 +19,7 @@
     <link href="/css/me.css" rel="stylesheet">
     <link href="/css/today.css" rel="stylesheet">
     <link href="/css/history.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+    <link href="/css/practice.css" rel="stylesheet">
 </head>
 <body class="app-body">
 
@@ -45,7 +45,7 @@
     </header>
 
     <div class="gct-practicebar">
-        <a href="#/today" class="gct-icon-btn" aria-label="End session" title="End session"><i data-icon="x"></i></a>
+        <a href="#/today" id="practice-close" class="gct-icon-btn" aria-label="End session" title="End session"><i data-icon="x"></i></a>
         <div id="practice-crumbs" class="gct-practicebar__crumbs"></div>
         <div class="gct-practicebar__progress">
             <div id="progress-bar-container" class="gct-progress">
@@ -53,13 +53,6 @@
             </div>
             <span id="exercise-counter" class="gct-practicebar__count"></span>
             <span id="progress-percentage" hidden>0%</span>
-            <!-- TEMPORARY (until P1 restyles practice): sound + voice toggles live with the session -->
-            <button id="audio-toggle-btn" class="btn-primary audio-toggle-btn whitespace-nowrap" title="Sound: on" aria-label="Disable sound">
-                <span id="audio-toggle-icon" aria-hidden="true">🔊</span>
-            </button>
-            <button id="voice-toggle-btn" class="btn-primary audio-toggle-btn whitespace-nowrap" title="Voice input: off" aria-pressed="false" aria-label="Toggle voice input">
-                <span aria-hidden="true">🎤</span>
-            </button>
             <span class="gct-offline" data-offline-chip><i data-icon="offline" data-size="14"></i>Offline</span>
         </div>
     </div>
@@ -97,87 +90,63 @@
         </section>
 
         <section data-screen="practice" hidden>
-            <div id="exercise-container" class="card exercise-container mb-8">
-                <div id="loading-spinner" class="text-center hidden">
-                    <div class="loading-wrapper">
-                        <div class="loading-spinner animate-spin rounded-full"></div>
-                        <p class="loading-text">Loading your practice session...</p>
-                        <div class="timer-container">
-                            <svg class="timer-icon" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
-                            </svg>
-                            <p id="timer" class="timer-value"></p>
-                            <span class="timer-label">seconds</span>
-                        </div>
-                    </div>
+            <!-- Practice card (js/exercise.js, js/voice.js, js/audio.js). Ported from ui_kits/app/ScreensPractice.jsx PracticeScreen. -->
+            <div id="exercise-container" class="gct-card gct-practice">
+                <div id="loading-spinner" class="gct-practice__loading hidden" role="status">
+                    <span class="gct-practice__spinner" aria-hidden="true"></span>
+                    <p class="gct-practice__loading-title">Building your session…</p>
+                    <p class="gct-practice__muted"><span id="timer" class="gct-practice__num">0</span> s · Usually 15 s</p>
                 </div>
-                <div id="empty-state-container" class="text-center hidden">
-                    <div class="empty-state-proverb mb-4">
-                        <p id="proverb-de" class="proverb-de"></p>
-                        <p id="proverb-en" class="proverb-en"></p>
-                    </div>
-                    <p class="empty-state-title mb-2">Ready to practice?</p>
-                    <p class="empty-state-subtitle">Select a topic above and click "Start Practice" to begin.</p>
+                <div id="empty-state-container" class="gct-practice__empty hidden">
+                    <p id="proverb-de" class="proverb"></p>
+                    <p id="proverb-en" class="gct-practice__proverb-en"></p>
+                    <p class="gct-practice__muted">Nothing to practice here right now. Pick a topic on Today.</p>
+                    <a href="#/today" class="gct-btn gct-btn--primary">Back to Today</a>
                 </div>
 
-                <div id="exercise-content">
-                    <p id="english-hint" class="english-hint mb-6">Loading exercise...</p>
-
-                    <div id="answer-area" class="answer-area mb-8 flex items-center justify-center transition-all duration-300">
-                        <p id="answer-prompt" class="answer-prompt">Click the words below to form the sentence.</p>
-                        <div id="constructed-sentence" class="constructed-sentence flex flex-wrap gap-3"></div>
-                    </div>
-                    <div id="voice-status" class="voice-status hidden" aria-live="polite">
-                        <span class="voice-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-                        <span id="voice-status-label" class="voice-status-label">Listening…</span>
-                        <span id="voice-transcript" class="voice-transcript"></span>
-                    </div>
-
-                    <div id="scrambled-words-header" class="scrambled-words-header flex justify-between items-center w-full gap-3 mb-6">
-                        <span id="exercise-topic-label" class="exercise-topic-label invisible flex-1 min-w-0 truncate"></span>
-                        <div class="exercise-actions flex items-center gap-2 ml-auto">
-                            <button id="skip-exercise-btn" class="btn-secondary exercise-action-btn flex items-center space-x-2" title="Skip this exercise for the current session">
-                                <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
-                                </svg>
-                                <span>Skip</span>
-                            </button>
-                            <button id="hint-btn" class="btn-primary exercise-action-btn flex items-center space-x-2">
-                                <svg class="action-icon" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"></path>
-                                </svg>
-                                <span>Hint</span>
-                            </button>
+                <div id="exercise-content" class="gct-practice__content">
+                    <div class="gct-practice__head">
+                        <span class="gct-practice__caption"><span class="gct-practice__desk">Build the sentence</span><span id="exercise-topic-label" class="gct-practice__topic"></span></span>
+                        <div class="gct-practice__tools">
+                            <button type="button" id="audio-toggle-btn" class="gct-icon-btn gct-practice__sound" title="Sound: on" aria-label="Disable sound" aria-pressed="true"><i data-icon="sound" data-size="18"></i><i data-icon="sound-off" data-size="18"></i></button>
+                            <span class="gct-practice__mic"><span class="gct-pulse" aria-hidden="true"></span><button type="button" id="voice-toggle-btn" class="gct-icon-btn" title="Voice input: off" aria-pressed="false" aria-label="Answer by voice"><i data-icon="mic-off" data-size="18"></i><i data-icon="mic" data-size="18"></i></button></span>
                         </div>
                     </div>
-                    <div id="scrambled-words-container" class="scrambled-words-container flex flex-wrap gap-3 justify-center">
-                        <!-- Word buttons will be dynamically inserted here -->
+                    <p id="english-hint" class="gct-practice__prompt"></p>
+
+                    <div id="answer-area" class="gct-practice__answer">
+                        <span id="answer-prompt" class="gct-practice__placeholder"><span class="gct-practice__touch">Tap the words in order</span><span class="gct-practice__keys">Click words or press 1–9</span></span>
+                        <div id="constructed-sentence" class="gct-practice__sentence"></div>
+                        <span id="voice-status" class="gct-practice__live hidden" aria-live="polite"><span class="gct-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span id="voice-transcript"></span><span id="voice-status-label">Ich höre zu…</span></span>
                     </div>
 
-                    <!-- Control buttons (shown after correct answer) -->
-                    <div id="exercise-controls" class="exercise-controls flex flex-wrap gap-3 justify-center mt-4 hidden">
-                        <div id="completion-status-indicator" class="completion-status-pill"></div>
-                        <button id="toggle-favorite-btn" class="btn-secondary toggle-favorite-btn flex items-center gap-2">
-                            <svg class="favorite-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
-                            </svg>
-                            <span id="favorite-btn-text">Add to Favorites</span>
-                        </button>
-                        <button id="explain-btn" class="btn-secondary explain-btn hidden flex items-center gap-2">
-                            <span>💡 Explain Mistakes</span>
-                            <span class="loading-spinner hidden" style="width: 16px; height: 16px; border-width: 2px;"></span>
-                        </button>
-                        <button id="replay-audio-btn" class="btn-primary replay-audio-btn">🔊 Replay Audio</button>
-                        <button id="next-exercise-btn" class="btn-primary next-exercise-btn">Next Exercise →</button>
+                    <div id="scrambled-words-container" class="gct-practice__bank"></div>
+
+                    <div id="scrambled-words-header" class="gct-practice__pending">
+                        <span id="practice-status" class="gct-practice__status" aria-live="polite"></span>
+                        <div class="gct-practice__pending-actions">
+                            <button type="button" id="skip-exercise-btn" class="gct-btn gct-btn--ghost"><i data-icon="skip" data-size="16"></i>Skip</button>
+                            <button type="button" id="hint-btn" class="gct-btn gct-btn--secondary"><i data-icon="hint" data-size="16"></i>Hint</button>
+                        </div>
                     </div>
 
-                    <div id="feedback-area" class="feedback-area mt-6 text-center">
-                        <p id="correct-sentence-display" class="correct-answer-feedback"></p>
+                    <!-- After the sentence is complete -->
+                    <div id="exercise-controls" class="gct-practice__done hidden">
+                        <div class="gct-practice__outcome"><span id="completion-status-indicator"></span><span id="next-review-label"></span></div>
+                        <div id="explanation-container" class="gct-practice__why hidden">
+                            <div class="gct-practice__why-head"><i data-icon="explain" data-size="16"></i><span class="caption">Why</span></div>
+                            <p id="explanation-text"></p>
+                        </div>
+                        <div class="gct-practice__actions">
+                            <button type="button" id="toggle-favorite-btn" data-auth="user" class="gct-icon-btn gct-practice__fav" aria-pressed="false" aria-label="Favorite" title="Add to favorites"><i data-icon="star"></i></button>
+                            <button type="button" id="replay-audio-btn" class="gct-icon-btn" aria-label="Replay sentence" title="Replay sentence"><i data-icon="sound"></i></button>
+                            <button type="button" id="explain-btn" class="gct-btn gct-btn--ghost hidden"><i data-icon="explain" data-size="16"></i><span class="gct-practice__explain-text">Explain mistakes</span><span class="gct-practice__spinner gct-practice__spinner--sm hidden" aria-hidden="true"></span></button>
+                            <span class="gct-practice__grow"></span>
+                            <button type="button" id="next-exercise-btn" class="gct-btn gct-btn--primary gct-btn--lg gct-practice__next">Next<span class="gct-practice__enter">Enter</span><i data-icon="arrow-right" data-size="16"></i></button>
+                        </div>
                     </div>
 
-                    <div id="explanation-container" class="explanation-container mt-4 hidden">
-                        <p id="explanation-text" class="explanation-text"></p>
-                    </div>
+                    <div id="feedback-area" class="gct-practice__feedback"><p id="correct-sentence-display" hidden></p></div>
                 </div>
             </div>
         </section>
@@ -599,19 +568,6 @@ gct whoami</pre>
                 <button id="last-refined-prompt-close-btn" class="close-btn">&times;</button>
             </div>
             <pre id="last-refined-prompt-content" class="code-block"></pre>
-        </div>
-    </dialog>
-
-    <!-- Skip Exercise Modal -->
-    <dialog id="skip-dialog" class="modal-backdrop">
-        <div class="card modal-content modal-md text-center">
-            <h2 class="modal-title mb-4">Skip or Remove?</h2>
-            <p class="mb-6 text-gray-600">Do you want to skip this exercise for the current session, or remove it completely from your practice list?</p>
-            <div class="flex flex-col gap-3">
-                <button id="skip-session-btn" class="btn-secondary w-full">Skip for this session</button>
-                <button id="skip-remove-btn" class="btn-secondary action-danger text-red-600 w-full hidden">Remove completely</button>
-                <button id="skip-cancel-btn" class="btn-primary w-full mt-2">Cancel</button>
-            </div>
         </div>
     </dialog>
 

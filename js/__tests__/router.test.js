@@ -56,7 +56,7 @@ describe('router.js', () => {
         document.querySelector('[data-screen="summary"]').innerHTML = '<div id="statistics-container"></div>';
         route('summary');
         expect(currentRoute()).toBe('summary');
-        expect(document.body.classList.contains('is-focused')).toBe(true);
+        expect(document.body.classList.contains('is-focused')).toBe(false);
     });
 
     it('keeps a finished session on its summary instead of reopening the card', () => {

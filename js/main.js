@@ -13,14 +13,15 @@ import {
     handleHintClick,
     handleKeyPress,
     handleNextExercise,
-    handleSkipExercise,
-    handleHideExercise,
+    confirmSkip,
     handleToggleFavorite,
     handleExplainClick,
 } from './exercise.js';
 import {
     initSession,
     showStatisticsPage,
+    endSession,
+    sessionInProgress,
 } from './session.js';
 import {
     loadTopics,
@@ -55,23 +56,7 @@ import {
 import { fetchDatabaseStatsAPI, createCLITokenAPI } from './api.js';
 import { updateOfflineCache, flushOfflineQueue, renderOfflineCacheStatus } from './offline.js';
 import { initHistory } from './history.js';
-
-const sampleExercises = {
-    "exercises": [
-        {
-            "conjunction_topic": "weil",
-            "english_hint": "He is learning German because he wants to work in Germany.",
-            "correct_german_sentence": "Er lernt Deutsch, weil er in Deutschland arbeiten will.",
-            "scrambled_words": ["er", "in", "will", "arbeiten", "Deutschland", "lernt", "Deutsch,", "weil"]
-        },
-        {
-            "conjunction_topic": "obwohl",
-            "english_hint": "She is going for a walk, although it is raining.",
-            "correct_german_sentence": "Sie geht spazieren, obwohl es regnet.",
-            "scrambled_words": ["obwohl", "es", "Sie", "geht", "spazieren,", "regnet"]
-        }
-    ]
-};
+import { confirm } from './ui.js';
 
 // Wire up cross-module callbacks
 initExercise({ onSessionComplete: showStatisticsPage });
@@ -233,18 +218,21 @@ dom.hintBtn.addEventListener('click', handleHintClick);
 dom.replayAudioBtn.addEventListener('click', handleReplayAudio);
 dom.toggleFavoriteBtn.addEventListener('click', handleToggleFavorite);
 dom.explainBtn.addEventListener('click', handleExplainClick);
+dom.skipExerciseBtn.addEventListener('click', confirmSkip);
 
-// Skip Dialog handling
-dom.skipExerciseBtn.addEventListener('click', () => dom.skipDialog.showModal());
-dom.skipSessionBtn.addEventListener('click', () => {
-    handleSkipExercise();
-    dom.skipDialog.close();
+// X in the practice bar: mid-session it asks first; finished sentences are saved either way.
+dom.practiceClose?.addEventListener('click', async (e) => {
+    if (currentRoute() !== 'practice' || !sessionInProgress()) return; // plain link to Today
+    e.preventDefault();
+    const choice = await confirm({
+        title: 'End this session?',
+        body: 'Progress on finished sentences is kept.',
+        actions: [{ label: 'End session', kind: 'primary', value: 'end' }, { label: 'Keep practicing', kind: 'ghost' }],
+    });
+    if (choice !== 'end') return;
+    endSession();
+    route('today');
 });
-dom.skipRemoveBtn.addEventListener('click', () => {
-    handleHideExercise();
-    dom.skipDialog.close();
-});
-dom.skipCancelBtn.addEventListener('click', () => dom.skipDialog.close());
 
 dom.nextExerciseBtn.addEventListener('click', handleNextExercise);
 // Word hotkeys / Enter only drive the practice screen, never typing in Today/Manage inputs.
@@ -349,22 +337,7 @@ function init() {
     renderOfflineCacheStatus();
     flushOfflineQueue();
 
-    // Start with sample exercises for testing
-    state.exercises = sampleExercises.exercises;
-    state.exerciseIds = []; // Sample exercises don't have IDs
-    state.currentExerciseIndex = 0;
-    state.mistakes = 0;
-    state.hintsUsed = 0;
-    state.sessionTime = 0;
-    state.isSessionComplete = false;
-    state.exercisesWithMistakes = new Set();
-    state.exerciseMistakes = {};
-    state.exercisesWithHints = new Set();
-    state.exercisePerformance = new Map(); // Empty for sample exercises
-    state.completedExerciseIds = new Set();
-    state.startTime = Date.now();
-
-    renderExercise();
+    renderExercise(); // empty practice card until startPractice() loads a session
 
     // Expose functions to global scope for testing (only in development mode)
     const urlParams = new URLSearchParams(window.location.search);
