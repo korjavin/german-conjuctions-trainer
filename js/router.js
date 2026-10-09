@@ -2,7 +2,7 @@
 import { state } from './state.js';
 
 export const ROUTES = ['today', 'topics', 'listen', 'history', 'me', 'manage', 'practice', 'summary'];
-const FOCUSED = new Set(['practice']); // takeover: nav hidden, practice bar shown (the summary keeps the nav, per the design)
+const FOCUSED = new Set(['practice', 'summary']); // takeover: nav hidden, practice bar shown
 
 let current = null;
 let authReady = false;
