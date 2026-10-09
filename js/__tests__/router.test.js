@@ -59,6 +59,17 @@ describe('router.js', () => {
         expect(document.body.classList.contains('is-focused')).toBe(true);
     });
 
+    it('keeps a finished session on its summary instead of reopening the card', () => {
+        document.querySelector('[data-screen="summary"]').innerHTML = '<div id="statistics-container"></div>';
+        state.isSessionComplete = true;
+        route('practice');
+        expect(currentRoute()).toBe('summary');
+        document.getElementById('statistics-container').remove(); // what resetForNewSession does first
+        route('practice');
+        expect(currentRoute()).toBe('practice');
+        state.isSessionComplete = false;
+    });
+
     it('dispatches routechange with route and params', () => {
         let detail = null;
         const on = (e) => { detail = e.detail; };

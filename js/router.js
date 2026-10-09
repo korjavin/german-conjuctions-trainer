@@ -20,7 +20,10 @@ export function parseHash(hash) {
 export function guard(name) {
     if (name === 'manage' && authReady && !state.isAdmin) return 'me';
     // A refreshed #/summary has no session to summarise.
-    if (name === 'summary' && !document.getElementById('statistics-container')) return 'today';
+    const hasSummary = Boolean(document.getElementById('statistics-container'));
+    if (name === 'summary' && !hasSummary) return 'today';
+    // Back from the summary must not reopen the finished card (Next would save the session twice).
+    if (name === 'practice' && hasSummary && state.isSessionComplete) return 'summary';
     return name;
 }
 

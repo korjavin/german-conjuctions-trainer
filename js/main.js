@@ -507,8 +507,8 @@ function renderDatabaseStats(stats) {
 function init() {
     updateAudioToggleUI();
     initRouter();
-    checkAuthStatus().then(markAuthReady); // re-render once auth is known (#/manage guard, history)
-    loadTopics();
+    // Re-render once auth and topics are known: #/manage guard, and screens that read the current topic.
+    Promise.allSettled([checkAuthStatus(), loadTopics()]).then(markAuthReady);
 
     // Service worker: caches the app shell + audio so sessions work offline.
     if ('serviceWorker' in navigator) {
