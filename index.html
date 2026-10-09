@@ -64,18 +64,8 @@
     <main class="gct-main">
         <section data-screen="today">
             <h1 class="gct-page-title">Today</h1>
-            <!-- TEMPORARY (until S2/T1): topic picker + practice launcher -->
-            <div id="topic-selection-section" class="flex flex-wrap items-center gap-3">
-                <div id="topic-selector-container" class="topic-selector-container relative flex-1">
-                    <input type="text" id="topic-search" class="topic-search-input w-full" placeholder="Select topic...">
-                    <svg class="search-icon absolute top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                </div>
-                <button id="generate-btn" class="btn-primary generate-btn whitespace-nowrap">
-                    Start Practice
-                </button>
-            </div>
+            <!-- TEMPORARY (until T1): practice launcher for the current scope (js/scope.js) -->
+            <button id="generate-btn" class="gct-btn gct-btn--primary">Start practice</button>
         </section>
 
         <section data-screen="topics" hidden>
@@ -657,11 +647,6 @@ gct whoami</pre>
             </div>
         </div>
     </template>
-
-    <!-- Topic Dropdown - positioned outside stacking contexts -->
-    <div id="topic-dropdown" class="topic-dropdown hidden">
-        <!-- Topic items will be dynamically inserted here -->
-    </div>
 
     <!-- v2 feedback hosts (js/ui.js) -->
     <div id="toast-root" popover="manual"></div>

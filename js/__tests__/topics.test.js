@@ -68,13 +68,9 @@ describe('topic tree collapse', () => {
         localStorage.clear();
         const dom = (await import('../dom.js')).dom;
         dom.topicsList = document.createElement('div');
-        dom.topicDropdown = document.createElement('div');
-        dom.topicSearch = document.createElement('input');
         state.topics = tree;
         state.topicsSearchQuery = '';
         state.collapsedTopicIds.clear();
-        const { resetDropdownCollapseState } = await import('../topics.js');
-        resetDropdownCollapseState();
     });
 
     it('settings tree hides descendants of a collapsed topic instead of leaking them as roots', async () => {
@@ -85,20 +81,6 @@ describe('topic tree collapse', () => {
         renderTopicsList();
 
         expect(dom.topicsList.querySelectorAll('[role="treeitem"]')).toHaveLength(1);
-    });
-
-    it('dropdown collapse keeps the tree when the input holds the canonical path', async () => {
-        const { renderTopicDropdown } = await import('../topics.js');
-        const dom = (await import('../dom.js')).dom;
-        dom.topicSearch.value = 'Parent > Child > Grandchild';
-
-        renderTopicDropdown('');
-        dom.topicDropdown.querySelector('.topic-dropdown-collapse-btn').click();
-
-        const items = dom.topicDropdown.querySelectorAll('.topic-dropdown-tree-item');
-        expect(items).toHaveLength(1);
-        expect(dom.topicDropdown.textContent).not.toContain('No topics found');
-        expect(JSON.parse(localStorage.getItem('dropdownTopicCollapseState'))).toHaveLength(1);
     });
 });
 
@@ -116,32 +98,15 @@ describe('topic archive', () => {
         localStorage.clear();
         const dom = (await import('../dom.js')).dom;
         dom.topicsList = document.createElement('div');
-        dom.topicDropdown = document.createElement('div');
-        dom.topicSearch = document.createElement('input');
         state.topics = tree;
         state.topicsSearchQuery = '';
         state.collapsedTopicIds.clear();
-        const { resetDropdownCollapseState } = await import('../topics.js');
-        resetDropdownCollapseState();
     });
 
     it('collects the archive root and its whole subtree', async () => {
         const { getArchivedTopicIds, getPracticeTopics } = await import('../topics.js');
         expect([...getArchivedTopicIds(tree)].sort()).toEqual(['archive', 'old', 'old-leaf']);
         expect(getPracticeTopics(tree).map(t => t.id)).toEqual(['p', 'c']);
-    });
-
-    it('keeps archived topics out of the practice dropdown', async () => {
-        const { renderTopicDropdown } = await import('../topics.js');
-        const dom = (await import('../dom.js')).dom;
-
-        renderTopicDropdown('');
-        expect(dom.topicDropdown.textContent).toContain('Parent');
-        expect(dom.topicDropdown.textContent).not.toContain('Archive');
-        expect(dom.topicDropdown.textContent).not.toContain('Old');
-
-        renderTopicDropdown('old');
-        expect(dom.topicDropdown.textContent).toContain('No topics found');
     });
 
     it('shows the archive last in the settings tree with Archive/Restore buttons', async () => {
@@ -160,21 +125,22 @@ describe('topic archive', () => {
         expect(item('old-leaf').querySelector('.archive-topic-btn, .unarchive-topic-btn')).toBeNull();
     });
 
-    it('archiving moves the current selection off the archived subtree', async () => {
+    it('archiving reloads the topics and announces topicschange (js/scope.js drops an archived scope)', async () => {
         const { renderTopicsList } = await import('../topics.js');
         const dom = (await import('../dom.js')).dom;
         state.topics = tree.map(t => (t.id === 'old' ? { ...t, parent_id: null } : t));
-        state.currentTopicId = 'old';
-        localStorage.setItem('selectedTopicId', 'old');
         renderTopicsList();
+        const changed = vi.fn();
+        window.addEventListener('topicschange', changed);
 
         api.archiveTopicAPI.mockResolvedValueOnce({});
         api.fetchTopicsAPI.mockResolvedValueOnce({ topics: tree });
         item(dom, 'old').querySelector('.archive-topic-btn').click();
-        await vi.waitFor(() => expect(state.currentTopicId).toBe('p'));
+        await vi.waitFor(() => expect(changed).toHaveBeenCalled());
+        window.removeEventListener('topicschange', changed);
 
         expect(api.archiveTopicAPI).toHaveBeenCalledWith('old');
-        expect(dom.topicSearch.value).toBe('Parent');
+        expect(state.topics).toBe(tree);
     });
 });
 

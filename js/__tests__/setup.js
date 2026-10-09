@@ -118,7 +118,6 @@ vi.mock('../dom.js', () => {
       skipRemoveBtn: createMockElement('button'),
       offlineCacheBtn: createMockElement('button'),
       offlineCacheStatus: createMockElement('span'),
-      topicSearch: createMockElement('input'),
 
       // Additional elements can be added here as needed by tests
       constructedSentenceEl: createMockElement('div'),

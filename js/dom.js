@@ -2,8 +2,6 @@ export const dom = {
     settingsBtn: document.getElementById('settings-btn'),
     accountMenu: document.getElementById('account-menu'),
     topicsAdminSection: document.getElementById('topics-admin-section'),
-    topicSearch: document.getElementById('topic-search'),
-    topicDropdown: document.getElementById('topic-dropdown'),
 
     generateBtn: document.getElementById('generate-btn'),
     audioToggleBtn: document.getElementById('audio-toggle-btn'),
