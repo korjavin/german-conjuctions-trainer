@@ -228,7 +228,7 @@ describe('exercise.js', () => {
             state.exercises = [{ correct_german_sentence: 'A b.' }, { correct_german_sentence: 'C d.' }, { correct_german_sentence: 'E f.' }];
             state.exerciseIds = ['a', 'c', 'e'];
             state.exercisePerformance = new Map([['a', { hints: 0, mistakes: 1 }], ['c', { hints: 0, mistakes: 0 }], ['e', { hints: 1, mistakes: 0 }]]);
-            state.exercisesWithMistakes = new Set([0]);
+            state.exercisesWithMistakes = new Set([0, 1]);
             state.exercisesWithHints = new Set([2]);
             state.currentExerciseIndex = 1;
 

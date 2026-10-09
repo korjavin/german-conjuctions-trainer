@@ -513,14 +513,16 @@ export function handleSkipExercise() {
 
 export async function handleHideExercise() {
     if (!state.isLoggedIn) return;
+    const exerciseId = state.exerciseIds[state.currentExerciseIndex];
     try {
-        await toggleHideExerciseAPI(state.exerciseIds[state.currentExerciseIndex]);
+        await toggleHideExerciseAPI(exerciseId);
     } catch (error) {
         console.error('Error hiding exercise:', error);
         toast({ tone: 'danger', text: 'Failed to remove the exercise. Please try again.' });
         return;
     }
-    dropCurrent();
+    // The learner may have moved on during the request; only drop the item that was hidden.
+    if (state.exerciseIds[state.currentExerciseIndex] === exerciseId) dropCurrent();
 }
 
 export async function handleToggleFavorite() {
