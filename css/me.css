@@ -1,0 +1,32 @@
+/* Me / Settings screen (#/me, js/me.js). Ported from docs/design/claude-design/ui_kits/app/ScreensMore.jsx MeScreen. */
+.gct-me { max-width: 720px; }
+.gct-me [hidden] { display: none !important; }
+.gct-me__mob { display: none; }
+.gct-me__grow { flex: 1; min-width: 0; }
+.gct-me__label { font: 700 15px/1.3 var(--font-sans); color: var(--fg-primary); }
+.gct-me__sub { margin-top: 2px; font: 600 13px/1.35 var(--font-sans); color: var(--fg-muted); }
+.gct-me__text { font-size: 14px; color: var(--fg-secondary); }
+.gct-me__caption { margin: 0 4px 10px; font: 700 12px/1 var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); }
+
+.gct-me__account { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 18px; margin-bottom: 22px; }
+.gct-me__avatar { width: 48px; height: 48px; flex: none; border-radius: 50%; background: var(--color-cream-strong); color: var(--color-orange-900); display: flex; align-items: center; justify-content: center; }
+
+/* Card of rows: each row draws a top divider; the card clips the first one (whichever rows are visible). */
+.gct-me__list { overflow: hidden; margin-bottom: 22px; }
+.gct-me__line { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 14px 18px; margin-top: -1px; border-top: 1px solid var(--color-border); box-sizing: border-box; }
+.gct-me__link { width: 100%; background: transparent; border-left: 0; border-right: 0; border-bottom: 0; text-align: left; font: inherit; color: inherit; text-decoration: none; cursor: pointer; }
+.gct-me__link:hover { background: var(--bg-hover); }
+.gct-me__link > svg { flex: none; color: var(--fg-secondary); }
+.gct-me__link > svg:last-child { color: var(--fg-muted); }
+
+.gct-me__box { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; margin-bottom: 22px; }
+.gct-me__split { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.gct-me__progress { display: flex; align-items: center; gap: 10px; font: 600 13px/1 var(--font-sans); color: var(--fg-secondary); }
+.gct-me__feed { display: flex; gap: 8px; }
+.gct-me__mono { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 13px; }
+.gct-me__error { font-size: 13px; font-weight: 600; color: var(--color-danger); }
+
+@media (max-width: 759px) {
+    .gct-me__desk { display: none; }
+    .gct-me__mob { display: inline; }
+}

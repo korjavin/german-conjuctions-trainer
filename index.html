@@ -16,6 +16,7 @@
     <link href="/css/components.css" rel="stylesheet">
     <link href="style.css?v=202610090002" rel="stylesheet">
     <link href="/css/shell.css" rel="stylesheet">
+    <link href="/css/me.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 </head>
 <body class="app-body">
@@ -306,39 +307,83 @@
         </section>
 
         <section data-screen="me" hidden>
-            <h1 class="gct-page-title">Me</h1>
-            <!-- Offline practice (any logged-in user) -->
-            <div id="offline-cache-section" class="offline-cache-section mb-6 hidden">
-                <h3 class="section-title mb-2">Offline Practice</h3>
-                <div class="offline-cache-row">
-                    <div class="min-w-0">
-                        <p class="section-desc">Download exercises and audio for the current and recently used topics.</p>
-                        <p id="offline-cache-status" class="offline-cache-status">Nothing cached yet.</p>
-                    </div>
-                    <button id="offline-cache-btn" class="btn-secondary btn-sm whitespace-nowrap">Update offline cache</button>
+          <div class="gct-me">
+            <h1 class="gct-page-title"><span class="gct-me__desk">Settings</span><span class="gct-me__mob">Me</span></h1>
+            <div class="gct-card gct-me__account">
+                <span class="gct-me__avatar"><i data-icon="user" data-size="24"></i></span>
+                <div class="gct-me__grow">
+                    <div class="gct-me__label" data-auth="user">Signed in with Google</div>
+                    <div class="gct-me__label" data-auth="anon">Not signed in</div>
+                </div>
+                <a href="/auth/google/login" class="gct-btn gct-btn--primary" data-auth="anon">Log in with Google</a>
+            </div>
+
+            <h2 class="gct-me__caption">Practice</h2>
+            <div class="gct-card gct-me__list">
+                <div class="gct-me__line">
+                    <div class="gct-me__grow"><div class="gct-me__label" id="pref-sound-label">Speak each word</div><div class="gct-me__sub">Plays a word when you pick it</div></div>
+                    <button type="button" id="pref-sound" class="gct-switch" role="switch" aria-checked="true" aria-labelledby="pref-sound-label"></button>
+                </div>
+                <div class="gct-me__line">
+                    <div class="gct-me__grow"><div class="gct-me__label" id="pref-autoplay-label">Read the sentence when solved</div></div>
+                    <button type="button" id="pref-autoplay" class="gct-switch" role="switch" aria-checked="true" aria-labelledby="pref-autoplay-label"></button>
+                </div>
+                <div class="gct-me__line" id="pref-voice-row" hidden>
+                    <div class="gct-me__grow"><div class="gct-me__label" id="pref-voice-label">Start with voice input</div><div class="gct-me__sub">You can always toggle it on the card</div></div>
+                    <button type="button" id="pref-voice" class="gct-switch" role="switch" aria-checked="false" aria-labelledby="pref-voice-label"></button>
                 </div>
             </div>
 
-            <!-- Podcast RSS feed (any logged-in user) -->
-            <div id="podcast-feed-section" class="mb-6 hidden">
-                <h3 class="section-title mb-2">Podcast RSS feed</h3>
-                <p class="section-desc mb-2">Add this private URL to your podcast app to get the episodes you build on Listen. Each episode stays in the feed for 7 days. Keep the URL to yourself.</p>
-                <div class="flex items-center gap-2">
-                    <input type="text" id="podcast-feed-url" class="form-input flex-1 min-w-0" readonly placeholder="Loading…" aria-label="Podcast feed URL">
-                    <button id="podcast-feed-copy-btn" class="btn-secondary btn-sm">Copy</button>
-                    <button id="podcast-feed-regenerate-btn" class="btn-secondary btn-sm">Regenerate</button>
-                </div>
-                <div id="podcast-feed-error" class="text-error text-sm hidden mt-2"></div>
-            </div>
-            <div class="mb-6">
-                <h3 class="section-title mb-2">Account</h3>
-                <div class="flex flex-wrap gap-3">
-                    <a href="/auth/google/login" class="btn-secondary btn-sm" data-auth="anon">Login with Google</a>
-                    <a href="#/manage" class="btn-secondary btn-sm" data-auth="admin">Manage</a>
-                    <a href="/privacy.html" class="btn-secondary btn-sm">Privacy</a>
-                    <button id="logout-btn" class="btn-secondary btn-sm" data-auth="user">Log out</button>
+            <!-- Offline practice (logged-in users; js/auth.js toggles .hidden) -->
+            <div id="offline-cache-section" class="hidden">
+                <h2 class="gct-me__caption">Offline</h2>
+                <div class="gct-card gct-me__box">
+                    <div class="gct-me__split">
+                        <div class="gct-me__grow">
+                            <div class="gct-me__label" id="offline-cache-count">Nothing cached yet</div>
+                            <div class="gct-me__sub" id="offline-cache-status">Save exercises and audio for the current and recent topics.</div>
+                        </div>
+                        <button type="button" id="offline-cache-btn" class="gct-btn gct-btn--secondary gct-btn--sm"><i data-icon="refresh" data-size="16"></i>Update</button>
+                    </div>
+                    <div class="gct-me__progress" id="offline-cache-progress" hidden>
+                        <div class="gct-progress gct-me__grow"><div class="gct-progress__fill" id="offline-cache-progress-fill" style="width:0%"></div></div>
+                        <span id="offline-cache-progress-text">Audio 0%</span>
+                    </div>
                 </div>
             </div>
+
+            <!-- Private podcast RSS feed (logged-in users; js/auth.js toggles .hidden) -->
+            <div id="podcast-feed-section" class="hidden">
+                <h2 class="gct-me__caption">Podcast feed</h2>
+                <div class="gct-card gct-me__box">
+                    <div class="gct-me__text">Private feed — paste into any podcast app.</div>
+                    <div class="gct-me__feed">
+                        <input type="text" id="podcast-feed-url" class="gct-input gct-me__mono" readonly placeholder="Loading…" aria-label="Podcast feed URL">
+                        <button type="button" id="podcast-feed-copy-btn" class="gct-btn gct-btn--secondary"><i data-icon="copy" data-size="16"></i>Copy</button>
+                    </div>
+                    <div><button type="button" id="podcast-feed-regenerate-btn" class="gct-btn gct-btn--ghost gct-btn--sm"><i data-icon="refresh" data-size="16"></i>Regenerate URL</button></div>
+                    <div id="podcast-feed-error" class="gct-me__error hidden" role="alert"></div>
+                </div>
+            </div>
+
+            <h2 class="gct-me__caption">Account</h2>
+            <div class="gct-card gct-me__list">
+                <a href="#/manage" class="gct-me__line gct-me__link" data-auth="admin">
+                    <i data-icon="manage" data-size="20"></i>
+                    <div class="gct-me__grow"><div class="gct-me__label">Manage topics &amp; system</div><div class="gct-me__sub">Admin</div></div>
+                    <i data-icon="chevron-right" data-size="18"></i>
+                </a>
+                <a href="/privacy.html" class="gct-me__line gct-me__link">
+                    <i data-icon="shield" data-size="20"></i>
+                    <div class="gct-me__grow"><div class="gct-me__label">Privacy</div></div>
+                    <i data-icon="chevron-right" data-size="18"></i>
+                </a>
+                <button type="button" id="logout-btn" class="gct-me__line gct-me__link" data-auth="user">
+                    <i data-icon="logout" data-size="20"></i>
+                    <div class="gct-me__grow"><div class="gct-me__label">Log out</div></div>
+                </button>
+            </div>
+          </div>
         </section>
 
         <section data-screen="manage" hidden>
