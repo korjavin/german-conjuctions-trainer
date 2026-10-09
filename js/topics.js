@@ -174,6 +174,7 @@ export async function loadTopics() {
                 const parent = serverParent !== editor.parentId ? serverParent : dom.topicParentSelect.value;
                 editor.parentId = serverParent;
                 renderParentOptions(parent);
+                if (dom.topicParentSelect.value !== parent) renderParentOptions(serverParent); // pick vanished: never silently Root
                 renderRecentParents();
             }
             renderEditorChrome();
@@ -904,7 +905,7 @@ async function moveTopic(topicId, parentId, position = null) {
 
 // --- Editor pane ---
 
-// null | { mode: 'edit', id } | { mode: 'create', parentId }
+// null | { mode: 'edit', id, parentId (server parent when loaded) } | { mode: 'create', parentId }
 let editor = null;
 let saving = false;
 let exerciseCounts = new Map(); // topic id -> generated exercises (GET /api/db/stats, js/manage.js)
