@@ -48,3 +48,7 @@ coverage/
 
 # local scratch (contains personal data)
 tmp/
+
+# sqlite WAL/SHM sidecars written by tests
+*.sqlite-shm
+*.sqlite-wal
