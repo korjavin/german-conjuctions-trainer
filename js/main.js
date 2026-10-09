@@ -7,6 +7,7 @@ import { initMe } from './me.js';
 import { initManage } from './manage.js';
 import { initToday } from './today.js';
 import { initRouter, markAuthReady, currentRoute, route } from './router.js';
+import { initTopicsBrowser } from './topics-browser.js';
 import { initScope, startPractice, refreshProgress } from './scope.js';
 import {
     initExercise,
@@ -38,6 +39,7 @@ initSession({ renderExercise });
 // Before the routechange listener below: outside practice, screens read the scope's topic.
 initScope();
 initToday();
+initTopicsBrowser();
 initHistory();
 
 // --- Event Listeners ---
