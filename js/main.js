@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
 import { initVoice, handleVoiceToggle } from './voice.js';
-import { initPodcast, loadPodcastFeed, openPodcastDialog } from './podcast.js';
+import { initPodcast, loadPodcastFeed, showListen } from './podcast.js';
 import { initMe } from './me.js';
 import { initManage } from './manage.js';
 import { initToday } from './today.js';
@@ -64,7 +64,7 @@ window.addEventListener('routechange', ({ detail: { route: name } }) => {
     if (dom.accountMenu?.matches(':popover-open')) dom.accountMenu.hidePopover();
     // Spoken words would otherwise keep driving the hidden, abandoned exercise.
     if (name !== 'practice' && state.voiceActive) handleVoiceToggle();
-    if (name === 'listen') openPodcastDialog();
+    if (name === 'listen') showListen();
     else if (name === 'me') {
         renderOfflineCacheStatus();
         loadPodcastFeed();
