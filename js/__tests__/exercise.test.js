@@ -3,10 +3,15 @@ import {
     handleWordClick,
     handleHintClick,
     handleKeyPress,
+    handleSkipExercise,
     updateFavoriteButtonState,
     getHotkey,
     addPunctuationIfNeeded,
-    renderExercise
+    renderExercise,
+    nextReviewHours,
+    reviewIn,
+    outcome,
+    setProgress
 } from '../exercise.js';
 import { state } from '../state.js';
 import { dom } from '../dom.js';
@@ -195,37 +200,6 @@ describe('exercise.js', () => {
         });
     });
 
-    describe('updateFavoriteButtonState', () => {
-        it('sets correct text/class on the dom mock when true', () => {
-            // Need to mock SVG element for this
-            dom.toggleFavoriteBtn.innerHTML = '<svg></svg>';
-            const svg = dom.toggleFavoriteBtn.querySelector('svg');
-            svg.setAttribute = vi.fn();
-
-            updateFavoriteButtonState(true);
-
-            expect(dom.favoriteBtnText.textContent).toBe('Remove from Favorites');
-            expect(dom.toggleFavoriteBtn.classList.add).toHaveBeenCalledWith('btn-primary');
-            expect(dom.toggleFavoriteBtn.classList.add).toHaveBeenCalledWith('filter-active-yellow');
-            expect(dom.toggleFavoriteBtn.classList.remove).toHaveBeenCalledWith('btn-secondary');
-            expect(svg.setAttribute).toHaveBeenCalledWith('fill', 'currentColor');
-        });
-
-        it('sets correct text/class on the dom mock when false', () => {
-            dom.toggleFavoriteBtn.innerHTML = '<svg></svg>';
-            const svg = dom.toggleFavoriteBtn.querySelector('svg');
-            svg.setAttribute = vi.fn();
-
-            updateFavoriteButtonState(false);
-
-            expect(dom.favoriteBtnText.textContent).toBe('Add to Favorites');
-            expect(dom.toggleFavoriteBtn.classList.add).toHaveBeenCalledWith('btn-secondary');
-            expect(dom.toggleFavoriteBtn.classList.remove).toHaveBeenCalledWith('btn-primary');
-            expect(dom.toggleFavoriteBtn.classList.remove).toHaveBeenCalledWith('filter-active-yellow');
-            expect(svg.setAttribute).toHaveBeenCalledWith('fill', 'none');
-        });
-    });
-
     describe('word tokenization regex', () => {
         it('correctly tokenizes words and punctuation', () => {
             const regex = /[\p{L}\p{N}']+|[^\s\p{L}\p{N}]/gu;
@@ -233,6 +207,57 @@ describe('exercise.js', () => {
             const tokens = sentence.match(regex) || [];
 
             expect(tokens).toEqual(['Nein', ',', 'das', 'ist', 'nicht', 'wahr', '!']);
+        });
+    });
+
+    describe('updateFavoriteButtonState', () => {
+        it('reflects the favorite in aria-pressed', () => {
+            updateFavoriteButtonState(true);
+            expect(dom.toggleFavoriteBtn.getAttribute('aria-pressed')).toBe('true');
+            updateFavoriteButtonState(false);
+            expect(dom.toggleFavoriteBtn.getAttribute('aria-pressed')).toBe('false');
+        });
+    });
+
+    describe('handleSkipExercise', () => {
+        it('drops the item and shifts the index-keyed mistake/hint sets the summary reads', () => {
+            for (const k of ['exerciseContent', 'emptyStateContainer', 'exerciseCounter', 'englishHintEl', 'scrambledWordsContainer',
+                'constructedSentenceEl', 'correctSentenceDisplay', 'explanationContainer', 'answerPrompt', 'exerciseTopicLabel', 'progressBar']) {
+                dom[k] = document.createElement('div');
+            }
+            state.exercises = [{ correct_german_sentence: 'A b.' }, { correct_german_sentence: 'C d.' }, { correct_german_sentence: 'E f.' }];
+            state.exerciseIds = ['a', 'c', 'e'];
+            state.exercisePerformance = new Map([['a', { hints: 0, mistakes: 1 }], ['c', { hints: 0, mistakes: 0 }], ['e', { hints: 1, mistakes: 0 }]]);
+            state.exercisesWithMistakes = new Set([0, 1]);
+            state.exercisesWithHints = new Set([2]);
+            state.currentExerciseIndex = 1;
+
+            handleSkipExercise();
+
+            expect(state.exerciseIds).toEqual(['a', 'e']);
+            expect([...state.exercisesWithMistakes]).toEqual([0]);
+            expect([...state.exercisesWithHints]).toEqual([1]);
+            expect(state.exercisePerformance.has('c')).toBe(false);
+        });
+    });
+
+    describe('SRS labels', () => {
+        it('next review = new counter squared, formatted in h / d', () => {
+            const ex = { repetition_counter: 2 };
+            expect(nextReviewHours(ex, { mistakes: 0, hints: 0 })).toBe(9);
+            expect(nextReviewHours(ex, { mistakes: 0, hints: 1 })).toBe(4);
+            expect(nextReviewHours(ex, { mistakes: 1, hints: 0 })).toBe(1);
+            expect(nextReviewHours({}, { mistakes: 1, hints: 0 })).toBe(0);
+            expect(reviewIn(0)).toBe('now');
+            expect(reviewIn(4)).toBe('in 4 h');
+            expect(reviewIn(25)).toBe('in 2 d');
+        });
+
+        it('outcome badge: mistakes beat hints beat perfect', () => {
+            expect(outcome({ mistakes: 2, hints: 1 })).toEqual(['danger', 'With 2 mistakes']);
+            expect(outcome({ mistakes: 1, hints: 0 })).toEqual(['danger', 'With 1 mistake']);
+            expect(outcome({ mistakes: 0, hints: 3 })).toEqual(['warning', 'With hints']);
+            expect(outcome({ mistakes: 0, hints: 0 })).toEqual(['success', 'Perfect']);
         });
     });
 
@@ -249,59 +274,44 @@ describe('exercise.js', () => {
             dom.explainBtn = document.createElement('button');
             dom.answerPrompt = document.createElement('div');
             dom.exerciseTopicLabel = document.createElement('span');
-
-            // setup mocks for these
-            dom.exerciseTopicLabel.classList.add = vi.fn();
-            dom.exerciseTopicLabel.classList.remove = vi.fn();
-        });
-
-        it('hides topic label when exercise topic matches current topic', () => {
-            state.exercises = [{
-                correct_german_sentence: 'S1',
-                english_hint: 'H1',
-                topic_id: 'topic-A'
-            }];
-            state.currentExerciseIndex = 0;
-            state.currentTopicId = 'topic-A';
-            state.topics = [{ id: 'topic-A', name: 'Parent Topic' }];
-
-            renderExercise();
-
-            expect(dom.exerciseTopicLabel.textContent).toBe('');
-            expect(dom.exerciseTopicLabel.classList.add).toHaveBeenCalledWith('invisible');
-        });
-
-        it('shows topic label with name when exercise topic differs from current topic', () => {
-            state.exercises = [{
-                correct_german_sentence: 'S1',
-                english_hint: 'H1',
-                topic_id: 'topic-B'
-            }];
-            state.currentExerciseIndex = 0;
-            state.currentTopicId = 'topic-A';
+            dom.progressBar = document.createElement('div');
             state.topics = [
-                { id: 'topic-A', name: 'Parent Topic' },
-                { id: 'topic-B', name: 'Child Topic' }
+                { id: 'topic-A', name: 'Parent Topic (Berlin)' },
+                { id: 'topic-B', name: 'Child Topic: verbs' }
             ];
-
-            renderExercise();
-
-            expect(dom.exerciseTopicLabel.textContent).toBe('Child Topic');
-            expect(dom.exerciseTopicLabel.classList.remove).toHaveBeenCalledWith('invisible');
+            state.currentTopicId = 'topic-A';
         });
 
-        it('hides topic label if topic_id is undefined', () => {
-            state.exercises = [{
-                correct_german_sentence: 'S1',
-                english_hint: 'H1'
-            }];
+        it('progress is 0% before the first answer and the counter reads "n of N"', () => {
+            state.exercises = [{ correct_german_sentence: 'S1', english_hint: 'H1' }, { correct_german_sentence: 'S2', english_hint: 'H2' }];
             state.currentExerciseIndex = 0;
-            state.currentTopicId = 'topic-A';
-
             renderExercise();
+            expect(dom.progressBar.style.width).toBe('0%');
+            expect(dom.exerciseCounter.textContent).toBe('1 of 2');
+            setProgress(1);
+            expect(dom.progressBar.style.width).toBe('50%');
+        });
 
-            expect(dom.exerciseTopicLabel.textContent).toBe('');
-            expect(dom.exerciseTopicLabel.classList.add).toHaveBeenCalledWith('invisible');
+        it('word chips carry the hooks voice.js relies on', () => {
+            state.exercises = [{ correct_german_sentence: 'Das ist gut.', english_hint: 'H' }];
+            state.currentExerciseIndex = 0;
+            renderExercise();
+            const chips = dom.scrambledWordsContainer.querySelectorAll('.btn-word.gct-chip:not(.word-collected)');
+            expect([...chips].map((c) => c.dataset.word).sort()).toEqual(['Das', 'gut', 'ist']);
+            expect(chips[0].querySelector('.gct-chip__key').textContent).toBe('1');
+        });
+
+        it('topic caption: short name, marked when it differs from the practised topic', () => {
+            state.exercises = [{ correct_german_sentence: 'S1', english_hint: 'H1', topic_id: 'topic-A' }];
+            state.currentExerciseIndex = 0;
+            renderExercise();
+            expect(dom.exerciseTopicLabel.textContent).toBe('Parent Topic');
+            expect(dom.exerciseTopicLabel.classList.contains('is-other')).toBe(false);
+
+            state.exercises = [{ correct_german_sentence: 'S1', english_hint: 'H1', topic_id: 'topic-B' }];
+            renderExercise();
+            expect(dom.exerciseTopicLabel.textContent).toBe('Child Topic');
+            expect(dom.exerciseTopicLabel.classList.contains('is-other')).toBe(true);
         });
     });
 });

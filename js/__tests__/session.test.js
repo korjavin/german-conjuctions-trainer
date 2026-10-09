@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { fetchExercises, saveUserStats } from '../session.js';
+import { fetchExercises, saveUserStats, sessionStats, missedIndices, nextReviewsText, formatDuration } from '../session.js';
 import { state } from '../state.js';
 import { dom } from '../dom.js';
 import * as api from '../api.js';
@@ -17,6 +17,9 @@ vi.mock('../api.js', () => ({
 // Mock exercise methods called by fetchExercises
 vi.mock('../exercise.js', () => ({
     renderExercise: vi.fn(),
+    setProgress: vi.fn(),
+    nextReviewHours: vi.fn((ex, perf) => (perf.mistakes ? 0 : perf.hints ? 4 : 1)),
+    reviewIn: vi.fn((h) => (h ? `in ${h} h` : 'now')),
     initExercise: vi.fn()
 }));
 
@@ -226,6 +229,31 @@ describe('session.js', () => {
             expect(queue[0].id).toBeTruthy();
             expect(queue[0].stats.total_exercises).toBe(1);
             expect(queue[0].completions).toEqual([{ exercise_id: 'ex1', hints_used: 0, mistakes: 1 }]);
+        });
+    });
+
+    describe('session summary', () => {
+        beforeEach(() => {
+            state.exercises = ['a', 'b', 'c', 'd'].map((id) => ({ id, correct_german_sentence: id, english_hint: id }));
+            state.exerciseIds = ['a', 'b', 'c', 'd'];
+            state.exercisesWithMistakes = new Set([1, 3]);
+            state.exercisesWithHints = new Set([2, 3]);
+            state.exercisePerformance = new Map([['a', { hints: 0, mistakes: 0 }], ['b', { hints: 0, mistakes: 2 }], ['c', { hints: 1, mistakes: 0 }], ['d', { hints: 1, mistakes: 1 }]]);
+            state.completedExerciseIds = new Set(['a', 'b', 'c']);
+        });
+
+        it('counts outcomes like the old statistics page (an item can have both)', () => {
+            expect(sessionStats()).toEqual({ perfect: 1, hints: 2, mistakes: 2, total: 4 });
+            expect(missedIndices()).toEqual([1, 2, 3]);
+        });
+
+        it('summarises next reviews of the finished sentences only', () => {
+            expect(nextReviewsText()).toBe('1 now, 1 in 1 h, 1 in 4 h');
+        });
+
+        it('formats the session time', () => {
+            expect(formatDuration(42)).toBe('42 s');
+            expect(formatDuration(252)).toBe('4 min 12 s');
         });
     });
 });

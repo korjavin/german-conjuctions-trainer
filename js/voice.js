@@ -155,7 +155,7 @@ function setPhase(phase, transcript = '') {
     if (!dom.voiceStatus) return;
     dom.voiceStatus.classList.remove('speaking', 'thinking', 'muted');
     if (phase !== 'listening') dom.voiceStatus.classList.add(phase);
-    dom.voiceStatusLabel.textContent = { listening: 'Listening…', speaking: 'Hearing you…', thinking: 'Recognizing…', muted: 'Paused while audio plays…' }[phase];
+    dom.voiceStatusLabel.textContent = { listening: 'Ich höre zu…', speaking: 'Hearing you…', thinking: 'Recognizing…', muted: 'Paused while audio plays…' }[phase];
     dom.voiceTranscript.textContent = transcript;
 }
 
@@ -209,6 +209,8 @@ function updateUI() {
     if (!dom.voiceToggleBtn) return;
     dom.voiceToggleBtn.classList.toggle('voice-active', active);
     dom.voiceToggleBtn.title = active ? 'Voice input: on' : 'Voice input: off';
+    dom.voiceToggleBtn.setAttribute('aria-label', active ? 'Stop listening' : 'Answer by voice');
+    dom.exerciseContainer?.classList.toggle('is-listening', active); // pulse ring, live chip, voice status line
     dom.voiceToggleBtn.setAttribute('aria-pressed', String(active));
     if (dom.voiceStatus) dom.voiceStatus.classList.toggle('hidden', !active);
     if (active) setPhase('listening');

@@ -221,10 +221,10 @@ export function preloadExerciseWordAudio(exercise) {
 }
 
 export function updateAudioToggleUI() {
-    if (!dom.audioToggleBtn || !dom.audioToggleIcon) return;
+    if (!dom.audioToggleBtn) return;
 
     const isEnabled = state.isAudioEnabled;
-    dom.audioToggleIcon.textContent = isEnabled ? '🔊' : '🔇';
+    dom.audioToggleBtn.setAttribute('aria-pressed', String(isEnabled)); // css/practice.css swaps the sound / sound-off icon
     dom.audioToggleBtn.setAttribute('title', isEnabled ? 'Sound: on' : 'Sound: off');
     dom.audioToggleBtn.setAttribute('aria-label', isEnabled ? 'Disable sound' : 'Enable sound');
 

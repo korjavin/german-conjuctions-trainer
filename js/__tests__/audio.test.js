@@ -133,7 +133,7 @@ describe('audio.js', () => {
             state.isAudioEnabled = true;
             updateAudioToggleUI();
 
-            expect(dom.audioToggleIcon.textContent).toBe('🔊');
+            expect(dom.audioToggleBtn.getAttribute('aria-pressed')).toBe('true');
             expect(dom.audioToggleBtn.getAttribute('title')).toBe('Sound: on');
             expect(dom.audioToggleBtn.classList.remove).toHaveBeenCalledWith('is-audio-off');
             expect(dom.replayAudioBtn.disabled).toBe(false);
@@ -141,7 +141,7 @@ describe('audio.js', () => {
             state.isAudioEnabled = false;
             updateAudioToggleUI();
 
-            expect(dom.audioToggleIcon.textContent).toBe('🔇');
+            expect(dom.audioToggleBtn.getAttribute('aria-pressed')).toBe('false');
             expect(dom.audioToggleBtn.getAttribute('title')).toBe('Sound: off');
             expect(dom.audioToggleBtn.classList.add).toHaveBeenCalledWith('is-audio-off');
             expect(dom.replayAudioBtn.disabled).toBe(true);

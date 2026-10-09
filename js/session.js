@@ -4,26 +4,33 @@ import { fetchExercisesFromAPI } from './api.js';
 import { route } from './router.js';
 import { flattenExercise, takeStashedExercises, makeBatch, sendBatch, enqueueBatch, SESSION_SIZE } from './offline.js';
 import { toast } from './ui.js';
+import { tree, scopeNode, short, startPractice } from './scope.js';
+import { nextReviewHours, reviewIn, setProgress } from './exercise.js';
 
 let _renderExercise = () => {};
 
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const svg = (name, size = 16) => (typeof window.gctIconSvg === 'function' ? window.gctIconSvg(name, size) : '');
+
 export function initSession({ renderExercise }) {
     _renderExercise = renderExercise;
+    // The saved session refreshed the due counts: the summary's due line and footer follow.
+    window.addEventListener('progresschange', () => renderSummaryDue(scopeDue()));
 }
 
 // state.currentTopicId '' = All topics: the server serves cached due items, never generates.
 export async function fetchExercises() {
     dom.loadingSpinner.classList.remove('hidden');
     dom.exerciseContent.classList.add('hidden');
+    dom.emptyStateContainer?.classList.add('hidden');
     dom.generateBtn.disabled = true;
-    state.timer = 60;
+    // Seconds counter on the loading card (LLM generation takes 10–30 s).
+    clearInterval(state.timerInterval);
+    state.timer = 0;
     dom.timer.textContent = state.timer;
     state.timerInterval = setInterval(() => {
-        state.timer--;
+        state.timer++;
         dom.timer.textContent = state.timer;
-        if (state.timer === 0) {
-            clearInterval(state.timerInterval);
-        }
     }, 1000);
 
     try {
@@ -96,196 +103,166 @@ export async function fetchExercises() {
     }
 }
 
+// Same numbers the Chart.js summary showed: per-index mistake/hint sets, perfect = neither.
+export function sessionStats() {
+    let perfect = 0;
+    for (let i = 0; i < state.exercises.length; i++) {
+        if (!state.exercisesWithMistakes.has(i) && !state.exercisesWithHints.has(i)) perfect++;
+    }
+    return { perfect, hints: state.exercisesWithHints.size, mistakes: state.exercisesWithMistakes.size, total: state.exercises.length };
+}
+
+// Indices of the sentences worth another look (any mistake or hint), in session order.
+export const missedIndices = () => [...new Set([...state.exercisesWithMistakes, ...state.exercisesWithHints])]
+    .filter((i) => i < state.exercises.length).sort((a, b) => a - b);
+
+// "1 now, 2 in 4 h, 4 in 1 d" for the sentences finished this session.
+export function nextReviewsText() {
+    const counts = new Map();
+    state.exercises.forEach((ex) => {
+        if (!state.completedExerciseIds.has(ex.id)) return;
+        const h = nextReviewHours(ex, state.exercisePerformance.get(ex.id) || { mistakes: 0, hints: 0 });
+        counts.set(h, (counts.get(h) || 0) + 1);
+    });
+    return [...counts].sort((a, b) => a[0] - b[0]).map(([h, n]) => `${n} ${reviewIn(h)}`).join(', ');
+}
+
+export const formatDuration = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`);
+
+const scopeDue = () => (scopeNode() ? scopeNode().due : tree.due);
+
+// Due line + footer; re-rendered when the saved session refreshes the due counts (progresschange).
+function summaryFootHtml(due) {
+    const keep = due > 0 && state.isLoggedIn;
+    return `<a href="#/today" class="gct-btn gct-btn--${keep ? 'ghost' : 'primary'} gct-btn--lg">Back to Today</a>`
+        + (keep ? `<button type="button" class="gct-btn gct-btn--primary gct-btn--lg" data-summary="keep">Keep reviewing · ${due} due${svg('arrow-right')}</button>` : '');
+}
+const dueLine = (due) => (due > 0 ? `${due} more ${due === 1 ? 'sentence is' : 'sentences are'} due today.` : 'Nothing else is due right now.');
+
+function renderSummaryDue(due) {
+    const box = document.getElementById('statistics-container');
+    if (!box) return;
+    const sub = box.querySelector('[data-summary="due"]');
+    if (sub) sub.textContent = dueLine(due);
+    box.querySelector('.gct-summary__foot').innerHTML = summaryFootHtml(due);
+}
+
 export function showStatisticsPage() {
     state.isSessionComplete = true;
-    const endTime = Date.now();
-    state.sessionTime = Math.floor((endTime - state.startTime) / 1000);
+    state.sessionTime = Math.floor((Date.now() - state.startTime) / 1000);
 
     if (state.isLoggedIn) {
         saveUserStats();
     }
 
-    // Calculate session statistics
-    const withMistakesCount = state.exercisesWithMistakes.size;
-    const withHintsCount = state.exercisesWithHints.size;
-    let perfectCount = 0;
+    const { perfect, hints, mistakes, total } = sessionStats();
+    const missed = missedIndices();
+    const topic = tree.byId.get(state.currentTopicId);
+    // Until the saved session refreshes the counts, estimate: the scope's due minus what was just reviewed.
+    const due = Math.max(0, scopeDue() - state.completedExerciseIds.size);
+    const reviews = state.isLoggedIn ? nextReviewsText() : '';
+    const tiles = [['Perfect', perfect, '--outcome-perfect'], ['With hints', hints, '--outcome-hints'], ['With mistakes', mistakes, '--outcome-mistakes']];
 
-    for (let i = 0; i < state.exercises.length; i++) {
-        const hadMistake = state.exercisesWithMistakes.has(i);
-        const hadHint = state.exercisesWithHints.has(i);
+    const box = document.createElement('div');
+    box.id = 'statistics-container'; // js/router.js guards #/summary on it
+    box.className = 'gct-summary';
+    box.innerHTML = '<div class="caption gct-summary__caption">Session done</div>'
+        + `<div class="gct-summary__head"><span class="gct-summary__score">${perfect}<span>/${total}</span></span>`
+        + `<div class="gct-summary__headline"><div class="gct-summary__title">perfect on the first try</div>`
+        + `<div class="gct-summary__meta">${esc(topic ? short(topic.name) : 'All topics')} · ${formatDuration(state.sessionTime)}</div></div></div>`
+        + '<div class="gct-summary__bar">' + tiles.map(([, v, c]) => (v ? `<div style="flex:${v};background:var(${c})"></div>` : '')).join('') + '</div>'
+        + '<div class="gct-summary__tiles">' + tiles.map(([l, v, c]) => `<div class="gct-card gct-summary__tile"><div class="gct-summary__tile-label"><span class="gct-summary__dot" style="background:var(${c})"></span>${l}</div><div class="gct-summary__tile-num">${v}</div></div>`).join('') + '</div>'
+        + (state.isLoggedIn ? `<div class="gct-card gct-summary__next">${svg('clock', 22)}<div>${reviews ? `<b>Next reviews:</b> ${reviews}.` : ''}<div class="gct-summary__sub" data-summary="due"></div></div></div>` : '')
+        + (missed.length ? '<div class="gct-summary__look-head"><div class="caption">Worth another look</div>'
+            + `<button type="button" class="gct-btn gct-btn--secondary gct-btn--sm" data-summary="retry">${svg('retry', 14)}Retry these ${missed.length}</button></div>`
+            + '<div class="gct-card gct-summary__list">' + missed.map((i) => {
+                const ex = state.exercises[i];
+                const perf = state.exercisePerformance.get(ex.id) || { mistakes: 0, hints: 0 };
+                const [tone, label] = perf.mistakes > 0 || state.exercisesWithMistakes.has(i)
+                    ? ['danger', perf.mistakes > 1 ? `${perf.mistakes} mistakes` : '1 mistake']
+                    : ['warning', perf.hints > 1 ? `${perf.hints} hints` : '1 hint'];
+                return `<div class="gct-summary__row"><div class="gct-summary__text"><div class="gct-summary__de">${esc(ex.correct_german_sentence)}</div><div class="gct-summary__en">${esc(ex.english_hint)}</div></div>`
+                    + `<span class="gct-badge gct-badge--${tone} gct-badge--quiet"><span class="gct-badge__dot"></span>${label}</span></div>`;
+            }).join('') + '</div>' : '')
+        + `<a href="#/listen" class="gct-summary__podcast">${svg('listen', 18)}Turn this lesson into a podcast for the commute<span class="gct-practice__grow"></span>${svg('chevron-right')}</a>`
+        + '<div class="gct-summary__foot"></div>';
 
-        if (!hadMistake && !hadHint) {
-            perfectCount++;
-        }
-    }
-
-    const avgTimePerExercise = state.exercises.length > 0 ?
-        (state.sessionTime / state.exercises.length).toFixed(1) : 0;
-
-    // Create statistics display
-    const statsContainer = document.createElement('div');
-    statsContainer.id = 'statistics-container';
-    statsContainer.className = 'card p-8 text-center';
-
-    statsContainer.innerHTML = `
-        <h2 class="page-title mb-6">Session Complete! 🎉</h2>
-        <div class="history-summary mb-8">
-            <div class="summary-box">
-                <div class="summary-value" style="color: var(--color-success);">${perfectCount}</div>
-                <div class="summary-label">Perfect</div>
-            </div>
-            <div class="summary-box">
-                <div class="summary-value" style="color: var(--color-info);">${withHintsCount}</div>
-                <div class="summary-label">With Hints</div>
-            </div>
-            <div class="summary-box">
-                <div class="summary-value" style="color: var(--color-danger);">${withMistakesCount}</div>
-                <div class="summary-label">With Mistakes</div>
-            </div>
-            <div class="summary-box">
-                <div class="summary-value" style="color: var(--fg-muted);">${state.sessionTime}s</div>
-                <div class="summary-label">Total Time</div>
-            </div>
-        </div>
-        <div class="mb-8">
-            <h3 class="section-title mb-4">Session Analysis</h3>
-            <div class="mx-auto" style="position: relative; height: 250px; width: 100%; max-width: 400px;">
-                <canvas id="session-chart"></canvas>
-            </div>
-        </div>
-        <div class="flex flex-wrap gap-4 justify-center">
-            <button id="new-session-btn" class="btn-primary">
-                New Practice Session
-            </button>
-            <button id="same-exercises-btn" class="btn-primary">
-                Retry These Exercises
-            </button>
-            ${state.isLoggedIn ? '<button id="view-progress-btn" class="btn-primary">View Your Progress</button>' : ''}
-        </div>
-    `;
+    box.addEventListener('click', (e) => {
+        const act = e.target.closest('[data-summary]')?.dataset.summary;
+        if (act === 'retry') resetForSameExercises(missed);
+        else if (act === 'keep') startPractice();
+    });
 
     // The summary is its own route (#/summary); the practice card stays put in #/practice.
-    document.getElementById('screen-summary').replaceChildren(statsContainer);
+    document.getElementById('screen-summary').replaceChildren(box);
+    renderSummaryDue(due);
+    setProgress(total, total);
+    if (dom.exerciseCounter) dom.exerciseCounter.textContent = `${total} of ${total}`;
     route('summary');
-
-    // Add event listeners for the buttons
-    document.getElementById('new-session-btn').addEventListener('click', resetForNewSession);
-    document.getElementById('same-exercises-btn').addEventListener('click', resetForSameExercises);
-
-    if (state.isLoggedIn) {
-        const viewProgressBtn = document.getElementById('view-progress-btn');
-        if (viewProgressBtn) {
-            viewProgressBtn.addEventListener('click', () => route('history'));
-        }
-    }
-
-    // --- Chart.js Implementation ---
-    const ctx = document.getElementById('session-chart').getContext('2d');
-    // Canvas can't resolve CSS variables — read the design tokens' computed values.
-    const rootStyle = getComputedStyle(document.documentElement);
-    const token = (name) => rootStyle.getPropertyValue(name).trim();
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Perfect', 'With Hints', 'With Mistakes'],
-            datasets: [{
-                data: [perfectCount, withHintsCount, withMistakesCount],
-                backgroundColor: [
-                    token('--color-success-dot'),
-                    token('--color-info-dot'),
-                    token('--color-danger-dot'),
-                ],
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: false,
-                    text: 'Session Performance'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        stepSize: 1
-                    }
-                }
-            }
-        }
-    });
 }
 
-export function resetForNewSession() {
-    const statsContainer = document.getElementById('statistics-container');
-    if (statsContainer) {
-        statsContainer.remove();
+// X in the practice bar mid-session: finished sentences are saved, the rest is dropped.
+export function endSession() {
+    if (state.isLoggedIn && state.completedExerciseIds.size > 0) {
+        state.sessionTime = Math.floor((Date.now() - state.startTime) / 1000);
+        saveUserStats(state.completedExerciseIds.size);
     }
-
-    route('practice');
-
-    state.currentExerciseIndex = 0;
-    state.mistakes = 0;
-    state.hintsUsed = 0;
-    state.sessionTime = 0;
-    state.isSessionComplete = false;
-    state.startTime = null;
+    state.isSessionComplete = true;
     state.exercises = [];
-    state.exercisesWithMistakes.clear();
-    state.exercisesWithHints.clear();
-    state.completedExerciseIds.clear();
-
-    // Clean up loading state and timers
-    dom.loadingSpinner.classList.add('hidden');
-    if (state.timerInterval) {
-        clearInterval(state.timerInterval);
-    }
-
-    // Re-enable the generate button
-    dom.generateBtn.disabled = false;
-
-    // Automatically fetch new exercises
-    fetchExercises();
-}
-
-export function resetForSameExercises() {
-    const statsContainer = document.getElementById('statistics-container');
-    if (statsContainer) {
-        statsContainer.remove();
-    }
-
-    route('practice');
-
-    state.currentExerciseIndex = 0;
-    state.mistakes = 0;
-    state.hintsUsed = 0;
-    state.sessionTime = 0;
-    state.isSessionComplete = false;
-    state.startTime = Date.now();
-    state.exercisesWithMistakes.clear();
-    state.exercisesWithHints.clear();
-    state.completedExerciseIds.clear();
-
-    // Clean up loading state and timers
-    dom.loadingSpinner.classList.add('hidden');
-    if (state.timerInterval) {
-        clearInterval(state.timerInterval);
-    }
-
-    // Re-enable the generate button
-    dom.generateBtn.disabled = false;
-
+    state.exerciseIds = [];
     _renderExercise();
 }
 
-export async function saveUserStats() {
+export const sessionInProgress = () => state.exercises.length > 0 && !state.isSessionComplete;
+
+function clearSummary() {
+    document.getElementById('statistics-container')?.remove();
+    dom.loadingSpinner.classList.add('hidden');
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    dom.generateBtn.disabled = false;
+}
+
+function resetCounters() {
+    state.currentExerciseIndex = 0;
+    state.mistakes = 0;
+    state.hintsUsed = 0;
+    state.sessionTime = 0;
+    state.isSessionComplete = false;
+    state.exercisesWithMistakes = new Set();
+    state.exercisesWithHints = new Set();
+    state.exerciseMistakes = {};
+    state.completedExerciseIds = new Set();
+    state.exercisePerformance = new Map(state.exerciseIds.map((id) => [id, { hints: 0, mistakes: 0 }]));
+}
+
+export function resetForNewSession() {
+    clearSummary();
+    route('practice');
+    state.exercises = [];
+    state.exerciseIds = [];
+    resetCounters();
+    state.startTime = null;
+    setProgress(0, 0);
+    if (dom.exerciseCounter) dom.exerciseCounter.textContent = '';
+    fetchExercises();
+}
+
+// Retry the session (or just the given indices, e.g. the summary's "Retry these N").
+export function resetForSameExercises(indices) {
+    clearSummary();
+    if (indices) {
+        state.exercises = indices.map((i) => state.exercises[i]).filter(Boolean);
+        state.exerciseIds = state.exercises.map((ex) => ex.id);
+    }
+    route('practice');
+    resetCounters();
+    state.startTime = Date.now();
+    _renderExercise();
+}
+
+export async function saveUserStats(total = state.exercises.length) {
     const stats = {
-        total_exercises: state.exercises.length,
+        total_exercises: total,
         total_mistakes: state.mistakes,
         total_hints: state.hintsUsed,
         total_time: state.sessionTime,
