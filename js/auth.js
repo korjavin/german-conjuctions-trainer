@@ -74,24 +74,12 @@ export async function loadUserStats() {
 }
 
 export function updateAuthUI() {
-    if (state.isLoggedIn) {
-        dom.loginBtn.classList.add('hidden');
-        dom.logoutBtn.classList.remove('hidden');
-        dom.historyBtn.classList.remove('hidden');
-        dom.skipRemoveBtn.classList.remove('hidden');
-        dom.offlineCacheSection?.classList.remove('hidden');
-        dom.podcastFeedSection?.classList.remove('hidden');
-    } else {
-        dom.loginBtn.classList.remove('hidden');
-        dom.logoutBtn.classList.add('hidden');
-        dom.historyBtn.classList.add('hidden');
-        dom.skipRemoveBtn.classList.add('hidden');
-        dom.offlineCacheSection?.classList.add('hidden');
-        dom.podcastFeedSection?.classList.add('hidden');
-    }
+    // Shell chrome (index.html [data-auth="anon|user|admin"]) keys off these body classes.
+    document.body.classList.toggle('is-logged-in', Boolean(state.isLoggedIn));
+    document.body.classList.toggle('is-admin', Boolean(state.isAdmin));
 
-    // Settings holds offline practice (any logged-in user) plus the
-    // admin-only topics management / stats / CLI sections.
-    dom.settingsBtn.classList.toggle('hidden', !(state.isLoggedIn || state.isAdmin));
+    dom.skipRemoveBtn.classList.toggle('hidden', !state.isLoggedIn);
+    dom.offlineCacheSection?.classList.toggle('hidden', !state.isLoggedIn);
+    dom.podcastFeedSection?.classList.toggle('hidden', !state.isLoggedIn);
     dom.topicsAdminSection?.classList.toggle('hidden', !state.isAdmin);
 }

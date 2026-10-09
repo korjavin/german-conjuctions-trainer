@@ -121,7 +121,7 @@ export function renderExercise() {
 
     addPunctuationIfNeeded(exercise, state.userSentence);
 
-    dom.exerciseCounter.textContent = `${state.currentExerciseIndex + 1} / ${state.exercises.length}`;
+    dom.exerciseCounter.textContent = `${state.currentExerciseIndex + 1} of ${state.exercises.length}`;
 
     // Update favorite button state
     updateFavoriteButtonState(exercise.is_favorite);

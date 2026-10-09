@@ -211,7 +211,6 @@ export function openPodcastDialog() {
     dom.podcastFavoritesOption.classList.toggle('hidden', !state.isLoggedIn);
     dom.podcastFavoritesOnly.checked = state.isLoggedIn && loadFavoritesOnly();
     if (!isGenerating) setError('');
-    dom.podcastModal.showModal();
     loadPodcastEpisodes();
 }
 
@@ -332,14 +331,11 @@ export async function regeneratePodcastFeed() {
 export function initPodcast() {
     dom.podcastFeedCopyBtn?.addEventListener('click', copyPodcastFeed);
     dom.podcastFeedRegenerateBtn?.addEventListener('click', regeneratePodcastFeed);
-    if (!dom.podcastBtn) return;
-    dom.podcastBtn.addEventListener('click', openPodcastDialog);
-    dom.podcastCloseBtn.addEventListener('click', () => dom.podcastModal.close());
     dom.podcastGenerateBtn.addEventListener('click', generatePodcast);
     dom.podcastFavoritesOnly.addEventListener('change', () => saveFavoritesOnly(dom.podcastFavoritesOnly.checked));
     // The episode's own German would be heard as spoken answers.
     dom.podcastAudio.addEventListener('play', () => {
         if (state.voiceActive) handleVoiceToggle();
     });
-    // Closing the dialog keeps the episode playing, like a background player.
+    // Leaving #/listen keeps the episode playing, like a background player.
 }

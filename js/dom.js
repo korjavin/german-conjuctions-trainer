@@ -1,8 +1,7 @@
 export const dom = {
     settingsBtn: document.getElementById('settings-btn'),
-    settingsModal: document.getElementById('settings-modal'),
+    accountMenu: document.getElementById('account-menu'),
     topicsAdminSection: document.getElementById('topics-admin-section'),
-    settingsCloseBtn: document.getElementById('settings-close-btn'),
     topicSearch: document.getElementById('topic-search'),
     topicDropdown: document.getElementById('topic-dropdown'),
 
@@ -10,9 +9,6 @@ export const dom = {
     audioToggleBtn: document.getElementById('audio-toggle-btn'),
     audioToggleIcon: document.getElementById('audio-toggle-icon'),
     voiceToggleBtn: document.getElementById('voice-toggle-btn'),
-    podcastBtn: document.getElementById('podcast-btn'),
-    podcastModal: document.getElementById('podcast-modal'),
-    podcastCloseBtn: document.getElementById('podcast-close-btn'),
     podcastTopicName: document.getElementById('podcast-topic-name'),
     podcastFavoritesOption: document.getElementById('podcast-favorites-option'),
     podcastFavoritesOnly: document.getElementById('podcast-favorites-only'),
@@ -106,7 +102,6 @@ export const dom = {
 
     loginBtn: document.getElementById('login-btn'),
     logoutBtn: document.getElementById('logout-btn'),
-    historyBtn: document.getElementById('history-btn'),
     offlineCacheSection: document.getElementById('offline-cache-section'),
     offlineCacheBtn: document.getElementById('offline-cache-btn'),
     offlineCacheStatus: document.getElementById('offline-cache-status'),
@@ -127,8 +122,6 @@ export const dom = {
     exerciseControls: document.getElementById('exercise-controls'),
     completionStatusIndicator: document.getElementById('completion-status-indicator'),
 
-    historyModal: document.getElementById('history-modal'),
-    historyCloseBtn: document.getElementById('history-close-btn'),
     historyTopicName: document.getElementById('history-topic-name'),
     historySummary: document.getElementById('history-summary'),
     historyTotalCount: document.getElementById('history-total-count'),

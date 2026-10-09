@@ -82,7 +82,6 @@ vi.mock('../dom.js', () => {
       timer: createMockElement('span'),
 
       // History DOM
-      historyModal: createMockDialog(),
       historyLoading: createMockElement('div'),
       historyEmpty: createMockElement('div'),
       historyContent: createMockElement('div'),
@@ -115,7 +114,6 @@ vi.mock('../dom.js', () => {
       // Auth / header DOM
       loginBtn: createMockElement('button'),
       logoutBtn: createMockElement('button'),
-      historyBtn: createMockElement('button'),
       settingsBtn: createMockElement('button'),
       skipRemoveBtn: createMockElement('button'),
       offlineCacheBtn: createMockElement('button'),
@@ -127,9 +125,6 @@ vi.mock('../dom.js', () => {
       answerPrompt: createMockElement('div'),
 
       // Podcast DOM
-      podcastBtn: createMockElement('button'),
-      podcastModal: createMockDialog(),
-      podcastCloseBtn: createMockElement('button'),
       podcastTopicName: createMockElement('p'),
       podcastFavoritesOption: createMockElement('label'),
       podcastFavoritesOnly: createMockElement('input'),

@@ -60,7 +60,6 @@ describe('podcast.js', () => {
     it('opens the dialog labelled with the current topic path', () => {
         openPodcastDialog();
         expect(dom.podcastTopicName.textContent).toBe('Grammar > Konjunktionen');
-        expect(dom.podcastModal.showModal).toHaveBeenCalled();
     });
 
     it('renders the player, download link and phrase list', async () => {

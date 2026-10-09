@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
 import { fetchExercisesFromAPI } from './api.js';
-import { showExerciseHistory } from './history.js';
+import { route } from './router.js';
 import { flattenExercise, takeStashedExercises, makeBatch, sendBatch, enqueueBatch, SESSION_SIZE } from './offline.js';
 import { toast } from './ui.js';
 
@@ -168,9 +168,9 @@ export function showStatisticsPage() {
         </div>
     `;
 
-    // Replace exercise content with statistics
-    document.getElementById('exercise-container').classList.add('hidden');
-    document.querySelector('main .max-w-3xl').appendChild(statsContainer);
+    // The summary is its own route (#/summary); the practice card stays put in #/practice.
+    document.getElementById('screen-summary').replaceChildren(statsContainer);
+    route('summary');
 
     // Add event listeners for the buttons
     document.getElementById('new-session-btn').addEventListener('click', resetForNewSession);
@@ -179,7 +179,7 @@ export function showStatisticsPage() {
     if (state.isLoggedIn) {
         const viewProgressBtn = document.getElementById('view-progress-btn');
         if (viewProgressBtn) {
-            viewProgressBtn.addEventListener('click', showExerciseHistory);
+            viewProgressBtn.addEventListener('click', () => route('history'));
         }
     }
 
@@ -231,7 +231,7 @@ export function resetForNewSession() {
         statsContainer.remove();
     }
 
-    document.getElementById('exercise-container').classList.remove('hidden');
+    route('practice');
 
     state.currentExerciseIndex = 0;
     state.mistakes = 0;
@@ -263,7 +263,7 @@ export function resetForSameExercises() {
         statsContainer.remove();
     }
 
-    document.getElementById('exercise-container').classList.remove('hidden');
+    route('practice');
 
     state.currentExerciseIndex = 0;
     state.mistakes = 0;

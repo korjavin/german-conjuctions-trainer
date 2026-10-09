@@ -9,8 +9,7 @@ export async function showExerciseHistory() {
         return;
     }
 
-    // Show modal and loading state
-    dom.historyModal.showModal();
+    // Loading state (the #/history section is already visible)
     dom.historyLoading.classList.remove('hidden');
     dom.historyEmpty.classList.add('hidden');
     dom.historyContent.classList.add('hidden');
@@ -82,7 +81,6 @@ export async function showExerciseHistory() {
         dom.historyControlsContainer.classList.add('hidden');
         dom.historyReviewChart.classList.add('hidden');
         if (error.status === 401) {
-            dom.historyModal.close(); // close first: an open modal would host (and then hide) the toast
             toast({ tone: 'danger', text: "Your session has expired. Please log in again." });
             return;
         }
