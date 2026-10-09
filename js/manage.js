@@ -100,6 +100,7 @@ async function generateToken() {
     try {
         const label = dom.cliTokenLabel.value.trim() || 'cli';
         const result = await createCLITokenAPI(label);
+        if (tab !== 'cli' || currentRoute() !== 'manage') return; // left meanwhile: keep the reveal one-time
         dom.cliTokenValue.value = result.token || '';
         dom.cliTokenResult.hidden = false;
         dom.cliTokenValue.focus();

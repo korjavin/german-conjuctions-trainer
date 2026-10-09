@@ -155,6 +155,17 @@ describe('topic tree', () => {
         expect(rows()).toEqual(['p', 'a']); // pre-search collapse state is back
     });
 
+    it('search highlight never splits an escaped entity', () => {
+        state.topics = tree.map(t => (t.id === 'g' ? { ...t, name: `Grand's 3 <b>` } : t));
+        state.topicsSearchQuery = '3';
+        renderTopicsList();
+        const name = item('g').querySelector('.gct-manage__name');
+        expect(name.textContent).toBe(`Grand's 3 <b>`);
+        expect(name.querySelector('mark').textContent).toBe('3');
+        state.topicsSearchQuery = '';
+        renderTopicsList();
+    });
+
     it('row click on a folder toggles it', () => {
         renderTopicsList();
         item('c1').click();

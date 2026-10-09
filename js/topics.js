@@ -165,28 +165,24 @@ export async function loadTopics() {
 
         renderTopicsList();
         // An edited topic that vanished closes the editor; otherwise refresh its chrome, keep unsaved fields.
-        if (editor?.mode === 'edit' && !findTopic(editor.id)) closeEditor();
-        else renderEditorChrome();
+        const edited = editor?.mode === 'edit' ? findTopic(editor.id) : null;
+        if (editor?.mode === 'edit' && !edited) closeEditor();
+        else {
+            if (edited) {
+                // Archive/restore/drag moved it on the server: follow that parent, else keep the user's pick.
+                const serverParent = edited.parent_id || '';
+                const parent = serverParent !== editor.parentId ? serverParent : dom.topicParentSelect.value;
+                editor.parentId = serverParent;
+                renderParentOptions(parent);
+                renderRecentParents();
+            }
+            renderEditorChrome();
+        }
         // js/scope.js rebuilds the scope tree and drops a scope that vanished or was archived.
         window.dispatchEvent(new Event('topicschange'));
     } catch (error) {
         console.error('Error rendering topics:', error);
     }
-}
-
-export function countDescendantTopics(topicId, allTopics = state.topics, visited = new Set()) {
-    if (!topicId || visited.has(topicId)) return 0;
-    visited.add(topicId);
-
-    let count = 0;
-    const children = allTopics.filter(t => t.parent_id === topicId);
-    count += children.length;
-
-    for (const child of children) {
-        count += countDescendantTopics(child.id, allTopics, visited);
-    }
-
-    return count;
 }
 
 export function getTopicPath(topicId, allTopics = state.topics, visited = new Set()) {
@@ -354,7 +350,7 @@ function createTopicItem({ topic, depth, parentId, expanded }, archivedIds, touc
     if (isFolder) row.setAttribute('aria-expanded', String(expanded));
 
     const name = escapeHtml(topic.name);
-    const displayName = state.topicsSearchQuery ? highlightText(name, state.topicsSearchQuery) : name;
+    const displayName = highlightText(topic.name, state.topicsSearchQuery);
     let guides = '';
     for (let k = 0; k < depth; k++) guides += `<span class="gct-manage__guide" style="left:${17 + k * ROW_INDENT}px"></span>`;
 
@@ -438,15 +434,12 @@ function findMatchingTopics(searchQuery, nodesById) {
     return { matchingIds, expandedIds };
 }
 
+// Takes the RAW text: split on the match first, then escape each piece, so the query never lands inside an entity.
 function highlightText(text, searchQuery) {
-    if (!searchQuery) return text;
-    try {
-        const regex = new RegExp(`(${escapeRegExp(escapeHtml(searchQuery))})`, 'gi');
-        return text.replace(regex, '<mark class="search-highlight">$1</mark>');
-    } catch (error) {
-        console.warn('Failed to highlight search text:', error);
-        return text;
-    }
+    if (!searchQuery) return escapeHtml(text);
+    return String(text ?? '').split(new RegExp(`(${escapeRegExp(searchQuery)})`, 'gi'))
+        .map((part, i) => (i % 2 ? `<mark class="search-highlight">${escapeHtml(part)}</mark>` : escapeHtml(part)))
+        .join('');
 }
 
 function escapeRegExp(string) {
@@ -921,10 +914,6 @@ export function setExerciseCounts(perTopic = []) {
     renderEditorChrome();
 }
 
-export function getEditor() {
-    return editor;
-}
-
 function fillEditor(name, parentId, prompt) {
     dom.topicNameInput.value = name;
     dom.promptTextarea.value = prompt;
@@ -949,7 +938,10 @@ function renderParentOptions(parentId) {
 
 function renderRecentParents() {
     const selfId = editor?.mode === 'edit' ? editor.id : null;
-    const recent = state.recentlyUsedTopics.filter(r => r.id !== selfId && findTopic(r.id)).slice(0, 4);
+    // Same rule as the select: no self, no descendants (a badge without an option would pick Root).
+    const recent = state.recentlyUsedTopics
+        .filter(r => findTopic(r.id) && (!selfId || !wouldCreateCycle(state.nodesById, selfId, r.id)))
+        .slice(0, 4);
     dom.recentlyUsedTopics.hidden = recent.length === 0;
     dom.recentTopicsContainer.replaceChildren(...recent.map(r => {
         const b = document.createElement('button');
@@ -1030,7 +1022,7 @@ function renderEditorChrome() {
 export function openEditor(topicId, { focusName = false } = {}) {
     const topic = findTopic(topicId);
     if (!topic || isArchiveRoot(topic) || !dom.topicEditor) return;
-    editor = { mode: 'edit', id: topicId };
+    editor = { mode: 'edit', id: topicId, parentId: topic.parent_id || '' };
     state.editingTopicId = topicId;
     fillEditor(topic.name, topic.parent_id || '', topic.prompt || '');
     renderEditorChrome();

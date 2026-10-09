@@ -6,7 +6,7 @@ import { initPodcast, loadPodcastFeed, openPodcastDialog } from './podcast.js';
 import { initMe } from './me.js';
 import { initManage } from './manage.js';
 import { initToday } from './today.js';
-import { initRouter, markAuthReady, route, currentRoute } from './router.js';
+import { initRouter, markAuthReady, currentRoute } from './router.js';
 import { initScope, startPractice, refreshProgress } from './scope.js';
 import {
     initExercise,
