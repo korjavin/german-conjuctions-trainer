@@ -114,6 +114,7 @@ export async function refreshProgress() {
     }
     rollup(tree, progress);
     render();
+    window.dispatchEvent(new CustomEvent('progresschange'));
 }
 
 function onTopicsChange() {

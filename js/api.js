@@ -249,6 +249,12 @@ export async function fetchTopicProgressAPI() {
     return response.json();
 }
 
+// Per-day completion counts, oldest first: {days: [{date: "2026-10-03", count: 12}, ...]}; '' = All topics.
+export async function fetchUserActivityAPI(topicId, days = 7) {
+    const response = await apiFetch(`/api/user/activity?topic_id=${encodeURIComponent(topicId || '')}&days=${days}`);
+    return response.json();
+}
+
 export async function saveUserSettingsAPI(topicId) {
     await fetch('/api/user/settings', {
         method: 'POST',
