@@ -204,12 +204,8 @@ export const state = {
     isAdmin: false,
     historyData: [],
     historyPage: 1,
-    historyItemsPerPage: 10,
-    historyFilterReady: false,
-    historyFilterFavorites: false,
-    historyFilterTrained: false,
-    historyFilterIgnored: false,
-    historySortDimension: 'sooner', // sooner, later, most_errors, fewest_errors, newest, oldest
+    historyFilter: 'due', // due | training | fav | ignored (single-select)
+    historySort: { key: 'timing', dir: 1 }, // timing | errors | date; dir 1 = ascending
     nodesById: new Map(), // Cached nodes by ID for tree operations
     preSearchCollapsedTopicIds: undefined, // Saved collapse state before search began
 };

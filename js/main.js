@@ -28,12 +28,7 @@ import {
     checkAuthStatus,
 } from './auth.js';
 import { updateOfflineCache, flushOfflineQueue, renderOfflineCacheStatus } from './offline.js';
-import {
-    showExerciseHistory,
-    renderHistoryPage,
-    updateHistoryFilterUI,
-    updateHistorySortUI,
-} from './history.js';
+import { initHistory } from './history.js';
 
 const sampleExercises = {
     "exercises": [
@@ -58,6 +53,7 @@ initSession({ renderExercise });
 // Before the routechange listener below: outside practice, screens read the scope's topic.
 initScope();
 initToday();
+initHistory();
 
 // --- Event Listeners ---
 
@@ -66,8 +62,7 @@ window.addEventListener('routechange', ({ detail: { route: name } }) => {
     if (dom.accountMenu?.matches(':popover-open')) dom.accountMenu.hidePopover();
     // Spoken words would otherwise keep driving the hidden, abandoned exercise.
     if (name !== 'practice' && state.voiceActive) handleVoiceToggle();
-    if (name === 'history' && state.isLoggedIn) showExerciseHistory();
-    else if (name === 'listen') openPodcastDialog();
+    if (name === 'listen') openPodcastDialog();
     else if (name === 'me') {
         renderOfflineCacheStatus();
         loadPodcastFeed();
@@ -126,89 +121,6 @@ if (dom.offlineCacheBtn) {
 
 // Retry queued session results as soon as connectivity is back.
 window.addEventListener('online', () => { flushOfflineQueue(); });
-
-dom.historyFilterReady.addEventListener('click', () => {
-    state.historyFilterReady = !state.historyFilterReady;
-    state.historyPage = 1; // Reset to first page
-    updateHistoryFilterUI();
-    renderHistoryPage();
-});
-
-// History Sort Controls
-dom.historySortTiming.addEventListener('click', () => {
-    state.historySortDimension = state.historySortDimension === 'sooner' ? 'later' : 'sooner';
-    state.historyPage = 1;
-    updateHistorySortUI();
-    renderHistoryPage();
-});
-
-dom.historySortErrors.addEventListener('click', () => {
-    state.historySortDimension = state.historySortDimension === 'most_errors' ? 'fewest_errors' : 'most_errors';
-    state.historyPage = 1;
-    updateHistorySortUI();
-    renderHistoryPage();
-});
-
-dom.historySortDate.addEventListener('click', () => {
-    state.historySortDimension = state.historySortDimension === 'newest' ? 'oldest' : 'newest';
-    state.historyPage = 1;
-    updateHistorySortUI();
-    renderHistoryPage();
-});
-
-dom.historyFilterFavorites.addEventListener('click', () => {
-    state.historyFilterFavorites = !state.historyFilterFavorites;
-    state.historyPage = 1; // Reset to first page
-    updateHistoryFilterUI();
-    renderHistoryPage();
-});
-
-dom.historyFilterTrained.addEventListener('click', () => {
-    state.historyFilterTrained = !state.historyFilterTrained;
-    state.historyPage = 1; // Reset to first page
-    updateHistoryFilterUI();
-    renderHistoryPage();
-});
-
-dom.historyFilterIgnored.addEventListener('click', () => {
-    state.historyFilterIgnored = !state.historyFilterIgnored;
-    // When showing ignored, clear other filters
-    if (state.historyFilterIgnored) {
-        state.historyFilterReady = false;
-        state.historyFilterTrained = false;
-    }
-    state.historyPage = 1;
-    updateHistoryFilterUI();
-    renderHistoryPage();
-});
-
-dom.historyPrevBtn.addEventListener('click', () => {
-    if (state.historyPage > 1) {
-        state.historyPage--;
-        renderHistoryPage();
-    }
-});
-
-dom.historyNextBtn.addEventListener('click', () => {
-    // getFilteredHistoryData is internal to history.js; compute total pages here
-    const filteredCount = state.historyData.filter(item => {
-        if (state.historyFilterIgnored) {
-            if (!item.is_hidden) return false;
-        } else {
-            if (item.is_hidden) return false;
-        }
-        let matches = true;
-        if (state.historyFilterReady) matches = matches && item.ready_to_repeat;
-        if (state.historyFilterFavorites) matches = matches && item.is_favorite;
-        if (state.historyFilterTrained) matches = matches && !item.ready_to_repeat;
-        return matches;
-    }).length;
-    const totalPages = Math.ceil(filteredCount / state.historyItemsPerPage);
-    if (state.historyPage < totalPages) {
-        state.historyPage++;
-        renderHistoryPage();
-    }
-});
 
 // --- Initialization ---
 function init() {
