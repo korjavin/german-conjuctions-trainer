@@ -5,7 +5,7 @@ import { dom } from './dom.js';
 import { generatePodcastAPI, listPodcastEpisodesAPI, getPodcastFeedAPI, regeneratePodcastFeedAPI } from './api.js';
 import { getTopicPath } from './topics.js';
 import { handleVoiceToggle } from './voice.js';
-import { confirm } from './ui.js';
+import { confirm, toast } from './ui.js';
 
 let current = null; // episode loaded in the player (server response)
 let sessionEpisodes = []; // built in this page session, newest first
@@ -298,8 +298,7 @@ export async function copyPodcastFeed() {
     if (!value) return;
     try {
         await navigator.clipboard.writeText(value);
-        dom.podcastFeedCopyBtn.textContent = 'Copied!';
-        setTimeout(() => { dom.podcastFeedCopyBtn.textContent = 'Copy'; }, 1500);
+        toast({ icon: 'copy', text: 'Feed URL copied' });
     } catch (_) {
         // Clipboard API can fail (insecure context): let the user copy by hand.
         dom.podcastFeedUrl.focus();
@@ -310,7 +309,7 @@ export async function copyPodcastFeed() {
 export async function regeneratePodcastFeed() {
     const choice = await confirm({
         title: 'Make a new feed URL?',
-        body: 'The current URL stops working. You will need to add the new one to your podcast app.',
+        body: 'The old URL stops working. You will need to add the new one to your podcast app.',
         actions: [{ label: 'Make new URL', kind: 'danger', value: 'regenerate' }, { label: 'Cancel', kind: 'ghost' }],
     });
     if (choice !== 'regenerate') return;
@@ -321,6 +320,7 @@ export async function regeneratePodcastFeed() {
         const data = await regeneratePodcastFeedAPI();
         feedRequest++; // loads started meanwhile may have read the old token
         dom.podcastFeedUrl.value = data.feed_url || '';
+        toast({ text: 'New feed URL ready' });
     } catch (error) {
         setFeedError(error.message || 'Failed to regenerate the podcast feed.');
     } finally {
