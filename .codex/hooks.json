@@ -24,6 +24,19 @@
         "matcher": "manual|auto"
       }
     ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "python3 -c \"import sys,json,re; d=json.load(sys.stdin); c=json.dumps(d.get('tool_input',{}).get('command','')); sys.exit(0) if not re.search(r'(^|[\\\\s;&|/\\\"])vitest(?![\\\\w.-])|pnpm\\\\s+(run\\\\s+)?test\\\\b|npm\\\\s+(run\\\\s+)?test\\\\b', c) else (sys.stderr.write('BLOCKED by .codex/hooks.json: local frontend tests (vitest / pnpm test) are forbidden in this repo; CI is the only frontend gate. Review statically.\\\\n'), sys.exit(2))\"",
+            "statusMessage": "no-local-frontend-tests guard",
+            "timeout": 10,
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
