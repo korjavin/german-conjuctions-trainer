@@ -23,7 +23,7 @@ An interactive German language learning application that helps B1-level students
 - **Prompt Customization**: Tailor exercise generation prompts for each topic.
 - **Version History**: Track and restore the last 10 versions of a prompt.
 - **Persistent Storage**: Uses SQLite for fast and reliable data storage.
-- **Database Statistics** (Admin): View total exercises, topics, audio cache size/file count, database size, and per-topic exercise counts from the settings modal.
+- **Database Statistics** (Admin): View total exercises, topics, audio cache size/file count, database size, and per-topic exercise counts on the Manage screen (Database tab).
 - **Legacy Airtable Integration**: Support for Airtable (Deprecated).
 - **Optional Google Login**: Allows users to log in with their Google account to enable the SRS feature and save settings.
 - **Podcast Mode**: Turns the selected topic (with its subtopics) into a listen-only MP3 episode for commuting or walking. See [Podcast Mode](#podcast-mode).
@@ -175,28 +175,7 @@ go test -cover ./...
 
 ### Frontend Tests (JavaScript)
 
-JavaScript tests are designed for browser-based verification:
-
-1. **Browser Console Tests**:
-   - Open the application in your browser
-   - Open Developer Tools (F12)
-   - Go to Console tab
-   - Paste the contents of any test file from `js/topics-*-test.js`
-   - Tests will run automatically and report results
-
-2. **Performance Test Runner**:
-   - Open `js/topics-performance-test-runner.html` in your browser
-   - Click "Run All Tests" button
-   - Results appear in console and on the page
-
-3. **Test Guides**: Each feature has a corresponding test guide:
-   - `js/topics-accessibility-test-guide.md` - Accessibility feature verification
-   - `js/topics-collapse-test-guide.md` - Expand/collapse functionality
-   - `js/topics-dragdrop-test-guide.md` - Drag-and-drop behavior
-   - `js/topics-form-test-guide.md` - Form validation and UX
-   - `js/topics-icon-test-guide.md` - Topic icons rendering
-   - `js/topics-search-test-guide.md` - Search functionality
-   - `js/topics-sort-test-guide.md` - Sorting behavior
+Vitest unit suites live in `js/__tests__/` (happy-dom) and run in CI on every pull request (`pnpm test`).
 
 ### Test Coverage
 

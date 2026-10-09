@@ -78,5 +78,4 @@ export function updateAuthUI() {
     dom.skipRemoveBtn.classList.toggle('hidden', !state.isLoggedIn);
     dom.offlineCacheSection?.classList.toggle('hidden', !state.isLoggedIn);
     dom.podcastFeedSection?.classList.toggle('hidden', !state.isLoggedIn);
-    dom.topicsAdminSection?.classList.toggle('hidden', !state.isAdmin);
 }
