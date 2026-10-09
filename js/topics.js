@@ -376,9 +376,10 @@ function createTopicItem({ topic, depth, parentId, expanded }, archivedIds, touc
         e.stopPropagation();
         openMenu(row, topic.id);
     });
+    // Touch (push navigation): a folder tap only expands it; its editor is one ⋯ > Rename away.
     row.addEventListener('click', () => {
         if (isFolder) toggleRow(topic.id);
-        if (!isArchive) openEditor(topic.id);
+        if (!isArchive && !(touch && isFolder)) openEditor(topic.id);
     });
     row.addEventListener('keydown', handleTopicKeyboard);
 
@@ -1034,6 +1035,7 @@ export function openEditor(topicId, { focusName = false } = {}) {
     fillEditor(topic.name, topic.parent_id || '', topic.prompt || '');
     renderEditorChrome();
     loadVersions(topicId);
+    if (isTouch()) window.scrollTo?.(0, 0); // the editor replaces the tree
     if (focusName) {
         dom.topicNameInput.focus();
         dom.topicNameInput.select();
