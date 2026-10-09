@@ -1,7 +1,6 @@
 export const dom = {
     settingsBtn: document.getElementById('settings-btn'),
     accountMenu: document.getElementById('account-menu'),
-    topicsAdminSection: document.getElementById('topics-admin-section'),
 
     generateBtn: document.getElementById('generate-btn'),
     audioToggleBtn: document.getElementById('audio-toggle-btn'),
@@ -51,52 +50,33 @@ export const dom = {
     progressPercentage: document.getElementById('progress-percentage'),
     emptyStateContainer: document.getElementById('empty-state-container'),
 
+    // Manage > Topics (js/topics.js)
+    manageTopics: document.getElementById('manage-topics'),
+    manageTree: document.getElementById('manage-tree'),
     topicsList: document.getElementById('topics-list'),
     topicsSearchInput: document.getElementById('topics-search-input'),
-    topicsSearchClear: document.getElementById('topics-search-clear'),
     topicSort: document.getElementById('topic-sort'),
-    collapseAllBtn: document.getElementById('collapse-all-btn'),
-    expandAllBtn: document.getElementById('expand-all-btn'),
     addTopicBtn: document.getElementById('add-topic-btn'),
-    addTopicForm: document.getElementById('add-topic-form'),
-    newTopicName: document.getElementById('new-topic-name'),
-    newTopicPrompt: document.getElementById('new-topic-prompt'),
-    saveTopicBtn: document.getElementById('save-topic-btn'),
-    cancelAddBtn: document.getElementById('cancel-add-btn'),
-
-    // Form validation elements
-    newTopicNameError: document.getElementById('new-topic-name-error'),
-    newTopicPromptError: document.getElementById('new-topic-prompt-error'),
-    editTopicPromptError: document.getElementById('edit-topic-prompt-error'),
-
-    // Hierarchy preview elements
-    addTopicHierarchyPreview: document.getElementById('add-topic-hierarchy-preview'),
-    addTopicPreviewPath: document.getElementById('add-topic-preview-path'),
-    editTopicHierarchyPreview: document.getElementById('edit-topic-hierarchy-preview'),
-    editTopicCurrentPath: document.getElementById('edit-topic-current-path'),
-
-    // Recently used topics elements
+    topicEditorEmpty: document.getElementById('topic-editor-empty'),
+    topicEditor: document.getElementById('topic-editor'),
+    topicEditorBack: document.getElementById('topic-editor-back'),
+    topicEditorCrumbs: document.getElementById('topic-editor-crumbs'),
+    topicEditorTitle: document.getElementById('topic-editor-title'),
+    topicEditorMeta: document.getElementById('topic-editor-meta'),
+    topicEditorArchive: document.getElementById('topic-editor-archive'),
+    topicEditorDelete: document.getElementById('topic-editor-delete'),
+    topicNameInput: document.getElementById('topic-name-input'),
+    topicNameError: document.getElementById('topic-name-error'),
+    topicParentSelect: document.getElementById('topic-parent-select'),
     recentlyUsedTopics: document.getElementById('recently-used-topics'),
     recentTopicsContainer: document.getElementById('recent-topics-container'),
-    editRecentlyUsedTopics: document.getElementById('edit-recently-used-topics'),
-    editRecentTopicsContainer: document.getElementById('edit-recent-topics-container'),
-
-    promptEditor: document.getElementById('prompt-editor'),
-    currentTopicName: document.getElementById('current-topic-name'),
+    promptCounter: document.getElementById('prompt-counter'),
     promptTextarea: document.getElementById('prompt-textarea'),
+    promptError: document.getElementById('prompt-error'),
     savePromptBtn: document.getElementById('save-prompt-btn'),
-    cancelEditBtn: document.getElementById('cancel-edit-btn'),
-
-    viewVersionsBtn: document.getElementById('view-versions-btn'),
-    versionHistory: document.getElementById('version-history'),
-    versionTopicName: document.getElementById('version-topic-name'),
+    discardBtn: document.getElementById('discard-btn'),
+    versionsSection: document.getElementById('versions-section'),
     versionsList: document.getElementById('versions-list'),
-    closeVersionsBtn: document.getElementById('close-versions-btn'),
-
-    viewLastRefinedPromptBtn: document.getElementById('view-last-refined-prompt-btn'),
-    lastRefinedPromptModal: document.getElementById('last-refined-prompt-modal'),
-    lastRefinedPromptContent: document.getElementById('last-refined-prompt-content'),
-    lastRefinedPromptCloseBtn: document.getElementById('last-refined-prompt-close-btn'),
 
     loginBtn: document.getElementById('login-btn'),
     logoutBtn: document.getElementById('logout-btn'),
@@ -129,20 +109,16 @@ export const dom = {
     completionStatusIndicator: document.getElementById('completion-status-indicator'),
 
 
-    // Database stats
-    dbStatsSection: document.getElementById('db-stats-section'),
-    dbStatsContainer: document.getElementById('db-stats-container'),
-    dbStatsLoading: document.getElementById('db-stats-loading'),
-    dbStatsContent: document.getElementById('db-stats-content'),
+    // Manage > Observability / Database / CLI access (js/manage.js)
+    obsCaption: document.getElementById('obs-caption'),
+    obsPrompt: document.getElementById('obs-prompt'),
     dbStatsError: document.getElementById('db-stats-error'),
     dbStatExercises: document.getElementById('db-stat-exercises'),
     dbStatTopics: document.getElementById('db-stat-topics'),
     dbStatDbSize: document.getElementById('db-stat-db-size'),
     dbStatAudioCache: document.getElementById('db-stat-audio-cache'),
+    dbStatAudioFiles: document.getElementById('db-stat-audio-files'),
     dbStatsPerTopic: document.getElementById('db-stats-per-topic'),
-
-    // CLI access (admin only)
-    cliAccessSection: document.getElementById('cli-access-section'),
     cliTokenLabel: document.getElementById('cli-token-label'),
     cliTokenGenerateBtn: document.getElementById('cli-token-generate-btn'),
     cliTokenResult: document.getElementById('cli-token-result'),
