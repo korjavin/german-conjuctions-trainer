@@ -126,7 +126,7 @@ export function renderHistory(now = Date.now()) {
     const counts = filterCounts(rows);
     document.querySelectorAll('#history-filters [data-filter]').forEach((b) => {
         b.setAttribute('aria-pressed', String(b.dataset.filter === state.historyFilter));
-        b.querySelector('.gct-pill__count').textContent = counts[b.dataset.filter];
+        b.querySelector('.gct-pill__count').textContent = String(counts[b.dataset.filter]);
     });
     document.querySelectorAll('#history-sort [data-sort]').forEach((b) => {
         const on = b.dataset.sort === state.historySort.key;
