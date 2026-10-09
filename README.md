@@ -103,8 +103,23 @@ docker run -p 8080:8080 \
   -e OPENAI_API_KEY=your_openai_api_key_here \
   -e OPENAI_URL=https://api.openai.com/v1 \
   -e MODEL_NAME=gpt-3.5-turbo-1106 \
-  ghcr.io/YOUR_USERNAME/german-conjuctions-trainer:latest
+  ghcr.io/korjavin/german-conjuctions-trainer:2
 ```
+
+### Updates and versions
+
+Every release is listed on the [Releases page](https://github.com/korjavin/german-conjuctions-trainer/releases) with human-readable notes (same text as [CHANGELOG.md](CHANGELOG.md)). To get an email when a new version ships, click **Watch → Custom → Releases** on GitHub, or subscribe to the [releases Atom feed](https://github.com/korjavin/german-conjuctions-trainer/releases.atom).
+
+Image tags:
+
+| Tag | Moves when |
+|-----|-----------|
+| `:2.0.0` | never — exact version |
+| `:2.0` | patch releases (fixes only) |
+| `:2` | any release without breaking changes — **recommended** |
+| `:latest` | every release, including breaking ones |
+
+Before moving to a new major version, read the "Before you upgrade" part of its release notes and back up your SQLite database.
 
 ### Building locally:
 
