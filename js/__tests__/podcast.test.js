@@ -113,11 +113,18 @@ describe('podcast.js', () => {
         expect(dom.podcastError.textContent).toBe('No favorite phrases in this topic yet.');
     });
 
-    it('asks for a topic when none is selected', async () => {
+    it('builds and lists episodes for the All topics scope (empty topic id)', async () => {
         state.currentTopicId = '';
+        state.isLoggedIn = true;
+        api.generatePodcastAPI.mockResolvedValueOnce({ ...episode, id: 'all', topic_id: '' });
         await generatePodcast();
-        expect(api.generatePodcastAPI).not.toHaveBeenCalled();
-        expect(dom.podcastError.textContent).toBe('Please select a topic first.');
+        expect(api.generatePodcastAPI).toHaveBeenCalledWith('', false);
+
+        api.listPodcastEpisodesAPI.mockResolvedValueOnce({ episodes: [{ ...episode, id: 'stored', topic_id: 'topic1', created_at: '2026-10-01T10:00:00Z' }] });
+        openPodcastDialog();
+        await vi.waitFor(() => expect(dom.podcastEpisodeList.querySelectorAll('li')).toHaveLength(2));
+        expect(api.listPodcastEpisodesAPI).toHaveBeenCalledWith('');
+        expect(dom.podcastTopicName.textContent).toBe('All topics');
     });
 
     describe('episode list', () => {
