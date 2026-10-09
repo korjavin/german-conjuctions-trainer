@@ -1,7 +1,7 @@
 /* History screen (#/history, js/history.js). Ported from docs/design/claude-design/ui_kits/app/ScreensMore.jsx HistoryScreen. */
 .gct-history { display: flex; flex-direction: column; }
 .gct-history [hidden] { display: none !important; }
-.gct-history__head { order: -1; margin-bottom: 18px; } /* desktop: page head above the scope note */
+.gct-history__head { order: -1; margin-bottom: 24px; } /* desktop: page head above the scope note */
 .gct-history__head .gct-page-title { margin: 0; }
 .gct-history__sub { margin-top: 4px; font: 600 14px/1.4 var(--font-sans); color: var(--fg-secondary); }
 .gct-history__anon { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 20px; }
@@ -24,7 +24,7 @@
 .gct-history__de { font: 700 16px/1.4 var(--font-sans); text-wrap: pretty; }
 .gct-history__en { margin-top: 2px; font-size: 14px; color: var(--fg-muted); }
 .gct-history__actions { display: flex; align-items: flex-start; gap: 2px; }
-.gct-history__fav[aria-pressed="true"] svg { fill: currentColor; }
+.gct-history__fav[aria-pressed="true"] { color: var(--color-warning-dot); background: var(--color-warning-bg); border-color: var(--color-warning-border); }
 .gct-history__foot { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-top: 4px; font: 600 13px/1.3 var(--font-sans); color: var(--fg-muted); }
 .gct-history__where { min-width: 0; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gct-history__grow { flex: 1; }
@@ -37,10 +37,11 @@
 .gct-history__more { display: flex; margin: 16px auto 0; }
 
 @media (max-width: 759px) {
-    .gct-history__head { order: 0; } /* the scope bar stays first */
+    .gct-history__head { order: 0; margin-bottom: 18px; } /* the scope bar stays first */
     .gct-history__upcoming { padding: 16px; --histo-h: 44px; }
     .gct-history__pills { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 2px 16px; max-width: calc(100% + 32px); }
     .gct-history__pills .gct-pill { flex: none; }
     .gct-history__row { padding: 14px; }
+    .gct-history__actions .gct-icon-btn { width: 44px; height: 44px; }
     .gct-history__where { max-width: 200px; }
 }
