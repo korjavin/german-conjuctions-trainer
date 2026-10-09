@@ -7,6 +7,14 @@ To get notified, click **Watch → Custom → Releases** on GitHub.
 
 ### Fixed
 
+- **Docker named volumes are writable.** With plain Docker, volumes mounted on `/data` (database) and `/app/audio_cache` were owned by root and the app could not write to them, so `docker-compose.yml` failed on a fresh install. New volumes now belong to the app user. Volumes that already hold data are not touched.
+
+### Other
+
+- The project now ships a `LICENSE` file (MIT, as stated in the README).
+
+### Fixed
+
 - With `LLM_PROVIDER=anthropic`, exercise generation (live and background batch) returns the full set again instead of a single exercise. Background pre-generation also stops resubmitting a topic that keeps failing every 15 minutes; it waits longer after each failure (up to a day).
 
 ## [2.0.0] - 2026-10-09
