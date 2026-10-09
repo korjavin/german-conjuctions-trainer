@@ -628,7 +628,6 @@ export function renderTopicsList() {
         }
 
         const { matchingIds, expandedIds } = findMatchingTopics(state.topicsSearchQuery, nodesById);
-        state.topicsMatchingIds = matchingIds;
         state.searchExpandedTopicIds = expandedIds;
 
         // Respect manual collapse/expand overrides during search
@@ -638,7 +637,6 @@ export function renderTopicsList() {
         flattenedNodes = flattenTopicTree(roots, searchExpandedIds)
             .filter(({ topic }) => matchingIds.has(topic.id) || expandedIds.has(topic.id));
     } else {
-        state.topicsMatchingIds.clear();
         // Search ended: restore the pre-search collapse state, keeping manual changes made during search.
         if (state.preSearchCollapsedTopicIds) {
             const mergedCollapsedIds = new Set(state.preSearchCollapsedTopicIds);

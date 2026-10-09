@@ -172,7 +172,6 @@ export const state = {
     })(),
     collapsedTopicIds: _loadTopicCollapseState(),
     topicsSearchQuery: '',
-    topicsMatchingIds: new Set(),
     searchExpandedTopicIds: new Set(), // Track topics auto-expanded by search
     searchManualExpandedTopicIds: new Set(), // Track topics manually expanded during search
     searchManualCollapsedTopicIds: new Set(), // Track topics manually collapsed during search
@@ -228,39 +227,6 @@ export function toggleTopicCollapse(topicId) {
         state.searchManualExpandedTopicIds.add(topicId);
         state.searchManualCollapsedTopicIds.delete(topicId);
     }
-}
-
-export function collapseAllTopics() {
-    const parentIds = new Set(state.topics.map(t => t.parent_id).filter(Boolean));
-    for (const topic of state.topics) {
-        if (parentIds.has(topic.id)) {
-            state.collapsedTopicIds.add(topic.id);
-        }
-    }
-    _saveTopicCollapseState(state.collapsedTopicIds);
-
-    // Track bulk change during active search
-    if (state.preSearchCollapsedTopicIds) {
-        for (const topic of state.topics) {
-            if (parentIds.has(topic.id)) {
-                state.searchManualCollapsedTopicIds.add(topic.id);
-                state.searchManualExpandedTopicIds.delete(topic.id);
-            }
-        }
-    }
-}
-
-export function expandAllTopics() {
-    // Track bulk change during active search
-    if (state.preSearchCollapsedTopicIds) {
-        for (const id of state.collapsedTopicIds) {
-            state.searchManualExpandedTopicIds.add(id);
-            state.searchManualCollapsedTopicIds.delete(id);
-        }
-    }
-
-    state.collapsedTopicIds.clear();
-    _saveTopicCollapseState(state.collapsedTopicIds);
 }
 
 export function isTopicCollapsed(topicId) {

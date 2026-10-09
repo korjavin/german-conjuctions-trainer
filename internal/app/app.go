@@ -165,7 +165,6 @@ func (a *App) Shutdown() {
 // RegisterRoutes registers all HTTP routes on the default mux.
 func (a *App) RegisterRoutes() {
 	http.HandleFunc("/", a.handleIndex)
-	http.HandleFunc("/app.js", a.handleJS)
 	http.HandleFunc("/style.css", a.handleCSS)
 	http.HandleFunc("/privacy.html", a.handlePrivacy)
 	http.HandleFunc("/favicon.svg", a.handleFavicon)

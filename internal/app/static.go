@@ -1,12 +1,8 @@
 package app
 
 import (
-	"fmt"
 	"net/http"
 	"os"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func getFilePath(filename string) string {
@@ -41,28 +37,10 @@ func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	htmlContent := string(content)
-	htmlContent = strings.ReplaceAll(htmlContent, "app.js?v=20250821001", fmt.Sprintf("app.js?v=%s", timestamp))
-
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	w.Write([]byte(htmlContent))
-}
-
-func (a *App) handleJS(w http.ResponseWriter, r *http.Request) {
-	filePath := getFilePath("app.js")
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		http.Error(w, "File not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/javascript")
-	w.Header().Set("Cache-Control", "public, max-age=31536000")
 
 	w.Write(content)
 }

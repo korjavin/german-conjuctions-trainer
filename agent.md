@@ -15,7 +15,7 @@ A web-based application for learning German grammar. It features interactive wor
 ├── main.go              # Go backend server with API and SQLite integration
 ├── cmd/migrate/main.go  # Data migration tool from Airtable to SQLite
 ├── index.html           # Main application UI
-├── app.js               # Frontend JavaScript for interactivity and topics management
+├── js/, css/            # Frontend ES modules (entry js/main.js) and stylesheets
 ├── agent.md             # Context file for AI development
 ├── Dockerfile           # Container definition for production
 ├── docker-compose.yml   # Docker Compose for local development
@@ -30,7 +30,7 @@ A web-based application for learning German grammar. It features interactive wor
 - **Spaced Repetition System (SRS)**: For authenticated users, the backend calculates which exercises are due for review based on their viewing history.
 - **On-Demand Generation**: The `generateAndCacheExercises` function is triggered only when the cache is insufficient for a user's request. It uses a `metaPrompt` to refine the topic prompt before calling the OpenAI API.
 - **API Endpoint `/api/exercises`**: The primary endpoint for the frontend. It orchestrates fetching from cache, applying SRS logic, and triggering generation.
-- **Static File Serving**: Custom handlers serve `index.html` with dynamic cache-busting and `app.js` with long-term caching.
+- **Static File Serving**: Custom handlers serve `index.html` (no-cache) and the `js/` + `css/` shell; `sw.js` precaches the shell.
 - **Rate Limiting**: IP-based rate limiting (1 request every 3 seconds) to prevent abuse.
 - **CORS Configuration**: Configurable CORS support via the `CORS_ALLOWED_ORIGINS` environment variable. All API handlers use this configuration to set proper CORS headers, defaulting to wildcard for development.
 - **SQLite Database**: Manages all CRUD operations for topics, versions, exercises, and user data.
