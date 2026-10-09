@@ -1,443 +1,219 @@
+// History (#/history): practiced sentences in the topic scope — upcoming reviews, filter pills,
+// sort, rows with favorite/ignore. Ported from docs/design/claude-design/ui_kits/app/ScreensMore.jsx HistoryScreen.
 import { state } from './state.js';
-import { dom } from './dom.js';
-import { loadExerciseHistoryAPI, toggleHideExerciseAPI } from './api.js';
+import { loadExerciseHistoryAPI, toggleHideExerciseAPI, toggleFavoriteAPI } from './api.js';
 import { toast } from './ui.js';
+import { path, short } from './scope.js';
 
-let historyRequest = 0;
+const PAGE = 10;
+const H = 36e5;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const svg = (name, size = 16) => (typeof window.gctIconSvg === 'function' ? window.gctIconSvg(name, size) : '');
+const $ = (id) => document.getElementById(id);
 
-export async function showExerciseHistory() {
-    if (!state.isLoggedIn) {
-        toast({ tone: 'danger', text: "Please log in to view your exercise history." });
-        return;
-    }
+// Single-select filters; Ignored rows only ever show under Ignored.
+export const FILTERS = {
+    due: (r) => !r.is_hidden && r.ready_to_repeat,
+    training: (r) => !r.is_hidden && !r.ready_to_repeat,
+    fav: (r) => !r.is_hidden && r.is_favorite,
+    ignored: (r) => r.is_hidden,
+};
 
-    // Loading state (the #/history section is already visible)
-    dom.historyLoading.classList.remove('hidden');
-    dom.historyEmpty.classList.add('hidden');
-    dom.historyContent.classList.add('hidden');
-    dom.historyPagination.classList.add('hidden');
-    dom.historyControlsContainer.classList.add('hidden');
+// Each sort key: [default direction, comparator ascending]; a repeat click flips the direction.
+const errRate = (r) => (r.total_attempts ? 1 - r.successful_attempts / r.total_attempts : 0);
+const when = (r) => new Date(r.created_at || r.last_viewed).getTime();
+const reviewAt = (r) => (r.ready_to_repeat ? 0 : new Date(r.last_viewed).getTime() + r.next_review_hours * H);
+export const SORTS = {
+    timing: { dir: 1, cmp: (a, b) => reviewAt(a) - reviewAt(b) },
+    errors: { dir: -1, cmp: (a, b) => errRate(a) - errRate(b) },
+    date: { dir: -1, cmp: (a, b) => when(a) - when(b) },
+};
 
-    try {
-        // Set topic name display
-        if (state.currentTopicId) {
-            const topic = state.topics.find(t => t.id === state.currentTopicId);
-            dom.historyTopicName.textContent = topic ? topic.name : 'Selected Topic';
-        } else {
-            dom.historyTopicName.textContent = 'All Topics';
-        }
-
-        const request = ++historyRequest;
-        const data = await loadExerciseHistoryAPI(state.currentTopicId);
-        if (request !== historyRequest) return; // the scope changed meanwhile; the newer load wins
-        state.historyData = data.history || [];
-        state.historyPage = 1;
-
-        // Reset filters and sort when opening fresh history
-        state.historyFilterReady = false;
-        state.historyFilterFavorites = false;
-        state.historyFilterTrained = false;
-        state.historyFilterIgnored = false;
-        state.historySortDimension = 'sooner';
-        updateHistoryFilterUI();
-        updateHistorySortUI();
-
-        dom.historyLoading.classList.add('hidden');
-
-        if (state.historyData.length === 0) {
-            dom.historyEmpty.classList.remove('hidden');
-            dom.historySummary.classList.add('hidden');
-            dom.historyControlsContainer.classList.add('hidden');
-            dom.historyReviewChart.classList.add('hidden');
-        } else {
-            // Calculate summary statistics (exclude ignored exercises)
-            const activeData = state.historyData.filter(item => !item.is_hidden);
-            const totalAttempts = activeData.reduce((sum, item) => sum + item.total_attempts, 0);
-            const totalSuccessful = activeData.reduce((sum, item) => sum + item.successful_attempts, 0);
-            const successRate = totalAttempts > 0 ? Math.round((totalSuccessful / totalAttempts) * 100) : 0;
-
-            // Update summary display
-            dom.historyTotalCount.textContent = activeData.length;
-            dom.historySuccessRate.textContent = successRate + '%';
-            dom.historyTotalAttempts.textContent = totalAttempts;
-
-            // Update filter counts
-            const readyCount = state.historyData.filter(item => !item.is_hidden && item.ready_to_repeat).length;
-            const favoritesCount = state.historyData.filter(item => item.is_favorite).length;
-            const trainedCount = state.historyData.filter(item => !item.is_hidden && !item.ready_to_repeat).length;
-            const ignoredCount = state.historyData.filter(item => item.is_hidden).length;
-            dom.historyFilterReadyCount.textContent = String(readyCount);
-            dom.historyFilterFavoritesCount.textContent = String(favoritesCount);
-            dom.historyFilterTrainedCount.textContent = String(trainedCount);
-            dom.historyFilterIgnoredCount.textContent = String(ignoredCount);
-
-            dom.historySummary.classList.remove('hidden');
-            dom.historyControlsContainer.classList.remove('hidden');
-            dom.historyContent.classList.remove('hidden');
-            renderReviewChart();
-            renderHistoryPage();
-        }
-
-    } catch (error) {
-        console.error('Error fetching exercise history:', error);
-        dom.historyLoading.classList.add('hidden');
-        dom.historySummary.classList.add('hidden');
-        dom.historyControlsContainer.classList.add('hidden');
-        dom.historyReviewChart.classList.add('hidden');
-        if (error.status === 401) {
-            toast({ tone: 'danger', text: "Your session has expired. Please log in again." });
-            return;
-        }
-        toast({ tone: 'danger', text: 'Could not load exercise history. Please try again later.' });
-    }
+export function getFilteredHistoryData(rows = state.historyData, filter = state.historyFilter, sort = state.historySort) {
+    const s = SORTS[sort.key];
+    return rows.filter(FILTERS[filter]).sort((a, b) => s.cmp(a, b) * sort.dir);
 }
 
-export function getFilteredHistoryData() {
-    let filtered = [...state.historyData].filter(item => {
-        // When "Ignored" filter is active, show only hidden items
-        if (state.historyFilterIgnored) {
-            if (!item.is_hidden) return false;
-        } else {
-            // By default, hide ignored exercises
-            if (item.is_hidden) return false;
-        }
-        let matches = true;
-        if (state.historyFilterReady) {
-            matches = matches && item.ready_to_repeat;
-        }
-        if (state.historyFilterFavorites) {
-            matches = matches && item.is_favorite;
-        }
-        if (state.historyFilterTrained) {
-            matches = matches && !item.ready_to_repeat;
-        }
-        return matches;
-    });
+export const filterCounts = (rows) => Object.fromEntries(Object.keys(FILTERS).map((k) => [k, rows.filter(FILTERS[k]).length]));
 
-    // Sort the filtered data
-    filtered.sort((a, b) => {
-        switch (state.historySortDimension) {
-            case 'sooner':
-                return a.next_review_hours - b.next_review_hours;
-            case 'later':
-                return b.next_review_hours - a.next_review_hours;
-            case 'most_errors': {
-                const aErrRate = a.total_attempts > 0 ? 1 - (a.successful_attempts / a.total_attempts) : 0;
-                const bErrRate = b.total_attempts > 0 ? 1 - (b.successful_attempts / b.total_attempts) : 0;
-                return bErrRate - aErrRate;
-            }
-            case 'fewest_errors': {
-                const aErrRate = a.total_attempts > 0 ? 1 - (a.successful_attempts / a.total_attempts) : 0;
-                const bErrRate = b.total_attempts > 0 ? 1 - (b.successful_attempts / b.total_attempts) : 0;
-                return aErrRate - bErrRate;
-            }
-            case 'newest': {
-                const aDate = new Date(a.created_at || a.last_viewed).getTime();
-                const bDate = new Date(b.created_at || b.last_viewed).getTime();
-                return bDate - aDate;
-            }
-            case 'oldest': {
-                const aDate = new Date(a.created_at || a.last_viewed).getTime();
-                const bDate = new Date(b.created_at || b.last_viewed).getTime();
-                return aDate - bDate;
-            }
-            default:
-                return a.next_review_hours - b.next_review_hours;
-        }
-    });
-
-    return filtered;
-}
-
-// Hour-aware bucket boundaries and labels for the review chart
+// Hour-aware bucket boundaries and labels for the review chart (Today reuses them).
 export const REVIEW_BUCKETS = [
-    { label: 'Now',   maxHours: 1 },
-    { label: '<4h',   maxHours: 4 },
-    { label: '4-12h', maxHours: 12 },
-    { label: '12-24h', maxHours: 24 },
-    { label: '1-2d',  maxHours: 48 },
-    { label: '2-4d',  maxHours: 96 },
-    { label: '4-7d',  maxHours: 168 },
+    { label: 'Now', maxHours: 1 },
+    { label: '<4h', maxHours: 4 },
+    { label: '4–12h', maxHours: 12 },
+    { label: '12–24h', maxHours: 24 },
+    { label: '1–2d', maxHours: 48 },
+    { label: '2–4d', maxHours: 96 },
+    { label: '4–7d', maxHours: 168 },
     { label: 'Later', maxHours: Infinity },
 ];
 
 export function bucketReviewItems(items, now) {
-    const msPerHour = 1000 * 60 * 60;
     const buckets = new Array(REVIEW_BUCKETS.length).fill(0);
-
-    items.forEach(item => {
+    items.forEach((item) => {
         if (item.is_hidden) return;
-        let hoursFromNow;
-        if (item.ready_to_repeat) {
-            hoursFromNow = 0;
-        } else {
-            const lastViewed = new Date(item.last_viewed).getTime();
-            const reviewAt = lastViewed + item.next_review_hours * msPerHour;
-            hoursFromNow = Math.max(0, (reviewAt - now) / msPerHour);
-        }
-        const startIdx = item.ready_to_repeat ? 0 : 1;
-        for (let i = startIdx; i < REVIEW_BUCKETS.length; i++) {
+        const hoursFromNow = item.ready_to_repeat ? 0 : Math.max(0, (reviewAt(item) - now) / H);
+        for (let i = item.ready_to_repeat ? 0 : 1; i < REVIEW_BUCKETS.length; i++) {
             if (hoursFromNow < REVIEW_BUCKETS[i].maxHours) {
                 buckets[i]++;
                 break;
             }
         }
     });
-
     return buckets;
 }
 
-export function renderReviewChart() {
-    const now = Date.now();
-    const buckets = bucketReviewItems(state.historyData, now);
-    const lastIdx = REVIEW_BUCKETS.length - 1;
-
-    const maxCount = Math.max(...buckets, 1);
-
-    // Build HTML directly for reliable rendering
-    let html = '';
-    buckets.forEach((count, i) => {
-        const pct = Math.round((count / maxCount) * 100);
-        const height = count > 0 ? Math.max(pct, 6) : 0;
-        let barClass = 'rc-bar';
-        if (i === 0) barClass += ' rc-bar-today';
-        else if (i === lastIdx) barClass += ' rc-bar-later';
-        html += `<div class="rc-col">` +
-            `<span class="rc-count">${count || ''}</span>` +
-            `<div class="rc-track"><div class="${barClass}" style="height:${height}%"></div></div>` +
-            `<span class="rc-label">${REVIEW_BUCKETS[i].label}</span>` +
-            `</div>`;
-    });
-    dom.historyReviewChartBars.innerHTML = html;
-    dom.historyReviewChart.classList.remove('hidden');
+// Topic path of a row relative to the scope: the scope prefix is dropped; the leaf name alone when the row IS the scope.
+export function relativeTopic(item, scopeId = state.scopeId) {
+    const p = path(item.topic_id);
+    if (!p.length) return item.topic_name || '';
+    const k = scopeId ? p.findIndex((n) => n.id === scopeId) : -1;
+    const tail = p.slice(k + 1);
+    return (tail.length ? tail : p.slice(-1)).map((n) => short(n.name)).join(' › ');
 }
 
-export function renderHistoryPage() {
-    const filteredData = getFilteredHistoryData();
-    const start = (state.historyPage - 1) * state.historyItemsPerPage;
-    const end = start + state.historyItemsPerPage;
-    const pageData = filteredData.slice(start, end);
-    const totalPages = Math.ceil(filteredData.length / state.historyItemsPerPage);
-
-    // Render items
-    dom.historyContent.innerHTML = '';
-
-    if (filteredData.length === 0) {
-        if (state.historyData.length > 0) {
-            dom.historyContent.innerHTML = '<div class="text-center py-4 text-gray-500">No exercises match the selected filters.</div>';
-        }
-        dom.historyPagination.classList.add('hidden');
-        return;
-    }
-
-    pageData.forEach(item => {
-        const itemEl = createHistoryItem(item);
-        dom.historyContent.appendChild(itemEl);
-    });
-
-    // Update pagination
-    if (totalPages > 1) {
-        dom.historyPagination.classList.remove('hidden');
-        dom.historyPageInfo.textContent = `Page ${state.historyPage} of ${totalPages}`;
-        dom.historyPrevBtn.disabled = state.historyPage === 1;
-        dom.historyNextBtn.disabled = state.historyPage === totalPages;
-    } else {
-        dom.historyPagination.classList.add('hidden');
-    }
+function ago(iso, now) {
+    const h = Math.floor((now - new Date(iso).getTime()) / H);
+    if (h < 1) return 'Just now';
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return d === 1 ? 'Yesterday' : `${d} days ago`;
 }
 
-function createHistoryItem(item) {
-    const div = document.createElement('div');
-    div.className = 'border rounded-lg p-4 bg-white hover:shadow-md transition-shadow';
+export function statusBadge(item, now = Date.now()) {
+    const badge = (tone, text) => `<span class="gct-badge gct-badge--${tone} gct-badge--quiet"><span class="gct-badge__dot"></span>${text}</span>`;
+    if (item.is_hidden) return badge('neutral', 'Ignored');
+    const h = Math.ceil((reviewAt(item) - now) / H);
+    if (item.ready_to_repeat) return badge('info', 'Due now');
+    if (h <= 0) return badge('neutral', 'Soon');
+    return badge('neutral', h >= 24 ? `in ${Math.ceil(h / 24)} d` : `in ${h} h`);
+}
 
-    // Calculate time info
-    const lastViewed = new Date(item.last_viewed);
-    const hoursAgo = Math.floor((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60));
-    let timeText;
-    if (hoursAgo < 1) timeText = 'Just now';
-    else if (hoursAgo < 24) timeText = `${hoursAgo}h ago`;
-    else {
-        const daysAgo = Math.floor(hoursAgo / 24);
-        timeText = daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`;
-    }
+export function rowHtml(item, i, now = Date.now()) {
+    const pct = item.total_attempts ? Math.round((item.successful_attempts / item.total_attempts) * 100) : 0;
+    const tone = pct >= 75 ? 'good' : pct >= 40 ? 'mid' : 'bad';
+    return `<div class="gct-history__row" data-i="${i}">`
+        + `<div class="gct-history__text"><div class="gct-history__de">${esc(item.german_sentence)}</div><div class="gct-history__en">${esc(item.english_hint)}</div></div>`
+        + '<div class="gct-history__actions">'
+        + `<button type="button" class="gct-icon-btn gct-history__fav" data-act="fav" aria-pressed="${Boolean(item.is_favorite)}" aria-label="Favorite" title="Favorite">${svg('star', 18)}</button>`
+        + `<button type="button" class="gct-icon-btn" data-act="ignore" aria-label="${item.is_hidden ? 'Stop ignoring' : 'Ignore'}" title="${item.is_hidden ? 'Stop ignoring' : 'Ignore'}">${svg('eye-off', 18)}</button>`
+        + '</div><div class="gct-history__foot">'
+        + statusBadge(item, now)
+        + `<span class="gct-history__where">${esc(relativeTopic(item))} · ${ago(item.last_viewed, now)}</span><span class="gct-history__grow"></span>`
+        + `<span class="gct-history__nums" title="Correct · mistakes · hints"><span>✓ ${item.successful_attempts}</span><span>✗ ${item.failed_attempts}</span><span class="gct-history__hint">${svg('hint', 13)}${item.hints_used}</span></span>`
+        + `<span class="gct-history__pct is-${tone}">${pct}%</span>`
+        + '</div></div>';
+}
 
-    const template = document.getElementById('history-item-template');
-    if (!template) {
-        console.error("Missing template: history-item-template");
-        return document.createElement('div');
-    }
-    const fragment = template.content.cloneNode(true);
-    const container = fragment.querySelector('.history-item');
+export function histogramHtml(buckets) {
+    const max = Math.max(1, ...buckets);
+    return buckets.map((v, i) => `<div class="gct-today__col${i === 0 ? ' is-now' : ''}"><span>${v}</span>`
+        + `<span class="gct-today__hbar" style="height:max(3px, calc(var(--histo-h, 56px) * ${(v / max).toFixed(3)}))"></span><span>${REVIEW_BUCKETS[i].label}</span></div>`).join('');
+}
 
-    // Success rate calculation
-    const successRate = item.total_attempts > 0
-        ? Math.round((item.successful_attempts / item.total_attempts) * 100)
-        : 0;
+// Rows shown right now (filtered + sorted, first page*10); clicks index into it.
+let shown = [];
 
-    // Title and favorite icon
-    const titleEl = container.querySelector('.history-item-title');
-    if (item.is_favorite) {
-        const svgHTML = `<span class="text-yellow-500 mr-2" title="Favorite">
-            <svg class="w-5 h-5 inline" fill="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
-            </svg>
-        </span>`;
-        titleEl.innerHTML = svgHTML + escapeHtml(item.german_sentence);
-    } else {
-        titleEl.textContent = item.german_sentence;
-    }
+export function renderHistory(now = Date.now()) {
+    if (!$('history-content')) return;
+    const rows = state.historyData;
+    const active = rows.filter((r) => !r.is_hidden);
+    const attempts = active.reduce((s, r) => s + r.total_attempts, 0);
+    const ok = active.reduce((s, r) => s + r.successful_attempts, 0);
+    $('history-sub').textContent = `${active.length} practiced · ${attempts ? Math.round((ok / attempts) * 100) : 0}% right first time`;
+    $('history-review-chart-bars').innerHTML = histogramHtml(bucketReviewItems(rows, now));
 
-    container.querySelector('.history-item-hint').textContent = item.english_hint;
-
-    // Ignore toggle button
-    const ignoreBtn = container.querySelector('.history-item-ignore-btn');
-    if (item.is_hidden) {
-        container.classList.add('history-item-ignored');
-        ignoreBtn.classList.add('active');
-        ignoreBtn.title = 'Unignore this exercise';
-    }
-    ignoreBtn.addEventListener('click', async () => {
-        try {
-            const result = await toggleHideExerciseAPI(item.exercise_id);
-            item.is_hidden = result.is_hidden;
-            // Re-render to update counts and list
-            updateHistoryStats();
-            renderHistoryPage();
-        } catch (error) {
-            console.error('Error toggling ignore:', error);
-        }
+    const counts = filterCounts(rows);
+    document.querySelectorAll('#history-filters [data-filter]').forEach((b) => {
+        b.setAttribute('aria-pressed', String(b.dataset.filter === state.historyFilter));
+        b.querySelector('.gct-pill__count').textContent = String(counts[b.dataset.filter]);
+    });
+    document.querySelectorAll('#history-sort [data-sort]').forEach((b) => {
+        const on = b.dataset.sort === state.historySort.key;
+        b.setAttribute('aria-pressed', String(on));
+        b.querySelector('.gct-history__dir').textContent = on ? (state.historySort.dir > 0 ? '↑' : '↓') : '';
     });
 
-    // Status Badge
-    const statusContainer = container.querySelector('.history-item-status-container');
-    if (item.is_hidden) {
-        statusContainer.innerHTML = '<span class="badge-ignored">Ignored</span>';
-    } else if (item.ready_to_repeat) {
-        statusContainer.innerHTML = '<span class="badge-success">Ready to Practice</span>';
-    } else {
-        const hoursUntilReady = Math.ceil(item.next_review_hours - ((Date.now() - lastViewed.getTime()) / (1000 * 60 * 60)));
-        if (hoursUntilReady > 0) {
-            const label = hoursUntilReady >= 24
-                ? `${Math.ceil(hoursUntilReady / 24)}d`
-                : `${hoursUntilReady}h`;
-            statusContainer.innerHTML = `<span class="badge-info">Ready in ${label}</span>`;
-        }
-    }
-
-    container.querySelector('.history-item-topic').textContent = item.topic_name;
-    container.querySelector('.history-item-date').textContent = timeText;
-
-    container.querySelector('.history-item-success').textContent = `✓ ${item.successful_attempts}`;
-    container.querySelector('.history-item-failed').textContent = `✗ ${item.failed_attempts}`;
-    container.querySelector('.history-item-hints').textContent = `💡 ${item.hints_used}`;
-    container.querySelector('.history-item-total').textContent = `Σ ${item.total_attempts}`;
-
-    const rateEl = container.querySelector('.history-item-rate');
-    rateEl.textContent = `${successRate}%`;
-    if (successRate >= 75) rateEl.style.color = 'var(--color-success)';
-    else if (successRate >= 50) rateEl.style.color = 'var(--color-warning)';
-    else rateEl.style.color = 'var(--color-danger)';
-
-    return container;
+    const all = getFilteredHistoryData();
+    shown = all.slice(0, state.historyPage * PAGE);
+    $('history-content').innerHTML = shown.length
+        ? shown.map((r, i) => rowHtml(r, i, now)).join('')
+        : '<div class="gct-history__empty">Nothing here yet.</div>';
+    $('history-more-btn').hidden = all.length <= shown.length;
 }
 
-export function updateHistoryStats() {
-    const activeData = state.historyData.filter(item => !item.is_hidden);
-    const totalAttempts = activeData.reduce((sum, item) => sum + item.total_attempts, 0);
-    const totalSuccessful = activeData.reduce((sum, item) => sum + item.successful_attempts, 0);
-    const successRate = totalAttempts > 0 ? Math.round((totalSuccessful / totalAttempts) * 100) : 0;
+let historyRequest = 0;
 
-    dom.historyTotalCount.textContent = activeData.length;
-    dom.historySuccessRate.textContent = successRate + '%';
-    dom.historyTotalAttempts.textContent = totalAttempts;
-
-    const readyCount = state.historyData.filter(item => !item.is_hidden && item.ready_to_repeat).length;
-    const favoritesCount = state.historyData.filter(item => item.is_favorite).length;
-    const trainedCount = state.historyData.filter(item => !item.is_hidden && !item.ready_to_repeat).length;
-    const ignoredCount = state.historyData.filter(item => item.is_hidden).length;
-    dom.historyFilterReadyCount.textContent = String(readyCount);
-    dom.historyFilterFavoritesCount.textContent = String(favoritesCount);
-    dom.historyFilterTrainedCount.textContent = String(trainedCount);
-    dom.historyFilterIgnoredCount.textContent = String(ignoredCount);
-
-    renderReviewChart();
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-export function updateHistoryFilterUI() {
-    // Update Ready to Practice filter UI
-    if (state.historyFilterReady) {
-        dom.historyFilterReady.classList.add('active-green');
-    } else {
-        dom.historyFilterReady.classList.remove('active-green');
-    }
-
-    // Update Favorites filter UI
-    const favoritesSvg = dom.historyFilterFavorites.querySelector('svg');
-    if (state.historyFilterFavorites) {
-        dom.historyFilterFavorites.classList.add('active-yellow');
-        favoritesSvg.setAttribute('fill', 'currentColor');
-    } else {
-        dom.historyFilterFavorites.classList.remove('active-yellow');
-        favoritesSvg.setAttribute('fill', 'none');
-    }
-
-    // Update Trained filter UI
-    if (state.historyFilterTrained) {
-        dom.historyFilterTrained.classList.add('active-yellow');
-    } else {
-        dom.historyFilterTrained.classList.remove('active-yellow');
-    }
-
-    // Update Ignored filter UI
-    if (state.historyFilterIgnored) {
-        dom.historyFilterIgnored.classList.add('active-gray');
-    } else {
-        dom.historyFilterIgnored.classList.remove('active-gray');
+export async function showExerciseHistory() {
+    if (!state.isLoggedIn) return; // the section shows the login prompt
+    const request = ++historyRequest;
+    $('history-loading').hidden = false;
+    $('history-body').hidden = true;
+    try {
+        const data = await loadExerciseHistoryAPI(state.scopeId || '');
+        if (request !== historyRequest) return; // the scope changed meanwhile; the newer load wins
+        state.historyData = data.history || [];
+        state.historyPage = 1;
+        $('history-loading').hidden = true;
+        $('history-body').hidden = false;
+        renderHistory();
+    } catch (error) {
+        if (request !== historyRequest) return;
+        console.error('Error fetching exercise history:', error);
+        $('history-loading').hidden = true;
+        toast({ tone: 'danger', text: error.status === 401 ? 'Your session has expired. Please log in again.' : 'Could not load exercise history. Please try again later.' });
     }
 }
 
-export function updateHistorySortUI() {
-    // Reset all sort buttons
-    dom.historySortTiming.classList.remove('active');
-    dom.historySortErrors.classList.remove('active');
-    dom.historySortDate.classList.remove('active');
-
-    // Reset directions to default
-    dom.historySortTiming.querySelector('.sort-dir').textContent = '↑';
-    dom.historySortErrors.querySelector('.sort-dir').textContent = '↓';
-    dom.historySortDate.querySelector('.sort-dir').textContent = '↓';
-
-    // Highlight active sort and update direction
-    switch (state.historySortDimension) {
-        case 'sooner':
-            dom.historySortTiming.classList.add('active');
-            dom.historySortTiming.querySelector('.sort-dir').textContent = '↑';
-            break;
-        case 'later':
-            dom.historySortTiming.classList.add('active');
-            dom.historySortTiming.querySelector('.sort-dir').textContent = '↓';
-            break;
-        case 'most_errors':
-            dom.historySortErrors.classList.add('active');
-            dom.historySortErrors.querySelector('.sort-dir').textContent = '↓';
-            break;
-        case 'fewest_errors':
-            dom.historySortErrors.classList.add('active');
-            dom.historySortErrors.querySelector('.sort-dir').textContent = '↑';
-            break;
-        case 'newest':
-            dom.historySortDate.classList.add('active');
-            dom.historySortDate.querySelector('.sort-dir').textContent = '↓';
-            break;
-        case 'oldest':
-            dom.historySortDate.classList.add('active');
-            dom.historySortDate.querySelector('.sort-dir').textContent = '↑';
-            break;
+async function toggleIgnore(item, undoable = true) {
+    try {
+        item.is_hidden = (await toggleHideExerciseAPI(item.exercise_id)).is_hidden;
+    } catch (error) {
+        console.error('Error toggling ignore:', error);
+        return toast({ tone: 'danger', text: 'Could not update this sentence. Please try again.' });
     }
+    renderHistory();
+    if (undoable) {
+        toast({
+            text: item.is_hidden ? 'Hidden from future sessions' : 'Back in your reviews',
+            action: { label: 'Undo', run: () => toggleIgnore(item, false) },
+        });
+    }
+}
+
+async function toggleFavorite(item) {
+    try {
+        item.is_favorite = (await toggleFavoriteAPI(item.exercise_id)).is_favorite;
+        renderHistory();
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+        toast({ tone: 'danger', text: 'Could not update this sentence. Please try again.' });
+    }
+}
+
+export function initHistory() {
+    window.addEventListener('routechange', ({ detail: { route } }) => {
+        if (route === 'history') showExerciseHistory(); // also re-runs on scope change (scope.js re-renders the route)
+    });
+    window.addEventListener('topicschange', () => { if (state.historyData.length) renderHistory(); });
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#screen-history')) return;
+        const filter = e.target.closest('[data-filter]');
+        const sort = e.target.closest('[data-sort]');
+        const act = e.target.closest('[data-act]');
+        if (filter) {
+            state.historyFilter = filter.dataset.filter;
+            state.historyPage = 1;
+        } else if (sort) {
+            const key = sort.dataset.sort;
+            state.historySort = key === state.historySort.key ? { key, dir: -state.historySort.dir } : { key, dir: SORTS[key].dir };
+            state.historyPage = 1;
+        } else if (e.target.closest('#history-more-btn')) {
+            state.historyPage++;
+        } else if (act) {
+            const item = shown[act.closest('[data-i]').dataset.i];
+            return act.dataset.act === 'fav' ? toggleFavorite(item) : toggleIgnore(item);
+        } else return;
+        renderHistory();
+    });
 }

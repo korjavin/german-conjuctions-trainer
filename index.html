@@ -18,6 +18,7 @@
     <link href="/css/shell.css" rel="stylesheet">
     <link href="/css/me.css" rel="stylesheet">
     <link href="/css/today.css" rel="stylesheet">
+    <link href="/css/history.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 </head>
 <body class="app-body">
@@ -229,91 +230,38 @@
             </div>
         </section>
 
-        <section data-screen="history" hidden>
-            <p class="gct-login-prompt" data-auth="anon">Log in to see your practice history. <a href="/auth/google/login">Log in with Google</a></p>
+        <section data-screen="history" id="screen-history" class="gct-history" hidden>
+            <div class="gct-history__head">
+                <h1 class="gct-page-title">History</h1>
+                <div id="history-sub" class="gct-history__sub" data-auth="user"></div>
+            </div>
+            <div class="gct-card gct-history__anon" data-auth="anon">
+                <p>Log in to see your history</p>
+                <a href="/auth/google/login" class="gct-btn gct-btn--primary">Log in with Google</a>
+            </div>
             <div data-auth="user">
-            <div class="flex justify-between items-start mb-6">
-                <div>
-                    <h2 class="modal-title">Practice History</h2>
-                    <p id="history-topic-name" class="modal-subtitle">All Topics</p>
-                </div>
-
-                <div class="flex flex-col items-end gap-2">
-                    <div id="history-summary" class="history-compact-stats hidden text-sm text-gray-500">
-                        <span title="Total unique exercises practiced">Total Practiced: <strong id="history-total-count">0</strong></span> &bull;
-                        <span title="Total practice attempts">Attempts: <strong id="history-total-attempts">0</strong></span> &bull;
-                        <span title="Overall success rate">Success Rate: <strong id="history-success-rate">0%</strong></span>
+                <div id="history-loading" class="gct-history__empty" hidden>Loading history…</div>
+                <div id="history-body" hidden>
+                    <div class="gct-card gct-history__upcoming">
+                        <div class="gct-history__caption">Upcoming reviews</div>
+                        <div id="history-review-chart-bars" class="gct-today__histo"></div>
                     </div>
-                </div>
-            </div>
-
-            <div id="history-loading" class="text-center py-8 hidden">
-                <div class="loading-spinner mx-auto mb-4"></div>
-                <p class="text-gray-600">Loading history...</p>
-            </div>
-
-            <div id="history-empty" class="text-center py-8 hidden">
-                <p class="text-gray-600">No practice history yet. Complete some exercises to see your progress!</p>
-            </div>
-
-            <div id="history-review-chart" class="review-chart hidden mb-4">
-                <div class="review-chart-header text-sm font-medium text-gray-600 mb-2">Upcoming Reviews</div>
-                <div id="history-review-chart-bars" class="review-chart-bars"></div>
-            </div>
-
-            <div id="history-controls-container" class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 hidden">
-                <div id="history-filters" class="flex flex-wrap gap-2">
-                    <button id="history-filter-ready" class="filter-btn flex items-center gap-1">
-                        <span class="w-2 h-2 rounded-full bg-green-500"></span>
-                        Ready to Practice
-                        <span id="history-filter-ready-count" class="filter-count-badge"></span>
-                    </button>
-                    <button id="history-filter-trained" class="filter-btn flex items-center gap-1">
-                        <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
-                        Training
-                        <span id="history-filter-trained-count" class="filter-count-badge"></span>
-                    </button>
-                    <button id="history-filter-favorites" class="filter-btn flex items-center gap-1">
-                        <svg class="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
-                        </svg>
-                        Favorites
-                        <span id="history-filter-favorites-count" class="filter-count-badge"></span>
-                    </button>
-                    <button id="history-filter-ignored" class="filter-btn flex items-center gap-1">
-                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
-                        </svg>
-                        Ignored
-                        <span id="history-filter-ignored-count" class="filter-count-badge"></span>
-                    </button>
-                </div>
-
-                <div id="history-sort-controls" class="flex items-center gap-2">
-                    <span class="text-sm text-gray-500">Sort by:</span>
-                    <div class="flex flex-wrap gap-1">
-                        <button id="history-sort-timing" class="sort-btn active" data-sort="sooner">
-                            Timing <span class="sort-dir">↑</span>
-                        </button>
-                        <button id="history-sort-errors" class="sort-btn" data-sort="most_errors">
-                            Errors <span class="sort-dir">↓</span>
-                        </button>
-                        <button id="history-sort-date" class="sort-btn" data-sort="newest">
-                            Date <span class="sort-dir">↓</span>
-                        </button>
+                    <div class="gct-history__controls">
+                        <div id="history-filters" class="gct-history__pills">
+                            <button type="button" class="gct-pill" data-filter="due" aria-pressed="true"><span>Due</span><span class="gct-pill__count"></span></button>
+                            <button type="button" class="gct-pill" data-filter="training" aria-pressed="false"><span>Training</span><span class="gct-pill__count"></span></button>
+                            <button type="button" class="gct-pill" data-filter="fav" aria-pressed="false"><i data-icon="star" data-size="14"></i><span>Favorites</span><span class="gct-pill__count"></span></button>
+                            <button type="button" class="gct-pill" data-filter="ignored" aria-pressed="false"><i data-icon="eye-off" data-size="14"></i><span>Ignored</span><span class="gct-pill__count"></span></button>
+                        </div>
+                        <div id="history-sort" class="gct-history__sort">Sort
+                            <button type="button" data-sort="timing" aria-pressed="true">Next review<span class="gct-history__dir"></span></button>
+                            <button type="button" data-sort="errors" aria-pressed="false">Errors<span class="gct-history__dir"></span></button>
+                            <button type="button" data-sort="date" aria-pressed="false">Date<span class="gct-history__dir"></span></button>
+                        </div>
                     </div>
+                    <div id="history-content" class="gct-card gct-history__list"></div>
+                    <button type="button" id="history-more-btn" class="gct-btn gct-btn--secondary gct-history__more" hidden>Show more</button>
                 </div>
-            </div>
-
-            <div id="history-content" class="history-content space-y-3">
-                <!-- History items will be dynamically inserted here -->
-            </div>
-
-            <div id="history-pagination" class="history-pagination flex justify-center items-center space-x-4 mt-6 hidden">
-                <button id="history-prev-btn" class="btn-pagination">Previous</button>
-                <span id="history-page-info" class="pagination-info">Page 1</span>
-                <button id="history-next-btn" class="btn-pagination">Next</button>
-            </div>
             </div>
         </section>
 
@@ -668,39 +616,6 @@ gct whoami</pre>
     </dialog>
 
     <!-- Templates for JS dynamic rendering -->
-    <template id="history-item-template">
-        <div class="history-item card">
-            <div class="flex justify-between items-start mb-2">
-                <div class="flex-1">
-                    <h3 class="history-item-title flex items-center"></h3>
-                    <p class="history-item-hint mt-1"></p>
-                </div>
-                <div class="flex items-start gap-2 ml-4">
-                    <div class="history-item-status-container"></div>
-                    <button class="history-item-ignore-btn" title="Ignore this exercise">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            <div class="history-item-footer flex items-center justify-between mt-3 pt-3">
-                <div class="flex space-x-4 history-item-meta">
-                    <span class="history-item-topic"></span>
-                    <span>•</span>
-                    <span class="history-item-date"></span>
-                </div>
-                <div class="flex space-x-4 history-item-stats">
-                    <span class="history-item-success" title="Successful attempts"></span>
-                    <span class="history-item-failed" title="Failed attempts"></span>
-                    <span class="history-item-hints" title="Hints used"></span>
-                    <span class="history-item-total" title="Total attempts"></span>
-                    <span class="history-item-rate" title="Success rate"></span>
-                </div>
-            </div>
-        </div>
-    </template>
-
     <template id="topic-item-template">
         <div class="topic-list-item flex justify-between items-center p-3">
             <div>

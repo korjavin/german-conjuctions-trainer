@@ -5,7 +5,7 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 import { tree, scopeNode, path, short, setScope, startPractice } from './scope.js';
 import { loadExerciseHistoryAPI, fetchUserActivityAPI, listPodcastEpisodesAPI } from './api.js';
-import { bucketReviewItems, REVIEW_BUCKETS } from './history.js';
+import { bucketReviewItems, histogramHtml } from './history.js';
 import { describeEpisode } from './podcast.js';
 
 const NEW_EPISODE_DAYS = 7; // ponytail: no "seen" flag for episodes, so "New" = made this week
@@ -96,11 +96,8 @@ export function weekHtml(days, node) {
 }
 
 export function upcomingHtml(history, now = Date.now()) {
-    const buckets = bucketReviewItems(history, now);
-    const max = Math.max(1, ...buckets);
     return '<div class="gct-today__row-head"><div class="gct-today__caption">Upcoming reviews</div><a href="#/history" class="gct-today__link">History</a></div>'
-        + '<div class="gct-today__histo">' + buckets.map((v, i) => `<div class="gct-today__col${i === 0 ? ' is-now' : ''}"><span>${v}</span>`
-            + `<span class="gct-today__hbar" style="height:${Math.max(3, Math.round((v / max) * 56))}px"></span><span>${REVIEW_BUCKETS[i].label}</span></div>`).join('') + '</div>';
+        + `<div class="gct-today__histo">${histogramHtml(bucketReviewItems(history, now))}</div>`;
 }
 
 function show(id, html) {
