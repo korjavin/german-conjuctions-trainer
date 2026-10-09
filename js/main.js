@@ -1,7 +1,7 @@
 import { state, toggleTopicCollapse, isTopicCollapsed, collapseAllTopics, expandAllTopics, addRecentlyUsedTopic } from './state.js';
 import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
-import { initVoice } from './voice.js';
+import { initVoice, handleVoiceToggle } from './voice.js';
 import { initPodcast, loadPodcastFeed, openPodcastDialog } from './podcast.js';
 import { initRouter, markAuthReady, route, currentRoute } from './router.js';
 import {
@@ -92,6 +92,8 @@ initSession({ renderExercise });
 // Screens (js/router.js): refresh each one's data when it is shown.
 window.addEventListener('routechange', ({ detail: { route: name } }) => {
     if (dom.accountMenu?.matches(':popover-open')) dom.accountMenu.hidePopover();
+    // Spoken words would otherwise keep driving the hidden, abandoned exercise.
+    if (name !== 'practice' && state.voiceActive) handleVoiceToggle();
     if (name === 'history' && state.isLoggedIn) showExerciseHistory();
     else if (name === 'listen') openPodcastDialog();
     else if (name === 'me') {

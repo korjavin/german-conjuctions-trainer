@@ -50,6 +50,13 @@
             </div>
             <span id="exercise-counter" class="gct-practicebar__count"></span>
             <span id="progress-percentage" hidden>0%</span>
+            <!-- TEMPORARY (until P1 restyles practice): sound + voice toggles live with the session -->
+            <button id="audio-toggle-btn" class="btn-primary audio-toggle-btn whitespace-nowrap" title="Sound: on" aria-label="Disable sound">
+                <span id="audio-toggle-icon" aria-hidden="true">🔊</span>
+            </button>
+            <button id="voice-toggle-btn" class="btn-primary audio-toggle-btn whitespace-nowrap" title="Voice input: off" aria-pressed="false" aria-label="Toggle voice input">
+                <span aria-hidden="true">🎤</span>
+            </button>
             <span class="gct-offline" data-offline-chip><i data-icon="offline" data-size="14"></i>Offline</span>
         </div>
     </div>
@@ -67,12 +74,6 @@
                 </div>
                 <button id="generate-btn" class="btn-primary generate-btn whitespace-nowrap">
                     Start Practice
-                </button>
-                <button id="audio-toggle-btn" class="btn-primary audio-toggle-btn whitespace-nowrap" title="Sound: on" aria-label="Disable sound">
-                    <span id="audio-toggle-icon" aria-hidden="true">🔊</span>
-                </button>
-                <button id="voice-toggle-btn" class="btn-primary audio-toggle-btn whitespace-nowrap" title="Voice input: off" aria-pressed="false" aria-label="Toggle voice input">
-                    <span aria-hidden="true">🎤</span>
                 </button>
             </div>
         </section>
@@ -333,6 +334,7 @@
                 <h3 class="section-title mb-2">Account</h3>
                 <div class="flex flex-wrap gap-3">
                     <a href="/auth/google/login" class="btn-secondary btn-sm" data-auth="anon">Login with Google</a>
+                    <a href="#/manage" class="btn-secondary btn-sm" data-auth="admin">Manage</a>
                     <a href="/privacy.html" class="btn-secondary btn-sm">Privacy</a>
                     <button id="logout-btn" class="btn-secondary btn-sm" data-auth="user">Log out</button>
                 </div>
