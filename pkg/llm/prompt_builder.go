@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+// variationProfileHeader starts the per-request part of a generation prompt;
+// everything before it depends only on the topic (see splitGenerationPrompt).
+const variationProfileHeader = "System-generated variation profile (follow all constraints and do not mention this profile in the output):\n"
+
 // BuildGenerationPrompt composes a stable prompt with dynamic variation constraints.
 func BuildGenerationPrompt(basePrompt string, profile VariationProfile, coverageSections ...string) string {
 	trimmedBase := strings.TrimSpace(basePrompt)
@@ -24,7 +28,7 @@ func BuildGenerationPrompt(basePrompt string, profile VariationProfile, coverage
 
 	var b strings.Builder
 	b.WriteString(trimmedBase)
-	b.WriteString("\n\nSystem-generated variation profile (follow all constraints and do not mention this profile in the output):\n")
+	b.WriteString("\n\n" + variationProfileHeader)
 	b.WriteString(fmt.Sprintf("- Create exactly %d unique exercises.\n", profile.TargetCount))
 
 	if len(profile.ConjunctionSet) > 0 {
