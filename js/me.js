@@ -36,10 +36,13 @@ export function initMe() {
             renderMe();
         });
     }
+    let previous = null;
     window.addEventListener('routechange', ({ detail: { route } }) => {
         if (route === 'me') renderMe();
-        // "Start with voice input": practice opens with the mic on.
-        if (route === 'practice' && state.voiceAutostart && !state.voiceActive && voiceSupported()) handleVoiceToggle();
+        // "Start with voice input": the mic turns on when entering practice; a same-screen
+        // re-render (e.g. markAuthReady) must not override the user's own toggle.
+        if (route === 'practice' && previous !== 'practice' && state.voiceAutostart && !state.voiceActive && voiceSupported()) handleVoiceToggle();
+        previous = route;
     });
     renderMe();
 }

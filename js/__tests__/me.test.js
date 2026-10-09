@@ -40,6 +40,9 @@ describe('me.js', () => {
         go('practice');
         expect(handleVoiceToggle).not.toHaveBeenCalled();
         state.voiceAutostart = true;
+        go('practice'); // re-render of the same screen: no autostart
+        expect(handleVoiceToggle).not.toHaveBeenCalled();
+        go('today');
         go('practice');
         expect(handleVoiceToggle).toHaveBeenCalledTimes(1);
         delete window.SpeechRecognition;
