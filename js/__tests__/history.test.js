@@ -45,7 +45,6 @@ describe('history.js', () => {
         state.historyFilterIgnored = false;
 
         // Reset DOM elements mock classes
-        dom.historyModal.showModal = vi.fn();
         dom.historyLoading.classList.remove = vi.fn();
         dom.historyLoading.classList.add = vi.fn();
         dom.historyEmpty.classList.remove = vi.fn();
@@ -110,7 +109,6 @@ describe('history.js', () => {
 
             await showExerciseHistory();
 
-            expect(dom.historyModal.showModal).toHaveBeenCalled();
             expect(api.loadExerciseHistoryAPI).toHaveBeenCalledWith('topic1');
 
             // Stats checks

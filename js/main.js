@@ -2,7 +2,8 @@ import { state, toggleTopicCollapse, isTopicCollapsed, collapseAllTopics, expand
 import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
 import { initVoice } from './voice.js';
-import { initPodcast, loadPodcastFeed } from './podcast.js';
+import { initPodcast, loadPodcastFeed, openPodcastDialog } from './podcast.js';
+import { initRouter, markAuthReady, route, currentRoute } from './router.js';
 import {
     initExercise,
     renderExercise,
@@ -88,15 +89,26 @@ initSession({ renderExercise });
 
 // --- Event Listeners ---
 
-// Settings modal
-dom.settingsBtn.addEventListener('click', () => {
-    if (state.isAdmin) loadTopics(); // Refresh topics when opening settings
-    renderOfflineCacheStatus();
-    loadPodcastFeed();
-    dom.settingsModal.showModal();
-    loadDatabaseStats();
-    toggleCLIAccessSection();
+// Screens (js/router.js): refresh each one's data when it is shown.
+window.addEventListener('routechange', ({ detail: { route: name } }) => {
+    if (dom.accountMenu?.matches(':popover-open')) dom.accountMenu.hidePopover();
+    if (name === 'history' && state.isLoggedIn) showExerciseHistory();
+    else if (name === 'listen') openPodcastDialog();
+    else if (name === 'me') {
+        renderOfflineCacheStatus();
+        loadPodcastFeed();
+    } else if (name === 'manage') {
+        if (state.isAdmin) loadTopics(); // Refresh topics when opening Manage
+        loadDatabaseStats();
+        toggleCLIAccessSection();
+    }
 });
+
+// Offline chip (top bar + practice bar) follows connectivity.
+const syncOfflineChip = () => document.body.classList.toggle('is-offline', navigator.onLine === false);
+window.addEventListener('online', syncOfflineChip);
+window.addEventListener('offline', syncOfflineChip);
+syncOfflineChip();
 
 // --- CLI Access (admin only) ---
 // Shows or hides the "CLI Access" panel based on admin status, and clears
@@ -156,13 +168,6 @@ if (dom.cliTokenCopyBtn) {
         }
     });
 }
-
-dom.settingsCloseBtn.addEventListener('click', () => {
-    dom.settingsModal.close();
-    hideAddTopicForm();
-    hidePromptEditor();
-    dom.versionHistory.classList.add('hidden');
-});
 
 if (dom.topicSort) {
     dom.topicSort.value = state.topicSortOrder;
@@ -224,7 +229,10 @@ dom.closeVersionsBtn.addEventListener('click', () => {
 });
 
 // Exercise controls
-dom.generateBtn.addEventListener('click', fetchExercises);
+dom.generateBtn.addEventListener('click', () => {
+    if (state.currentTopicId) route('practice'); // without a topic fetchExercises only toasts
+    fetchExercises();
+});
 dom.audioToggleBtn.addEventListener('click', handleAudioToggle);
 initVoice();
 initPodcast();
@@ -246,7 +254,10 @@ dom.skipRemoveBtn.addEventListener('click', () => {
 dom.skipCancelBtn.addEventListener('click', () => dom.skipDialog.close());
 
 dom.nextExerciseBtn.addEventListener('click', handleNextExercise);
-document.addEventListener('keydown', handleKeyPress);
+// Word hotkeys / Enter only drive the practice screen, never typing in Today/Manage inputs.
+document.addEventListener('keydown', (e) => {
+    if (currentRoute() === 'practice') handleKeyPress(e);
+});
 
 // Observability
 dom.viewLastRefinedPromptBtn.addEventListener('click', showLastRefinedPrompt);
@@ -341,11 +352,7 @@ document.addEventListener('keydown', (e) => {
     if (state.isAdmin && (e.ctrlKey || e.metaKey) && e.key === 'f') {
         // Prevent default browser find dialog
         e.preventDefault();
-        // Open settings modal if not already open
-        if (!dom.settingsModal.open) {
-            dom.settingsModal.showModal();
-            loadDatabaseStats();
-        }
+        if (currentRoute() !== 'manage') route('manage');
         // Focus search input
         dom.topicsSearchInput.focus();
     }
@@ -367,13 +374,6 @@ if (dom.offlineCacheBtn) {
 
 // Retry queued session results as soon as connectivity is back.
 window.addEventListener('online', () => { flushOfflineQueue(); });
-
-// History
-dom.historyBtn.addEventListener('click', showExerciseHistory);
-
-dom.historyCloseBtn.addEventListener('click', () => {
-    dom.historyModal.close();
-});
 
 dom.historyFilterReady.addEventListener('click', () => {
     state.historyFilterReady = !state.historyFilterReady;
@@ -504,7 +504,8 @@ function renderDatabaseStats(stats) {
 // --- Initialization ---
 function init() {
     updateAudioToggleUI();
-    checkAuthStatus();
+    initRouter();
+    checkAuthStatus().then(markAuthReady); // re-render once auth is known (#/manage guard, history)
     loadTopics();
 
     // Service worker: caches the app shell + audio so sessions work offline.

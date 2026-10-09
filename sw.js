@@ -9,13 +9,14 @@
  * IMPORTANT: bump CACHE_VERSION whenever a shell file changes, otherwise
  * returning visitors keep the old cached copy until the cache is evicted.
  */
-const CACHE_VERSION = 'gct-shell-v18';
+const CACHE_VERSION = 'gct-shell-v19';
 
 const SHELL_ASSETS = [
     '/',
     '/style.css',
     '/css/colors_and_type.css',
     '/css/components.css',
+    '/css/shell.css',
     '/manifest.json',
     '/favicon.svg',
     '/favicon-32x32.svg',
@@ -30,6 +31,7 @@ const SHELL_ASSETS = [
     '/js/icons.js',
     '/js/offline.js',
     '/js/podcast.js',
+    '/js/router.js',
     '/js/session.js',
     '/js/topics.js',
     '/js/ui.js',
