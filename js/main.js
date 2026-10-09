@@ -4,6 +4,7 @@ import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './aud
 import { initVoice, handleVoiceToggle } from './voice.js';
 import { initPodcast, loadPodcastFeed, openPodcastDialog } from './podcast.js';
 import { initMe } from './me.js';
+import { initToday } from './today.js';
 import { initRouter, markAuthReady, route, currentRoute } from './router.js';
 import { initScope, startPractice, refreshProgress } from './scope.js';
 import {
@@ -82,6 +83,7 @@ initExercise({ onSessionComplete: showStatisticsPage });
 initSession({ renderExercise });
 // Before the routechange listener below: outside practice, screens read the scope's topic.
 initScope();
+initToday();
 
 // --- Event Listeners ---
 
