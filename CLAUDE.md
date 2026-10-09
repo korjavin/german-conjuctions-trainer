@@ -75,3 +75,7 @@ _Add a brief overview of your project architecture_
 ## Conventions & Patterns
 
 _Add your project-specific conventions here_
+
+## Releasing
+
+User-facing changes go under `## [Unreleased]` in `CHANGELOG.md`, written for self-hosters (what they get, what they must change), not as a PR list. To release: rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, add a fresh empty `[Unreleased]`, merge, then `git tag vX.Y.Z && git push origin vX.Y.Z`. `.github/workflows/release.yml` publishes the image tags and the GitHub Release from that section. Bump major for anything that needs action on upgrade (new required env var, irreversible migration, removed feature).
