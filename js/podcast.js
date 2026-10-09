@@ -111,6 +111,13 @@ function subtreeTopicIds(topicId) {
     return ids;
 }
 
+// Predicate: is a topic id inside topicId's subtree? '' (All topics) matches everything.
+function inScopeFn(topicId) {
+    if (!topicId) return () => true;
+    const ids = subtreeTopicIds(topicId);
+    return (id) => ids.has(id);
+}
+
 // Merges episode lists by id, newest first.
 export function mergeEpisodes(...lists) {
     const byId = new Map();
@@ -180,17 +187,16 @@ function selectEpisode(data, { play = false } = {}) {
 // Lists every episode of the current topic and its subtopics: the user's
 // stored ones (logged in) plus the ones built in this page session.
 export async function loadPodcastEpisodes() {
-    const topicId = state.currentTopicId;
+    const topicId = state.currentTopicId; // '' = All topics
     const request = ++listRequest;
-    const subtree = topicId ? subtreeTopicIds(topicId) : new Set();
-    const local = sessionEpisodes.filter((ep) => subtree.has(ep.topic_id));
-    listedEpisodes = local;
+    const inScope = inScopeFn(topicId);
+    listedEpisodes = sessionEpisodes.filter((ep) => inScope(ep.topic_id));
     renderEpisodeList();
-    if (!topicId || !state.isLoggedIn || navigator.onLine === false) return;
+    if (!state.isLoggedIn || navigator.onLine === false) return;
     try {
         const data = await listPodcastEpisodesAPI(topicId);
         if (request !== listRequest) return;
-        listedEpisodes = mergeEpisodes(data.episodes || [], sessionEpisodes.filter((ep) => subtree.has(ep.topic_id)));
+        listedEpisodes = mergeEpisodes(data.episodes || [], sessionEpisodes.filter((ep) => inScope(ep.topic_id)));
         renderEpisodeList();
     } catch (error) {
         console.error('Failed to load podcast episodes:', error);
@@ -198,11 +204,11 @@ export async function loadPodcastEpisodes() {
 }
 
 export function openPodcastDialog() {
-    dom.podcastTopicName.textContent = currentTopicLabel() || 'No topic selected';
+    dom.podcastTopicName.textContent = currentTopicLabel() || 'All topics';
     // An episode of another topic stays playable but is labelled as such.
     if (!current) {
         dom.podcastResult.classList.add('hidden');
-    } else if (state.currentTopicId && !subtreeTopicIds(state.currentTopicId).has(current.topic_id)) {
+    } else if (!inScopeFn(state.currentTopicId)(current.topic_id)) {
         dom.podcastMeta.textContent = `Previous episode: ${current.topic_name} · ${describeEpisode(current)}`;
     } else {
         dom.podcastMeta.textContent = describeEpisode(current);
@@ -216,10 +222,6 @@ export function openPodcastDialog() {
 
 export async function generatePodcast() {
     if (isGenerating) return;
-    if (!state.currentTopicId) {
-        setError('Please select a topic first.');
-        return;
-    }
     if (navigator.onLine === false) {
         setError('You are offline. Podcasts are built on the server — try again when connected.');
         return;
@@ -243,7 +245,7 @@ export async function generatePodcast() {
         // Older servers don't echo these back.
         const ep = { topic_id: topicId, created_at: new Date().toISOString(), ...data };
         sessionEpisodes = mergeEpisodes([ep], sessionEpisodes);
-        if (state.currentTopicId && subtreeTopicIds(state.currentTopicId).has(ep.topic_id)) {
+        if (inScopeFn(state.currentTopicId)(ep.topic_id)) {
             listedEpisodes = mergeEpisodes([ep], listedEpisodes);
         }
         selectEpisode(ep);

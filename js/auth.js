@@ -2,6 +2,7 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 import { checkAuthStatusAPI, checkIsAdminAPI, loadUserStatsAPI, loadExerciseStatsAPI } from './api.js';
 import { getArchivedTopicIds } from './topics.js';
+import { hasSavedScope, setScope } from './scope.js';
 
 export const AUTH_CACHE_KEY = 'authStatusV1';
 
@@ -59,14 +60,10 @@ export async function checkAuthStatus() {
 export async function loadUserStats() {
     try {
         const stats = await loadUserStatsAPI();
-        // An archived last topic is not offered for practice; keep the current pick.
-        if (stats.last_topic_id && !getArchivedTopicIds(state.topics).has(stats.last_topic_id)) {
-            state.currentTopicId = stats.last_topic_id;
-            localStorage.setItem('selectedTopicId', stats.last_topic_id);
-            const currentTopic = state.topics.find(t => t.id === state.currentTopicId);
-            if (currentTopic) {
-                dom.topicSearch.value = currentTopic.name;
-            }
+        // The server-side last topic seeds the scope only on a device that never picked one;
+        // an archived one is not offered (js/scope.js also drops it once topics load).
+        if (!hasSavedScope() && stats.last_topic_id && !getArchivedTopicIds(state.topics).has(stats.last_topic_id)) {
+            setScope(stats.last_topic_id);
         }
     } catch (error) {
         console.error('Error loading user stats:', error);

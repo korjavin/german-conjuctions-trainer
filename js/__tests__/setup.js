@@ -126,7 +126,6 @@ vi.mock('../dom.js', () => {
       prefAutoplay: createMockElement('button'),
       prefVoice: createMockElement('button'),
       prefVoiceRow: createMockElement('div'),
-      topicSearch: createMockElement('input'),
 
       // Additional elements can be added here as needed by tests
       constructedSentenceEl: createMockElement('div'),

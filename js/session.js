@@ -11,12 +11,8 @@ export function initSession({ renderExercise }) {
     _renderExercise = renderExercise;
 }
 
+// state.currentTopicId '' = All topics: the server serves cached due items, never generates.
 export async function fetchExercises() {
-    if (!state.currentTopicId) {
-        toast({ tone: 'danger', text: 'Select a topic first, then generate exercises.' });
-        return;
-    }
-
     dom.loadingSpinner.classList.remove('hidden');
     dom.exerciseContent.classList.add('hidden');
     dom.generateBtn.disabled = true;
@@ -312,5 +308,7 @@ export async function saveUserStats() {
     const delivered = await sendBatch(batch);
     if (!delivered) {
         enqueueBatch(batch);
+    } else {
+        window.dispatchEvent(new Event('sessionsaved')); // js/scope.js refreshes the due counts
     }
 }

@@ -5,6 +5,7 @@ import { initVoice, handleVoiceToggle } from './voice.js';
 import { initPodcast, loadPodcastFeed, openPodcastDialog } from './podcast.js';
 import { initMe } from './me.js';
 import { initRouter, markAuthReady, route, currentRoute } from './router.js';
+import { initScope, startPractice, refreshProgress } from './scope.js';
 import {
     initExercise,
     renderExercise,
@@ -18,7 +19,6 @@ import {
 } from './exercise.js';
 import {
     initSession,
-    fetchExercises,
     showStatisticsPage,
 } from './session.js';
 import {
@@ -30,10 +30,6 @@ import {
     hidePromptEditor,
     showVersionHistory,
     showLastRefinedPrompt,
-    renderTopicDropdown,
-    shouldSuppressDropdownClose,
-    selectTopic,
-    positionDropdown,
     saveTopic,
     savePrompt,
     validateTopicName,
@@ -50,10 +46,7 @@ import {
     getFileIcon,
     getTopicPath,
     debounce,
-    resetDropdownCollapseState,
     escapeHtml,
-    BLUR_TIMEOUT_MS,
-    FOCUSOUT_TIMEOUT_MS,
 } from './topics.js';
 import {
     checkAuthStatus,
@@ -87,6 +80,8 @@ const sampleExercises = {
 // Wire up cross-module callbacks
 initExercise({ onSessionComplete: showStatisticsPage });
 initSession({ renderExercise });
+// Before the routechange listener below: outside practice, screens read the scope's topic.
+initScope();
 
 // --- Event Listeners ---
 
@@ -232,10 +227,7 @@ dom.closeVersionsBtn.addEventListener('click', () => {
 });
 
 // Exercise controls
-dom.generateBtn.addEventListener('click', () => {
-    if (state.currentTopicId) route('practice'); // without a topic fetchExercises only toasts
-    fetchExercises();
-});
+dom.generateBtn.addEventListener('click', () => startPractice());
 dom.audioToggleBtn.addEventListener('click', handleAudioToggle);
 initVoice();
 initPodcast();
@@ -267,88 +259,6 @@ document.addEventListener('keydown', (e) => {
 dom.viewLastRefinedPromptBtn.addEventListener('click', showLastRefinedPrompt);
 dom.lastRefinedPromptCloseBtn.addEventListener('click', () => {
     dom.lastRefinedPromptModal.close();
-});
-
-// Topic combobox
-dom.topicSearch.addEventListener('focus', () => {
-    renderTopicDropdown('');
-    positionDropdown();
-    dom.topicDropdown.classList.remove('hidden');
-});
-
-dom.topicSearch.addEventListener('blur', (e) => {
-    // Delay hiding so that a click on a dropdown item can be registered
-    setTimeout(() => {
-        // Don't close if a collapse button click just triggered a re-render
-        if (shouldSuppressDropdownClose()) {
-            return;
-        }
-
-        // Don't close if focus moved inside the dropdown (e.g., to collapse button)
-        const activeElement = document.activeElement;
-        if (dom.topicDropdown.contains(activeElement)) {
-            return;
-        }
-
-        dom.topicDropdown.classList.add('hidden');
-        resetSearchInputToCanonicalPath();
-    }, BLUR_TIMEOUT_MS);
-});
-
-// Helper function to reset the search input to the canonical topic path
-function resetSearchInputToCanonicalPath() {
-    const currentTopic = state.topics.find(t => t.id === state.currentTopicId);
-    if (currentTopic) {
-        dom.topicSearch.value = getTopicPath(currentTopic.id, state.topics);
-    } else {
-        dom.topicSearch.value = '';
-    }
-}
-
-dom.topicSearch.addEventListener('input', () => {
-    renderTopicDropdown(dom.topicSearch.value);
-    if (!dom.topicDropdown.classList.contains('hidden')) {
-        positionDropdown();
-    }
-});
-
-// Reposition dropdown on window resize and scroll
-window.addEventListener('resize', () => {
-    if (!dom.topicDropdown.classList.contains('hidden')) {
-        positionDropdown();
-    }
-});
-
-window.addEventListener('scroll', () => {
-    if (!dom.topicDropdown.classList.contains('hidden')) {
-        positionDropdown();
-    }
-});
-
-// Hide dropdown when clicking outside
-document.addEventListener('click', (e) => {
-    if (!dom.topicSearch.contains(e.target) && !dom.topicDropdown.contains(e.target)) {
-        dom.topicDropdown.classList.add('hidden');
-        resetSearchInputToCanonicalPath();
-    }
-});
-
-// Hide dropdown when focus leaves the dropdown (e.g., tabbing out)
-dom.topicDropdown.addEventListener('focusout', (e) => {
-    // Small delay to allow the focus transition to complete
-    setTimeout(() => {
-        // Don't close if a collapse button click just triggered a re-render
-        if (shouldSuppressDropdownClose()) {
-            return;
-        }
-
-        const activeElement = document.activeElement;
-        // Close if focus is no longer inside the dropdown or search input
-        if (!dom.topicDropdown.contains(activeElement) && !dom.topicSearch.contains(activeElement)) {
-            dom.topicDropdown.classList.add('hidden');
-            resetSearchInputToCanonicalPath();
-        }
-    }, FOCUSOUT_TIMEOUT_MS);
 });
 
 // Keyboard shortcut for topics search (Ctrl+F / Cmd+F)
@@ -510,7 +420,10 @@ function init() {
     updateAudioToggleUI();
     initRouter();
     // Re-render once auth and topics are known: #/manage guard, and screens that read the current topic.
-    Promise.allSettled([checkAuthStatus(), loadTopics()]).then(markAuthReady);
+    Promise.allSettled([checkAuthStatus(), loadTopics()]).then(() => {
+        refreshProgress(); // per-topic due counts need the login state and the topic tree
+        markAuthReady();
+    });
 
     // Service worker: caches the app shell + audio so sessions work offline.
     if ('serviceWorker' in navigator) {
@@ -564,7 +477,6 @@ function init() {
         window.getFolderIcon = getFolderIcon;
         window.getFileIcon = getFileIcon;
         window.getTopicPath = getTopicPath;
-        window.resetDropdownCollapseState = resetDropdownCollapseState;
     }
 }
 

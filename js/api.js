@@ -243,6 +243,12 @@ export async function saveExerciseCompletionsAPI(completions, clientBatchId) {
     console.log('Saved completion data for', completions.length, 'exercises');
 }
 
+// Direct (not rolled-up) per-topic counts: {topics: {"<id>": {exercises, seen, due, mastered}}}.
+export async function fetchTopicProgressAPI() {
+    const response = await apiFetch('/api/topics/progress');
+    return response.json();
+}
+
 export async function saveUserSettingsAPI(topicId) {
     await fetch('/api/user/settings', {
         method: 'POST',

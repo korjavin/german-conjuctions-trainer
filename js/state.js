@@ -159,7 +159,8 @@ export const state = {
     wordAudioCache: _loadWordAudioCache(),
     wordAudioInflight: new Map(),
     activeAudio: null,
-    currentTopicId: '',
+    currentTopicId: '', // topic the practice session fetches; follows scopeId outside practice (js/scope.js)
+    scopeId: null, // global topic scope, null = All topics (js/scope.js)
     topics: [],
     topicSortOrder: (() => {
         try {

@@ -12,7 +12,6 @@ import {
     restoreVersionAPI,
     fetchLastGenerationDebugAPI,
     fetchLastRefinedPromptAPI,
-    saveUserSettingsAPI,
 } from './api.js';
 import { toast, confirm } from './ui.js';
 
@@ -23,60 +22,6 @@ const MAX_PROMPT_LENGTH = 10000;
 
 // Performance optimization constants
 const SEARCH_DEBOUNCE_MS = 300; // Debounce delay for search input in milliseconds
-
-// UI timing constants (milliseconds)
-export const BLUR_TIMEOUT_MS = 200; // Timeout for search blur handler
-export const FOCUSOUT_TIMEOUT_MS = 50; // Timeout for search focusout handler
-
-// Topic dropdown collapse state, persisted separately from the settings modal tree
-const DROPDOWN_COLLAPSE_STORAGE_KEY = 'dropdownTopicCollapseState';
-const dropdownCollapsedTopicIds = new Set((() => {
-    try {
-        const parsed = JSON.parse(localStorage.getItem(DROPDOWN_COLLAPSE_STORAGE_KEY) || '[]');
-        return Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string') : [];
-    } catch {
-        return [];
-    }
-})());
-
-function saveDropdownCollapseState() {
-    try {
-        localStorage.setItem(DROPDOWN_COLLAPSE_STORAGE_KEY, JSON.stringify([...dropdownCollapsedTopicIds]));
-    } catch (error) {
-        console.error('Failed to save dropdown collapse state:', error);
-    }
-}
-// Query the dropdown was last rendered with (focus renders '', the input still holds the canonical path)
-let lastDropdownQuery = '';
-
-// Timestamp of the last collapse/expand button click
-// Used to suppress dropdown close from blur/focusout handlers for a short duration
-// This prevents the dropdown from closing due to blur when clicking collapse buttons
-let lastCollapseClickTime = 0;
-
-// Duration in ms to suppress dropdown close after a collapse button click
-// This must be longer than BLUR_TIMEOUT_MS to allow the blur handler to check suppression
-const SUPPRESS_CLOSE_DURATION_MS = 250;
-
-// Reset dropdown collapse state (for testing)
-export function resetDropdownCollapseState() {
-    dropdownCollapsedTopicIds.clear();
-    saveDropdownCollapseState();
-    lastDropdownQuery = '';
-    lastCollapseClickTime = 0;
-}
-
-// Check if the next dropdown close should be suppressed
-// Returns true if we're within the suppression window after a collapse button click
-export function shouldSuppressDropdownClose() {
-    const now = Date.now();
-    return (now - lastCollapseClickTime) < SUPPRESS_CLOSE_DURATION_MS;
-}
-
-// Record the timestamp of a collapse button click
-export function setSuppressDropdownClose() {
-    lastCollapseClickTime = Date.now();
-}
 
 // Debounce utility function
 export function debounce(func, wait) {
@@ -427,28 +372,8 @@ export async function loadTopics() {
         state.topics = data.topics || [];
 
         renderTopicsList();
-
-        // Archived topics are not offered for practice, so a saved selection
-        // that has been archived falls back to the first practice topic.
-        const practiceTopics = getPracticeTopics(state.topics);
-        try {
-            const savedTopicId = localStorage.getItem('selectedTopicId');
-            if (savedTopicId && practiceTopics.find(t => t.id === savedTopicId)) {
-                state.currentTopicId = savedTopicId;
-            } else if (practiceTopics.length > 0) {
-                state.currentTopicId = practiceTopics[0].id;
-            } else {
-                state.currentTopicId = '';
-            }
-        } catch (error) {
-            console.error('Failed to load selected topic ID:', error);
-            if (practiceTopics.length > 0) {
-                state.currentTopicId = practiceTopics[0].id;
-            }
-        }
-
-        const currentTopic = practiceTopics.find(t => t.id === state.currentTopicId);
-        dom.topicSearch.value = currentTopic ? getTopicPath(currentTopic.id, state.topics) : '';
+        // js/scope.js rebuilds the scope tree and drops a scope that vanished or was archived.
+        window.dispatchEvent(new Event('topicschange'));
     } catch (error) {
         console.error('Error rendering topics:', error);
     }
@@ -1504,11 +1429,6 @@ async function deleteTopic(topicId) {
     try {
         await deleteTopicAPI(topicId);
 
-        if (state.currentTopicId === topicId) {
-            state.currentTopicId = '';
-            localStorage.removeItem('selectedTopicId');
-        }
-
         // Remove from recently used topics
         removeRecentlyUsedTopic(topicId);
 
@@ -1537,7 +1457,7 @@ async function archiveTopic(topicId) {
     }
     try {
         await archiveTopicAPI(topicId);
-        // loadTopics moves the practice selection off the archived subtree.
+        // loadTopics -> topicschange: js/scope.js moves the scope off the archived subtree.
         await loadTopics();
         announceToScreenReader(`${topic.name} moved to the archive`);
     } catch (error) {
@@ -1846,175 +1766,6 @@ export async function showLastRefinedPrompt() {
         console.error('Error fetching last refined prompt:', error);
         toast({ tone: 'danger', text: 'Could not fetch the last refined prompt. Generate some exercises first.' });
     }
-}
-
-export function renderTopicDropdown(searchQuery = '') {
-    lastDropdownQuery = searchQuery;
-    dom.topicDropdown.innerHTML = '';
-
-    // The archive and its subtree are not offered for practice.
-    const practiceTopics = state.topics ? getPracticeTopics(state.topics) : [];
-
-    // Check if topics are loaded
-    if (practiceTopics.length === 0) {
-        dom.topicDropdown.innerHTML = '<div style="padding: 0.5rem; color: var(--fg-muted);">No topics available.</div>';
-        return;
-    }
-
-    // Build the topic tree
-    const { roots, nodesById } = buildTopicTree(practiceTopics);
-
-    // If searching, find matching topics and their parent IDs to auto-expand
-    let matchingIds = new Set();
-    let expandedIds = new Set();
-    if (searchQuery.trim()) {
-        const result = findMatchingTopics(searchQuery, nodesById);
-        matchingIds = result.matchingIds;
-        expandedIds = result.expandedIds;
-    }
-
-    // Inline flatten that respects dropdownCollapsedTopicIds and search-expandedIds
-    const flattened = [];
-    const visited = new Set();
-    const stack = [];
-
-    // Initialize stack with roots (in reverse order for correct processing)
-    for (let i = roots.length - 1; i >= 0; i--) {
-        stack.push({ node: roots[i], depth: 0 });
-    }
-
-    while (stack.length > 0) {
-        const { node, depth } = stack.pop();
-
-        if (visited.has(node.id)) continue;
-        visited.add(node.id);
-
-        // Include this node if:
-        // - Not searching, OR
-        // - This node matches OR is a parent of a matching node (in expandedIds)
-        const isMatching = matchingIds.has(node.id);
-        const shouldInclude = !searchQuery.trim() || isMatching || expandedIds.has(node.id);
-
-        if (shouldInclude) {
-            flattened.push({ node, depth });
-        }
-
-        // Only visit children if this topic is not collapsed or is search-expanded
-        const isCollapsed = dropdownCollapsedTopicIds.has(node.id);
-        const isExpandedBySearch = expandedIds.has(node.id);
-        const shouldShowChildren = node.children.length > 0 && (!isCollapsed || isExpandedBySearch);
-
-        if (shouldShowChildren) {
-            // Add children to stack (in reverse order for correct processing)
-            for (let i = node.children.length - 1; i >= 0; i--) {
-                stack.push({ node: node.children[i], depth: depth + 1 });
-            }
-        }
-    }
-
-    // Handle case where no topics match
-    if (flattened.length === 0) {
-        dom.topicDropdown.innerHTML = `<div style="padding: 0.5rem; color: var(--fg-muted);">No topics found.</div>`;
-        return;
-    }
-
-    // Render each flattened node as a tree item
-    flattened.forEach(({ node, depth }) => {
-        const item = document.createElement('div');
-        item.className = 'topic-dropdown-tree-item';
-
-        // Set inline padding based on depth (16px per level)
-        const paddingLeft = depth * 16;
-        item.style.paddingLeft = `${paddingLeft + 16}px`;
-
-        const hasChildren = node.children.length > 0;
-
-        // Collapse toggle button for parent topics
-        if (hasChildren) {
-            const collapseBtn = document.createElement('button');
-            collapseBtn.className = 'topic-dropdown-collapse-btn';
-            const isCollapsed = dropdownCollapsedTopicIds.has(node.id);
-            const isExpandedBySearch = expandedIds.has(node.id);
-            // Use effective expansion state: expanded if not collapsed OR search-expanded
-            const isEffectivelyExpanded = !isCollapsed || isExpandedBySearch;
-            collapseBtn.textContent = isEffectivelyExpanded ? '▼' : '▶';
-            collapseBtn.setAttribute('aria-label', isEffectivelyExpanded ? 'Collapse topic' : 'Expand topic');
-            collapseBtn.setAttribute('aria-expanded', String(isEffectivelyExpanded));
-            collapseBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent topic selection
-                if (dropdownCollapsedTopicIds.has(node.id)) {
-                    dropdownCollapsedTopicIds.delete(node.id);
-                } else {
-                    dropdownCollapsedTopicIds.add(node.id);
-                }
-                saveDropdownCollapseState();
-                // Set flag to prevent blur/focusout from closing the dropdown
-                setSuppressDropdownClose();
-                // Re-render with the query actually in effect, not the canonical path sitting in the input
-                renderTopicDropdown(lastDropdownQuery);
-            });
-            item.appendChild(collapseBtn);
-        }
-
-        // Icon (folder for parents, file for leaves)
-        const iconSpan = document.createElement('span');
-        iconSpan.innerHTML = hasChildren ? getFolderIcon() : getFileIcon();
-        iconSpan.className = 'mr-2';
-        item.appendChild(iconSpan);
-
-        // Topic name text with highlighting when searching
-        const textSpan = document.createElement('span');
-        if (searchQuery.trim()) {
-            textSpan.innerHTML = highlightText(escapeHtml(node.name), searchQuery);
-        } else {
-            textSpan.textContent = node.name;
-        }
-        item.appendChild(textSpan);
-
-        const descendantCount = countDescendantTopics(node.id, state.topics);
-        if (descendantCount > 0) {
-            const badgeSpan = document.createElement('span');
-            badgeSpan.className = 'text-xs text-gray-500 ml-2';
-            badgeSpan.textContent = `(${descendantCount} sub-topics)`;
-            item.appendChild(badgeSpan);
-        }
-
-        // Click handler: select the topic
-        item.addEventListener('click', () => {
-            const fullPath = getTopicPath(node.id, state.topics);
-            selectTopic(node.id, fullPath);
-        });
-
-        dom.topicDropdown.appendChild(item);
-    });
-}
-
-export function selectTopic(topicId, fullPath) {
-    state.currentTopicId = topicId;
-    try {
-        localStorage.setItem('selectedTopicId', topicId);
-    } catch (error) {
-        console.error('Failed to save selected topic ID:', error);
-    }
-    dom.topicSearch.value = fullPath;
-    dom.topicDropdown.classList.add('hidden');
-    if (state.isLoggedIn) {
-        saveUserSettingsAPI(state.currentTopicId).catch(err => {
-            console.error('Error saving user settings:', err);
-        });
-    }
-}
-
-export function positionDropdown() {
-    const searchRect = dom.topicSearch.getBoundingClientRect();
-    // The tree is deep and names are long: at least 40rem wide (viewport permitting),
-    // anchored to the input but never past the right edge.
-    const margin = 16;
-    const width = Math.min(window.innerWidth - 2 * margin, Math.max(searchRect.width, 640));
-    const left = Math.max(margin, Math.min(searchRect.left, window.innerWidth - margin - width));
-    dom.topicDropdown.style.left = left + 'px';
-    dom.topicDropdown.style.top = (searchRect.bottom + 4) + 'px';
-    dom.topicDropdown.style.width = width + 'px';
 }
 
 export function saveTopic() {
