@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"german-conjunctions-trainer/pkg/llm"
 	"german-conjunctions-trainer/pkg/storage"
 )
 
@@ -46,7 +47,7 @@ func TestPregenBatchLifecycle(t *testing.T) {
 			json.NewDecoder(r.Body).Decode(&body)
 			customIDs = nil
 			for _, req := range body.Requests {
-				if req.Params.Model != "claude-test" || len(req.Params.OutputConfig) == 0 {
+				if req.Params.Model != "claude-test" || len(req.Params.OutputConfig) != 0 {
 					t.Errorf("bad params: %+v", req.Params)
 				}
 				customIDs = append(customIDs, req.CustomID)
@@ -69,7 +70,7 @@ func TestPregenBatchLifecycle(t *testing.T) {
 			text, _ := json.Marshal(map[string]any{"exercises": exercises})
 			for _, id := range customIDs {
 				line, _ := json.Marshal(map[string]any{"custom_id": id, "result": map[string]any{"type": "succeeded", "message": map[string]any{
-					"content": []map[string]string{{"type": "text", "text": string(text)}}, "stop_reason": "end_turn",
+					"content": []map[string]string{{"type": "text", "text": "```json\n" + string(text) + "\n```"}}, "stop_reason": "end_turn",
 				}}})
 				w.Write(append(line, '\n'))
 			}
@@ -148,5 +149,48 @@ func TestPregenBatchLifecycle(t *testing.T) {
 	a.pregenCycle(threshold)
 	if submitted() != 2 {
 		t.Fatalf("topped-up pool resubmitted: submits=%d", submitted())
+	}
+}
+
+// TestPregenBackoff: a topic whose batch item failed is not resubmitted on the
+// next cycles, and a success clears it.
+func TestPregenBackoff(t *testing.T) {
+	t.Setenv("LLM_PROVIDER", "anthropic")
+	dbPath := filepath.Join(t.TempDir(), "pregen.db")
+	store, err := storage.NewSQLiteStorage(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	topic, _ := store.CreateTopic("Bad", "B1 Nebensätze mit weil.", nil, 0)
+	a := &App{DB: store, DBPath: dbPath}
+	items, _ := a.pregenItems(1)
+	if len(items) != 1 {
+		t.Fatalf("want 1 item, got %d", len(items))
+	}
+
+	a.notePregenOutcomes(items, map[int][]llm.GeneratedExercise{})
+	if got, _ := a.pregenItems(1); len(got) != 0 {
+		t.Fatalf("failed topic resubmitted right away")
+	}
+	key := topic.ID + "/" + items[0].PromptHash
+	first := a.pregenBackoff[key].until
+	a.notePregenOutcomes(items, map[int][]llm.GeneratedExercise{})
+	if b := a.pregenBackoff[key]; b.fails != 2 || !b.until.After(first) {
+		t.Fatalf("backoff did not grow: %+v (first until %s)", b, first)
+	}
+
+	a.notePregenOutcomes(items, map[int][]llm.GeneratedExercise{0: {{}}})
+	if got, _ := a.pregenItems(1); len(got) != 1 {
+		t.Fatalf("success did not clear the backoff")
+	}
+
+	// A failure of the old prompt does not hold back an edited prompt.
+	a.notePregenOutcomes(items, map[int][]llm.GeneratedExercise{})
+	if _, err := store.UpdateTopic(topic.ID, "Bad", "B1 Nebensätze mit obwohl.", nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := a.pregenItems(1); len(got) != 1 {
+		t.Fatalf("edited prompt still backing off")
 	}
 }

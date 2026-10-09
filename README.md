@@ -144,7 +144,7 @@ docker run -p 8080:8080 \
 | `OPENAI_TIMEOUT_SECONDS` | No | `180` | Timeout for each LLM request (refinement and generation) |
 | `ENABLE_PROMPT_REFINEMENT` | No | `false` | When `true`, runs refinement before generation; otherwise uses variation-profile generation directly |
 | `MODEL_NAME` | No | `gpt-3.5-turbo-1106` | Model name to use |
-| `LLM_PROVIDER` | No | - | `anthropic` = call the native Claude Messages API at `OPENAI_URL/messages` (set `OPENAI_URL=https://api.anthropic.com/v1`) with structured outputs and prompt caching; unset = OpenAI-compatible `/chat/completions` |
+| `LLM_PROVIDER` | No | - | `anthropic` = call the native Claude Messages API at `OPENAI_URL/messages` (set `OPENAI_URL=https://api.anthropic.com/v1`) with prompt caching; unset = OpenAI-compatible `/chat/completions` |
 | `LLM_FALLBACK_URL` | No | - | OpenAI-compatible endpoint retried once when the primary answers with a 4xx/5xx status (e.g. out of credits). Timeouts are not retried. Unset = no fallback |
 | `LLM_FALLBACK_API_KEY` | No | - | API key for the fallback endpoint |
 | `LLM_FALLBACK_MODEL` | No | `MODEL_NAME` | Model name for the fallback endpoint |
@@ -288,7 +288,7 @@ docker run -p 8080:8080 \
 
 Anthropic's compatibility layer ignores `response_format`, so replies may arrive wrapped in a ```` ```json ```` fence or in prose; the app extracts the outermost JSON object before parsing. The app sends no `temperature`, so the compat layer's cap of 1 does not apply.
 
-With `LLM_PROVIDER=anthropic` the exercise reply is schema-enforced (structured outputs), and the topic part of the generation prompt is sent as a cached system prompt: each call logs `cache_read_input_tokens`, which is above 0 on the second generation of a topic within 5 minutes. Topic prompts shorter than the model's minimum cacheable length (512 tokens on the 5.x models) are not cached.
+With `LLM_PROVIDER=anthropic` the topic part of the generation prompt is sent as a cached system prompt: each call logs `cache_read_input_tokens`, which is above 0 on the second generation of a topic within 5 minutes. Topic prompts shorter than the model's minimum cacheable length (512 tokens on the 5.x models) are not cached. Structured outputs (`output_config` json_schema) are deliberately not used: under the schema grammar Claude mostly returned one exercise instead of the requested set, so the reply is parsed like the compat one.
 
 ## Development
 

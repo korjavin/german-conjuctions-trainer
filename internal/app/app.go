@@ -48,10 +48,11 @@ type App struct {
 	podcast           podcastLimits
 	voiceMu           sync.Mutex
 	voiceID           string
-	limits            keyedLimiters // shared per-client rate limits; keys namespaced per endpoint
-	genInFlight       atomic.Int32  // exercise generations running for /api/exercises
-	pregenBatch       *pregenState  // in-flight background batch; only the pregen goroutine touches it
-	shutdown          chan struct{} // Channel to signal goroutine shutdown
+	limits            keyedLimiters            // shared per-client rate limits; keys namespaced per endpoint
+	genInFlight       atomic.Int32             // exercise generations running for /api/exercises
+	pregenBatch       *pregenState             // in-flight background batch; only the pregen goroutine touches it
+	pregenBackoff     map[string]pregenBackoff // topics whose batch item failed; only the pregen goroutine touches it
+	shutdown          chan struct{}            // Channel to signal goroutine shutdown
 	// bgWG tracks per-request fire-and-forget goroutines (currently only the
 	// async TouchCLIToken update in resolveBearer). It lets tests drain
 	// these workers before t.TempDir() cleanup deletes the sqlite database,

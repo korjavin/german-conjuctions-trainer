@@ -65,9 +65,8 @@ func SubmitExerciseBatch(items []BatchItem) (string, error) {
 	reqs := make([]batchRequest, len(items))
 	for i, it := range items {
 		reqs[i] = batchRequest{CustomID: batchCustomID(i), Params: buildAnthropicRequest(OpenAIRequest{
-			Model:        model,
-			Messages:     splitGenerationPrompt(it.Prompt),
-			OutputSchema: exercisesSchema,
+			Model:    model,
+			Messages: splitGenerationPrompt(it.Prompt),
 		})}
 	}
 	timeout := getOpenAITimeout()

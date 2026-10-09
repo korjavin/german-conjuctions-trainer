@@ -28,6 +28,16 @@ const (
 	pregenStateFile = "llm_batch.json"
 )
 
+// pregenBackoff skips a topic whose batch item failed `fails` times in a row
+// until `until`: pregenInterval doubled per failure, capped at maxPregenBackoff.
+// ponytail: in memory, a restart retries every topic once.
+type pregenBackoff struct {
+	fails int
+	until time.Time
+}
+
+const maxPregenBackoff = 24 * time.Hour
+
 type pregenState struct {
 	BatchID string          `json:"batch_id"`
 	Items   []llm.BatchItem `json:"items"`
@@ -122,6 +132,9 @@ func (a *App) pollPregenBatch(path string) {
 	if !ended {
 		return
 	}
+	if results != nil { // nil = batch vanished (404), not the topics' fault
+		a.notePregenOutcomes(st.Items, results)
+	}
 	stored := 0
 	for i, exercises := range results {
 		item := st.Items[i]
@@ -139,8 +152,30 @@ func (a *App) pollPregenBatch(path string) {
 	log.Printf("[PREGEN] batch %s ended: %d/%d topics, %d exercises stored", st.BatchID, len(results), len(st.Items), stored)
 }
 
+// notePregenOutcomes clears the backoff of topics that got exercises and
+// extends it for the ones that failed, so they are not resubmitted every cycle.
+func (a *App) notePregenOutcomes(items []llm.BatchItem, results map[int][]llm.GeneratedExercise) {
+	if a.pregenBackoff == nil {
+		a.pregenBackoff = make(map[string]pregenBackoff)
+	}
+	now := time.Now()
+	for i, item := range items {
+		key := item.TopicID + "/" + item.PromptHash // an edited prompt starts fresh
+		if _, ok := results[i]; ok {
+			delete(a.pregenBackoff, key)
+			continue
+		}
+		b := a.pregenBackoff[key]
+		b.fails++
+		// 30m, 1h, 2h ... capped; the inner min keeps the shift from overflowing.
+		b.until = now.Add(min(pregenInterval<<min(b.fails, 7), maxPregenBackoff))
+		a.pregenBackoff[key] = b
+		log.Printf("[PREGEN] topic %s failed %d time(s) in a row, skipped until %s", item.TopicID, b.fails, b.until.Format(time.RFC3339))
+	}
+}
+
 // pregenItems returns a batch item for each non-archived topic with a prompt
-// whose current-prompt pool is below threshold.
+// whose current-prompt pool is below threshold and that is not backing off.
 func (a *App) pregenItems(threshold int) ([]llm.BatchItem, error) {
 	ids, err := a.nonArchivedTopicIDs()
 	if err != nil {
@@ -157,12 +192,14 @@ func (a *App) pregenItems(threshold int) ([]llm.BatchItem, error) {
 	// Shuffled, so topics that keep failing cannot starve the rest past the cap.
 	mrand.Shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
 	var items []llm.BatchItem
+	now := time.Now()
 	for _, id := range ids {
 		if counts[id] >= threshold {
 			continue
 		}
 		topic, err := a.DB.GetTopic(id)
-		if err != nil || strings.TrimSpace(topic.Prompt) == "" {
+		if err != nil || strings.TrimSpace(topic.Prompt) == "" ||
+			now.Before(a.pregenBackoff[id+"/"+storage.GetPromptHash(topic.Prompt)].until) {
 			continue
 		}
 		items = append(items, llm.NewBatchItem(topic, a.coverageSection(topic, exercises)))
