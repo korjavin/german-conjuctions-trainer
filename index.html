@@ -20,6 +20,7 @@
     <link href="/css/manage.css" rel="stylesheet">
     <link href="/css/today.css" rel="stylesheet">
     <link href="/css/history.css" rel="stylesheet">
+    <link href="/css/listen.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 </head>
 <body class="app-body">
@@ -185,49 +186,77 @@
 
         <section data-screen="summary" hidden id="screen-summary"></section>
 
-        <section data-screen="listen" hidden>
+        <section data-screen="listen" hidden class="gct-listen">
+            <div class="gct-listen__head">
+                <h1 class="gct-page-title">Listen</h1>
+                <div class="gct-listen__sub">Phrase drills for when you can't look at the screen</div>
+            </div>
             <p class="gct-login-prompt" data-auth="anon">Podcast episodes are kept per account. <a href="/auth/google/login">Log in</a> to see yours.</p>
-            <div class="flex justify-between items-start gap-3 mb-4">
-                <div class="min-w-0">
-                    <h2 class="modal-title">Podcast</h2>
-                    <p id="podcast-topic-name" class="modal-subtitle truncate"></p>
+            <!-- Stays in the DOM (hidden, no native controls) so Media Session / background playback keep working. -->
+            <audio id="podcast-audio" preload="metadata" hidden></audio>
+            <div class="gct-listen__grid">
+                <div class="gct-listen__main">
+                    <div id="podcast-player" class="gct-player gct-listen__player" hidden>
+                        <button type="button" id="podcast-play-btn" class="gct-player__play" aria-label="Play"><i data-icon="play" data-size="26"></i></button>
+                        <div class="gct-listen__body">
+                            <div class="gct-listen__top">
+                                <div class="gct-listen__grow">
+                                    <div id="podcast-title" class="gct-listen__title"></div>
+                                    <div id="podcast-meta" class="gct-listen__meta"></div>
+                                </div>
+                                <button type="button" id="podcast-speed-btn" class="gct-btn gct-btn--secondary gct-btn--sm gct-listen__speed" aria-label="Playback speed">1×</button>
+                            </div>
+                            <div id="podcast-track" class="gct-player__track gct-listen__track" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+                                <div id="podcast-fill" class="gct-player__fill"></div>
+                                <div id="podcast-knob" class="gct-player__knob"></div>
+                            </div>
+                            <div class="gct-listen__controls">
+                                <span id="podcast-time" class="gct-player__time">0:00</span>
+                                <div class="gct-listen__btns">
+                                    <button type="button" id="podcast-back-btn" class="gct-icon-btn" aria-label="Back 10 s" title="Back 10 s"><i data-icon="back-10"></i></button>
+                                    <button type="button" id="podcast-fwd-btn" class="gct-icon-btn" aria-label="Forward 10 s" title="Forward 10 s"><i data-icon="fwd-10"></i></button>
+                                    <a id="podcast-download-link" class="gct-icon-btn" href="#" download aria-label="Download MP3" title="Download MP3"><i data-icon="download"></i></a>
+                                </div>
+                                <span id="podcast-total" class="gct-player__time">0:00</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="podcast-empty" class="gct-card gct-listen__empty">
+                        <span class="gct-listen__empty-icon"><i data-icon="listen" data-size="24"></i></span>
+                        <div class="gct-listen__grow">
+                            <div id="podcast-empty-title" class="gct-listen__empty-title">Nothing to play</div>
+                            <div class="gct-listen__empty-sub">Generate 25 phrases from it — about 40 s.</div>
+                        </div>
+                        <button type="button" id="podcast-empty-generate-btn" class="gct-btn gct-btn--primary"><i data-icon="plus" data-size="18"></i>Generate</button>
+                    </div>
+                    <div class="gct-listen__how">
+                        <div><b>Listen</b> — English, then German twice.</div>
+                        <div><b>Recall</b> — English, a pause to say it yourself, then the answer.</div>
+                    </div>
+                    <details id="podcast-transcript" class="gct-card gct-listen__transcript" hidden>
+                        <summary id="podcast-transcript-summary">Transcript</summary>
+                        <ol id="podcast-phrase-list" class="gct-listen__phrases"></ol>
+                    </details>
+                    <div class="gct-card gct-listen__list">
+                        <div class="gct-listen__list-head">
+                            <span id="podcast-episodes-summary" class="gct-listen__caption">Episodes · 0</span>
+                            <span class="gct-listen__muted">kept 7 days</span>
+                        </div>
+                        <div id="podcast-episode-list"></div>
+                    </div>
                 </div>
-            </div>
-
-            <p class="section-desc mb-2">An audio lesson of 25 phrases from this topic and its subtopics, for when you can't look at the screen.</p>
-            <ol class="podcast-format section-desc mb-6">
-                <li><strong>Listen:</strong> English, then German twice.</li>
-                <li><strong>Recall:</strong> English, a pause to say it in German yourself, then the answer.</li>
-            </ol>
-
-            <label id="podcast-favorites-option" class="podcast-option section-desc hidden">
-                <input type="checkbox" id="podcast-favorites-only"> Only favorites
-            </label>
-
-            <button id="podcast-generate-btn" class="btn-primary w-full">Generate podcast</button>
-
-            <div id="podcast-status" class="podcast-status hidden" aria-live="polite">
-                <div class="loading-spinner podcast-spinner animate-spin rounded-full"></div>
-                <span id="podcast-status-text">Building your episode…</span>
-            </div>
-            <p id="podcast-error" class="text-error text-sm mt-3 hidden" role="alert"></p>
-
-            <div id="podcast-result" class="podcast-result hidden">
-                <audio id="podcast-audio" class="podcast-audio" controls preload="metadata"></audio>
-                <div class="podcast-result-row">
-                    <span id="podcast-meta" class="section-desc"></span>
-                    <a id="podcast-download-link" class="btn-secondary btn-sm" href="#" download>Download MP3</a>
+                <div class="gct-listen__side">
+                    <div class="gct-card gct-listen__make">
+                        <div class="gct-listen__caption">New episode</div>
+                        <button type="button" id="podcast-scope-row" class="gct-listen__scope" data-scope-open aria-haspopup="dialog"></button>
+                        <div id="podcast-favorites-option" class="gct-listen__fav">
+                            <span id="podcast-favorites-label">Only favorites</span>
+                            <button type="button" id="podcast-favorites-only" class="gct-switch" role="switch" aria-checked="false" aria-labelledby="podcast-favorites-label"></button>
+                        </div>
+                        <button type="button" id="podcast-generate-btn" class="gct-btn gct-btn--secondary gct-listen__generate"><span class="gct-listen__gen-icon"><i data-icon="plus" data-size="18"></i></span><span id="podcast-generate-label">Generate 25 phrases</span></button>
+                    </div>
+                    <a href="#/me" class="gct-listen__feed"><i data-icon="rss" data-size="18"></i>Get episodes in your podcast app<span class="gct-listen__grow"></span><i data-icon="chevron-right" data-size="16"></i></a>
                 </div>
-                <details id="podcast-transcript" class="podcast-transcript">
-                    <summary id="podcast-transcript-summary">Phrases</summary>
-                    <ol id="podcast-phrase-list" class="podcast-phrase-list"></ol>
-                </details>
-            </div>
-
-            <div id="podcast-episodes" class="podcast-episodes hidden">
-                <h3 id="podcast-episodes-summary" class="podcast-episodes-title">Your episodes</h3>
-                <p class="section-desc">This topic and its subtopics. Each episode is kept for 7 days.</p>
-                <ul id="podcast-episode-list" class="podcast-episode-list"></ul>
             </div>
         </section>
 

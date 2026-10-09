@@ -1,9 +1,10 @@
-// Podcast mode: builds a listen-only episode (MP3) for the selected topic
-// subtree, to play in the browser or download for a phone's player.
+// Listen (#/listen): the brand player, the scope's episodes and "New episode" (25 phrases from
+// the scope subtree, to play here or download). Ported from docs/design/claude-design/ui_kits/app/ScreensMore.jsx
+// ListenScreen + Player. The feed URL section lives in Me (#/me) and is driven from here too.
 import { state } from './state.js';
 import { dom } from './dom.js';
 import { generatePodcastAPI, listPodcastEpisodesAPI, getPodcastFeedAPI, regeneratePodcastFeedAPI } from './api.js';
-import { getTopicPath } from './topics.js';
+import { path, short } from './scope.js';
 import { handleVoiceToggle } from './voice.js';
 import { confirm, toast } from './ui.js';
 
@@ -15,6 +16,9 @@ let isGenerating = false;
 let listRequest = 0;
 
 const FAVORITES_ONLY_KEY = 'podcastFavoritesOnly';
+const SPEEDS = [1, 1.25, 1.5, 0.75];
+const GENERATE_LABEL = 'Generate 25 phrases';
+const DAY_MS = 864e5;
 
 function loadFavoritesOnly() {
     try {
@@ -29,6 +33,9 @@ function saveFavoritesOnly(value) {
         localStorage.setItem(FAVORITES_ONLY_KEY, String(value));
     } catch (_) { /* private mode: the choice just isn't remembered */ }
 }
+
+const favoritesOn = () => dom.podcastFavoritesOnly.getAttribute('aria-checked') === 'true';
+const setFavorites = (on) => dom.podcastFavoritesOnly.setAttribute('aria-checked', String(on));
 
 export function formatDuration(totalSeconds) {
     const seconds = Math.max(0, Math.round(totalSeconds || 0));
@@ -49,38 +56,25 @@ export function describeEpisode(data) {
     return parts.join(' · ');
 }
 
-function currentTopicLabel() {
-    if (!state.currentTopicId) return '';
-    return getTopicPath(state.currentTopicId, state.topics) || '';
-}
+const svg = (name, size = 20) => (typeof window.gctIconSvg === 'function' ? window.gctIconSvg(name, size) : '');
 
-function setStatus(message) {
-    dom.podcastStatus.classList.toggle('hidden', !message);
-    dom.podcastStatusText.textContent = message || '';
-}
-
-function setError(message) {
-    dom.podcastError.classList.toggle('hidden', !message);
-    dom.podcastError.textContent = message || '';
+function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
 }
 
 function renderPhraseList(phrases) {
     const items = phrases.map((phrase) => {
-        const li = document.createElement('li');
-        const de = document.createElement('div');
-        de.className = 'podcast-phrase-de';
-        de.textContent = phrase.german;
+        const li = el('li');
+        const de = el('div', 'gct-listen__de', phrase.german);
         if (phrase.weak) {
-            const badge = document.createElement('span');
-            badge.className = 'podcast-phrase-weak';
-            badge.textContent = '×2';
+            const badge = el('span', 'gct-listen__weak', '×2');
             badge.title = 'You often make mistakes here, so it is recalled twice';
             de.appendChild(badge);
         }
-        const en = document.createElement('div');
-        en.className = 'podcast-phrase-en';
-        en.textContent = phrase.english;
-        li.append(de, en);
+        li.append(de, el('div', 'gct-listen__en', phrase.english));
         return li;
     });
     dom.podcastPhraseList.replaceChildren(...items);
@@ -129,59 +123,162 @@ export function mergeEpisodes(...lists) {
     return [...byId.values()].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
 }
 
-function formatCreated(createdAt) {
+// "Today, 07:50" / "Yesterday, 11:18" / "6 Oct, 13:43".
+export function formatWhen(createdAt, now = new Date()) {
     const date = new Date(createdAt);
-    if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    if (!createdAt || Number.isNaN(date.getTime())) return '';
+    const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const days = Math.round((startOfDay(now) - startOfDay(date)) / DAY_MS);
+    const day = days === 0 ? 'Today' : days === 1 ? 'Yesterday'
+        : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    return `${day}, ${time}`;
 }
 
+const isNew = (ep, now = Date.now()) => now - Date.parse(ep.created_at) < DAY_MS;
+
 function renderEpisodeList() {
-    const items = listedEpisodes.map((ep) => {
-        const li = document.createElement('li');
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'podcast-episode';
-        if (current && current.id === ep.id) {
-            btn.classList.add('podcast-episode-active');
-            btn.setAttribute('aria-current', 'true');
+    const rows = listedEpisodes.map((ep) => {
+        const on = Boolean(current && current.id === ep.id);
+        const row = el('button', 'gct-listen__row' + (on ? ' is-current' : ''));
+        row.type = 'button';
+        if (on) row.setAttribute('aria-current', 'true');
+        const icon = el('span', 'gct-listen__row-icon');
+        icon.innerHTML = svg(on ? 'sound' : 'play', 18);
+        const text = el('span', 'gct-listen__grow');
+        text.append(
+            el('span', 'gct-listen__row-title', ep.topic_name),
+            el('span', 'gct-listen__row-meta', [formatWhen(ep.created_at), `${phraseCount(ep)} phrases`, formatDuration(ep.duration_seconds)].filter(Boolean).join(' · ')),
+        );
+        row.append(icon, text);
+        if (isNew(ep)) {
+            const badge = el('span', 'gct-badge gct-badge--info');
+            badge.append(el('span', 'gct-badge__dot'), 'New');
+            row.append(badge);
         }
-        const title = document.createElement('span');
-        title.className = 'podcast-episode-title';
-        title.textContent = ep.topic_name;
-        const meta = document.createElement('span');
-        meta.className = 'podcast-episode-meta';
-        meta.textContent = [formatCreated(ep.created_at), describeEpisode(ep)].filter(Boolean).join(' · ');
-        btn.append(title, meta);
-        btn.addEventListener('click', () => selectEpisode(ep, { play: true }));
-        li.appendChild(btn);
-        return li;
+        row.addEventListener('click', () => selectEpisode(ep, { play: true }));
+        return row;
     });
-    dom.podcastEpisodeList.replaceChildren(...items);
-    dom.podcastEpisodesSummary.textContent = `Your episodes (${listedEpisodes.length})`;
-    dom.podcastEpisodes.classList.toggle('hidden', listedEpisodes.length === 0);
-    dom.podcastGenerateBtn.textContent = listedEpisodes.length || current ? 'Generate a new episode' : 'Generate podcast';
+    if (!rows.length) rows.push(el('div', 'gct-listen__none', 'No episodes for this topic yet.'));
+    dom.podcastEpisodeList.replaceChildren(...rows);
+    dom.podcastEpisodesSummary.textContent = `Episodes · ${listedEpisodes.length}`;
+}
+
+// --- player ---
+
+function totalSeconds() {
+    const d = dom.podcastAudio.duration;
+    return Number.isFinite(d) && d > 0 ? d : current?.duration_seconds || 0;
+}
+
+function renderProgress() {
+    const total = totalSeconds();
+    const now = dom.podcastAudio.currentTime || 0;
+    const pct = total ? Math.min(100, (now / total) * 100) : 0;
+    dom.podcastFill.style.width = `${pct}%`;
+    dom.podcastKnob.style.left = `${pct}%`;
+    dom.podcastTime.textContent = formatDuration(now);
+    dom.podcastTotal.textContent = formatDuration(total);
+    dom.podcastTrack.setAttribute('aria-valuemax', String(Math.round(total)));
+    dom.podcastTrack.setAttribute('aria-valuenow', String(Math.round(now)));
+    dom.podcastTrack.setAttribute('aria-valuetext', `${formatDuration(now)} of ${formatDuration(total)}`);
+}
+
+function renderPlayState() {
+    const playing = !dom.podcastAudio.paused;
+    dom.podcastPlayBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    dom.podcastPlayBtn.innerHTML = svg(playing ? 'pause' : 'play', 26);
+}
+
+function seek(seconds) {
+    const total = totalSeconds();
+    dom.podcastAudio.currentTime = Math.max(0, total ? Math.min(total, seconds) : seconds);
+    renderProgress();
+}
+
+function seekToPointer(e) {
+    const rect = dom.podcastTrack.getBoundingClientRect();
+    if (!rect.width) return;
+    seek(((e.clientX - rect.left) / rect.width) * totalSeconds());
+}
+
+function setSpeed(speed) {
+    // defaultPlaybackRate survives loading another episode; playbackRate applies now.
+    dom.podcastAudio.defaultPlaybackRate = speed;
+    dom.podcastAudio.playbackRate = speed;
+    dom.podcastSpeedBtn.textContent = `${speed}×`;
 }
 
 function renderEpisode(data) {
     dom.podcastAudio.src = data.url;
     dom.podcastDownloadLink.href = data.download_url;
-    dom.podcastMeta.textContent = describeEpisode(data);
+    dom.podcastTitle.textContent = data.topic_name || 'Episode';
+    // ponytail: no per-phrase timings in the episode JSON, so no "Phrase i of N · Listen/Recall" line yet.
+    dom.podcastMeta.textContent = `${phraseCount(data)} phrases`;
     const phrases = data.phrases || [];
-    dom.podcastTranscriptSummary.textContent = `Phrases (${phrases.length})`;
-    dom.podcastTranscript.classList.toggle('hidden', phrases.length === 0);
+    dom.podcastTranscriptSummary.textContent = `Transcript · ${phrases.length}`;
+    dom.podcastTranscript.hidden = phrases.length === 0;
     renderPhraseList(phrases);
-    dom.podcastResult.classList.remove('hidden');
+    renderProgress();
+    renderPlayState();
+}
+
+function showPlayer(on) {
+    dom.podcastPlayer.hidden = !on;
+    dom.podcastEmpty.hidden = on;
+    if (!on) dom.podcastTranscript.hidden = true;
 }
 
 // Loads an episode into the player; play starts it (a click is a user gesture).
 function selectEpisode(data, { play = false } = {}) {
-    current = data;
-    renderEpisode(data);
-    updateMediaSession(data);
+    if (current?.id !== data.id) {
+        current = data;
+        renderEpisode(data);
+        updateMediaSession(data);
+    }
+    showPlayer(true);
     renderEpisodeList();
     if (play) {
-        dom.podcastAudio.play?.()?.catch?.(() => { /* autoplay refused: the controls still work */ });
+        dom.podcastAudio.play?.()?.catch?.(() => { /* autoplay refused: the play button still works */ });
     }
+}
+
+// The list changed: keep the loaded episode while it plays or is still listed, else load the newest one.
+function syncSelection() {
+    const playing = current && !dom.podcastAudio.paused;
+    if (playing || (current && listedEpisodes.some((ep) => ep.id === current.id))) {
+        showPlayer(true);
+        renderEpisodeList();
+    } else if (listedEpisodes.length) {
+        selectEpisode(listedEpisodes[0]);
+    } else {
+        showPlayer(false);
+        renderEpisodeList();
+    }
+}
+
+// --- scope + generate ---
+
+function renderScope() {
+    const p = path(state.currentTopicId);
+    const node = p[p.length - 1];
+    const icon = el('span', 'gct-listen__scope-icon');
+    icon.innerHTML = svg(node?.kind === 'leaf' ? 'leaf' : 'folder', 18);
+    const text = el('span', 'gct-listen__grow');
+    const sub = node
+        ? p.map((n) => short(n.name)).join(' › ') + (node.kind === 'folder' ? ' · includes sub-topics' : '')
+        : 'A mix from every track';
+    text.append(el('span', 'gct-listen__scope-name', node ? node.name : 'All topics'), el('span', 'gct-listen__scope-sub', sub));
+    dom.podcastScopeRow.replaceChildren(icon, text, el('span', 'gct-listen__change', 'Change'));
+    dom.podcastEmptyTitle.textContent = `Nothing to play for ${node ? short(node.name) : 'All topics'}`;
+}
+
+function setGenerating(busy) {
+    isGenerating = busy;
+    for (const btn of [dom.podcastGenerateBtn, dom.podcastEmptyGenerateBtn]) btn.disabled = busy;
+    const icon = dom.podcastGenerateBtn.querySelector('.gct-listen__gen-icon');
+    if (icon) icon.innerHTML = svg(busy ? 'refresh' : 'plus', 18);
+    dom.podcastGenerateLabel.textContent = busy ? 'Generating · about 40 s' : GENERATE_LABEL;
 }
 
 // Lists every episode of the current topic and its subtopics: the user's
@@ -191,55 +288,37 @@ export async function loadPodcastEpisodes() {
     const request = ++listRequest;
     const inScope = inScopeFn(topicId);
     listedEpisodes = sessionEpisodes.filter((ep) => inScope(ep.topic_id));
-    renderEpisodeList();
+    syncSelection();
     if (!state.isLoggedIn || navigator.onLine === false) return;
     try {
         const data = await listPodcastEpisodesAPI(topicId);
         if (request !== listRequest) return;
         listedEpisodes = mergeEpisodes(data.episodes || [], sessionEpisodes.filter((ep) => inScope(ep.topic_id)));
-        renderEpisodeList();
+        syncSelection();
     } catch (error) {
         console.error('Failed to load podcast episodes:', error);
     }
 }
 
-export function openPodcastDialog() {
-    dom.podcastTopicName.textContent = currentTopicLabel() || 'All topics';
-    // An episode of another topic stays playable but is labelled as such.
-    if (!current) {
-        dom.podcastResult.classList.add('hidden');
-    } else if (!inScopeFn(state.currentTopicId)(current.topic_id)) {
-        dom.podcastMeta.textContent = `Previous episode: ${current.topic_name} · ${describeEpisode(current)}`;
-    } else {
-        dom.podcastMeta.textContent = describeEpisode(current);
-    }
+// Shows #/listen for the current scope (also re-run by scope.js when the scope changes).
+export function showListen() {
+    renderScope();
     // Favorites are per user, so guests don't get the option.
-    dom.podcastFavoritesOption.classList.toggle('hidden', !state.isLoggedIn);
-    dom.podcastFavoritesOnly.checked = state.isLoggedIn && loadFavoritesOnly();
-    if (!isGenerating) setError('');
+    dom.podcastFavoritesOption.hidden = !state.isLoggedIn;
+    setFavorites(state.isLoggedIn && loadFavoritesOnly());
     loadPodcastEpisodes();
 }
 
 export async function generatePodcast() {
     if (isGenerating) return;
     if (navigator.onLine === false) {
-        setError('You are offline. Podcasts are built on the server — try again when connected.');
+        toast({ tone: 'danger', text: 'You are offline. Episodes are built on the server — try again when connected.' });
         return;
     }
 
-    isGenerating = true;
     const topicId = state.currentTopicId;
-    const favoritesOnly = state.isLoggedIn && dom.podcastFavoritesOnly.checked;
-    dom.podcastGenerateBtn.disabled = true;
-    setError('');
-    const started = Date.now();
-    const tick = () => {
-        const elapsed = Math.round((Date.now() - started) / 1000);
-        setStatus(`Building your episode… ${elapsed}s (new phrases can take a minute or two)`);
-    };
-    tick();
-    const timer = setInterval(tick, 1000);
-
+    const favoritesOnly = state.isLoggedIn && favoritesOn();
+    setGenerating(true);
     try {
         const data = await generatePodcastAPI(topicId, favoritesOnly);
         // Older servers don't echo these back.
@@ -249,14 +328,12 @@ export async function generatePodcast() {
             listedEpisodes = mergeEpisodes([ep], listedEpisodes);
         }
         selectEpisode(ep);
+        toast({ tone: 'success', text: `Episode ready · ${phraseCount(ep)} phrases` });
     } catch (error) {
         console.error('Podcast generation failed:', error);
-        setError(error.message || 'Failed to build the podcast.');
+        toast({ tone: 'danger', text: error.message || 'Failed to build the episode.' });
     } finally {
-        clearInterval(timer);
-        setStatus('');
-        dom.podcastGenerateBtn.disabled = false;
-        isGenerating = false;
+        setGenerating(false);
     }
 }
 
@@ -334,10 +411,45 @@ export function initPodcast() {
     dom.podcastFeedCopyBtn?.addEventListener('click', copyPodcastFeed);
     dom.podcastFeedRegenerateBtn?.addEventListener('click', regeneratePodcastFeed);
     dom.podcastGenerateBtn.addEventListener('click', generatePodcast);
-    dom.podcastFavoritesOnly.addEventListener('change', () => saveFavoritesOnly(dom.podcastFavoritesOnly.checked));
+    dom.podcastEmptyGenerateBtn.addEventListener('click', generatePodcast);
+    dom.podcastFavoritesOnly.addEventListener('click', () => {
+        setFavorites(!favoritesOn());
+        saveFavoritesOnly(favoritesOn());
+    });
+    // The tree may load after #/listen first rendered: names and paths come from it.
+    window.addEventListener('topicschange', renderScope);
+
+    const audio = dom.podcastAudio;
     // The episode's own German would be heard as spoken answers.
-    dom.podcastAudio.addEventListener('play', () => {
+    audio.addEventListener('play', () => {
         if (state.voiceActive) handleVoiceToggle();
+    });
+    for (const ev of ['play', 'pause', 'ended']) audio.addEventListener(ev, renderPlayState);
+    for (const ev of ['timeupdate', 'loadedmetadata', 'durationchange']) audio.addEventListener(ev, renderProgress);
+    dom.podcastPlayBtn.addEventListener('click', () => {
+        if (audio.paused) audio.play?.()?.catch?.(() => {});
+        else audio.pause();
+    });
+    dom.podcastSpeedBtn.addEventListener('click', () => {
+        setSpeed(SPEEDS[(SPEEDS.indexOf(audio.playbackRate) + 1) % SPEEDS.length]);
+    });
+    dom.podcastBackBtn.addEventListener('click', () => seek(audio.currentTime - 10));
+    dom.podcastFwdBtn.addEventListener('click', () => seek(audio.currentTime + 10));
+    // Scrubber: click or drag seeks; arrow keys step 5 s.
+    const track = dom.podcastTrack;
+    track.addEventListener('pointerdown', (e) => {
+        track.setPointerCapture?.(e.pointerId);
+        seekToPointer(e);
+    });
+    track.addEventListener('pointermove', (e) => {
+        if (track.hasPointerCapture?.(e.pointerId)) seekToPointer(e);
+    });
+    track.addEventListener('keydown', (e) => {
+        const step = { ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5 }[e.key];
+        if (step == null) return;
+        e.preventDefault();
+        e.stopPropagation(); // keep arrows away from the practice shortcuts
+        seek(audio.currentTime + step);
     });
     // Leaving #/listen keeps the episode playing, like a background player.
 }
