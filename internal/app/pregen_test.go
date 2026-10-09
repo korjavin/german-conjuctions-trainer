@@ -173,14 +173,24 @@ func TestPregenBackoff(t *testing.T) {
 	if got, _ := a.pregenItems(1); len(got) != 0 {
 		t.Fatalf("failed topic resubmitted right away")
 	}
-	first := a.pregenBackoff[topic.ID].until
+	key := topic.ID + "/" + items[0].PromptHash
+	first := a.pregenBackoff[key].until
 	a.notePregenOutcomes(items, map[int][]llm.GeneratedExercise{})
-	if b := a.pregenBackoff[topic.ID]; b.fails != 2 || !b.until.After(first) {
+	if b := a.pregenBackoff[key]; b.fails != 2 || !b.until.After(first) {
 		t.Fatalf("backoff did not grow: %+v (first until %s)", b, first)
 	}
 
 	a.notePregenOutcomes(items, map[int][]llm.GeneratedExercise{0: {{}}})
 	if got, _ := a.pregenItems(1); len(got) != 1 {
 		t.Fatalf("success did not clear the backoff")
+	}
+
+	// A failure of the old prompt does not hold back an edited prompt.
+	a.notePregenOutcomes(items, map[int][]llm.GeneratedExercise{})
+	if _, err := store.UpdateTopic(topic.ID, "Bad", "B1 Nebensätze mit obwohl.", nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := a.pregenItems(1); len(got) != 1 {
+		t.Fatalf("edited prompt still backing off")
 	}
 }

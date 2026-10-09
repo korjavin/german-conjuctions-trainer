@@ -160,15 +160,16 @@ func (a *App) notePregenOutcomes(items []llm.BatchItem, results map[int][]llm.Ge
 	}
 	now := time.Now()
 	for i, item := range items {
+		key := item.TopicID + "/" + item.PromptHash // an edited prompt starts fresh
 		if _, ok := results[i]; ok {
-			delete(a.pregenBackoff, item.TopicID)
+			delete(a.pregenBackoff, key)
 			continue
 		}
-		b := a.pregenBackoff[item.TopicID]
+		b := a.pregenBackoff[key]
 		b.fails++
 		// 30m, 1h, 2h ... capped; the inner min keeps the shift from overflowing.
 		b.until = now.Add(min(pregenInterval<<min(b.fails, 7), maxPregenBackoff))
-		a.pregenBackoff[item.TopicID] = b
+		a.pregenBackoff[key] = b
 		log.Printf("[PREGEN] topic %s failed %d time(s) in a row, skipped until %s", item.TopicID, b.fails, b.until.Format(time.RFC3339))
 	}
 }
@@ -193,11 +194,12 @@ func (a *App) pregenItems(threshold int) ([]llm.BatchItem, error) {
 	var items []llm.BatchItem
 	now := time.Now()
 	for _, id := range ids {
-		if counts[id] >= threshold || now.Before(a.pregenBackoff[id].until) {
+		if counts[id] >= threshold {
 			continue
 		}
 		topic, err := a.DB.GetTopic(id)
-		if err != nil || strings.TrimSpace(topic.Prompt) == "" {
+		if err != nil || strings.TrimSpace(topic.Prompt) == "" ||
+			now.Before(a.pregenBackoff[id+"/"+storage.GetPromptHash(topic.Prompt)].until) {
 			continue
 		}
 		items = append(items, llm.NewBatchItem(topic, a.coverageSection(topic, exercises)))
