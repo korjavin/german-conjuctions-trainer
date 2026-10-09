@@ -3,6 +3,7 @@ import { dom } from './dom.js';
 import { updateAudioToggleUI, handleAudioToggle, handleReplayAudio } from './audio.js';
 import { initVoice, handleVoiceToggle } from './voice.js';
 import { initPodcast, loadPodcastFeed, openPodcastDialog } from './podcast.js';
+import { initMe } from './me.js';
 import { initRouter, markAuthReady, route, currentRoute } from './router.js';
 import { initScope, startPractice, refreshProgress } from './scope.js';
 import {
@@ -230,6 +231,7 @@ dom.generateBtn.addEventListener('click', () => startPractice());
 dom.audioToggleBtn.addEventListener('click', handleAudioToggle);
 initVoice();
 initPodcast();
+initMe();
 dom.hintBtn.addEventListener('click', handleHintClick);
 dom.replayAudioBtn.addEventListener('click', handleReplayAudio);
 dom.toggleFavoriteBtn.addEventListener('click', handleToggleFavorite);
@@ -279,7 +281,7 @@ dom.logoutBtn.addEventListener('click', () => {
     window.location.href = '/auth/logout';
 });
 
-// Offline cache (settings modal, logged-in users only; visibility handled by updateAuthUI)
+// Offline cache (Me screen, logged-in users only; visibility handled by updateAuthUI)
 if (dom.offlineCacheBtn) {
     dom.offlineCacheBtn.addEventListener('click', updateOfflineCache);
 }

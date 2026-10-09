@@ -347,7 +347,7 @@ async function handleSentenceCompletion(exercise, correctWordArray, lastWord = '
         if (lastWord) {
             await playWordAudio(lastWord);
         }
-        playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
+        if (state.autoplaySentence) playSentenceAudio(state.lastAudioUrl, state.lastAudioText);
 
         // Show exercise controls and hide hint/skip buttons
         dom.exerciseControls.classList.remove('hidden');

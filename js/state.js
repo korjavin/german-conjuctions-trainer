@@ -25,6 +25,17 @@ function _loadAudioEnabled() {
     }
 }
 
+// Boolean pref stored as 'true'/'false' (Me screen switches, js/me.js).
+function _loadBoolPref(key, fallback) {
+    try {
+        const savedValue = localStorage.getItem(key);
+        return savedValue === null ? fallback : savedValue === 'true';
+    } catch (error) {
+        console.error(`Failed to load ${key}:`, error);
+        return fallback;
+    }
+}
+
 function _loadTopicCollapseState() {
     try {
         const savedValue = localStorage.getItem(TOPIC_COLLAPSE_STATE_STORAGE_KEY);
@@ -142,6 +153,8 @@ export const state = {
     lastAudioUrl: '',
     lastAudioText: '',
     isAudioEnabled: _loadAudioEnabled(),
+    autoplaySentence: _loadBoolPref('autoplaySentence', true), // read the sentence when solved
+    voiceAutostart: _loadBoolPref('voiceAutostart', false), // start voice input with practice
     voiceActive: false,
     wordAudioCache: _loadWordAudioCache(),
     wordAudioInflight: new Map(),

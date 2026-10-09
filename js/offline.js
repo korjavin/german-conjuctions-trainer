@@ -5,6 +5,7 @@ import { state, showLocalStorageError } from './state.js';
 import { dom } from './dom.js';
 import { fetchExercisesFromAPI, saveUserStatsAPI, saveExerciseCompletionsAPI } from './api.js';
 import { preloadExerciseWordAudio } from './audio.js';
+import { toast } from './ui.js';
 
 export const OFFLINE_STASH_KEY = 'offlineStashV1';
 export const OFFLINE_QUEUE_KEY = 'offlineQueueV1';
@@ -186,16 +187,35 @@ function setStatus(text) {
     dom.offlineCacheStatus.textContent = text;
 }
 
+// "2 h ago" style age for the Me screen's offline line.
+export function formatAge(timestamp, now = Date.now()) {
+    const minutes = Math.floor((now - new Date(timestamp).getTime()) / 60000);
+    if (!(minutes >= 1)) return 'just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} h ago`;
+    const days = Math.floor(hours / 24);
+    return days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
 // renderOfflineCacheStatus shows the stored stash size and age.
 export function renderOfflineCacheStatus() {
     const stash = readStash();
-    if (stash.exercises.length === 0 || !stash.updatedAt) {
-        setStatus('Nothing cached yet.');
-        return;
+    const count = stash.updatedAt ? stash.exercises.length : 0;
+    if (dom.offlineCacheCount) {
+        dom.offlineCacheCount.textContent = count ? `${count} exercise${count === 1 ? '' : 's'} cached` : 'Nothing cached yet';
     }
-    const count = stash.exercises.length;
-    const updated = new Date(stash.updatedAt).toLocaleString();
-    setStatus(`${count} exercise${count === 1 ? '' : 's'} cached · updated ${updated}`);
+    setStatus(count
+        ? `Updated ${formatAge(stash.updatedAt)} · results sync when you're back online`
+        : 'Save exercises and audio for the current and recent topics.');
+}
+
+function setAudioProgress(done, total) {
+    if (!dom.offlineCacheProgress) return;
+    dom.offlineCacheProgress.hidden = total === 0;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    if (dom.offlineCacheProgressFill) dom.offlineCacheProgressFill.style.width = pct + '%';
+    if (dom.offlineCacheProgressText) dom.offlineCacheProgressText.textContent = `Audio ${pct}%`;
 }
 
 async function fetchForStash(topicId, extraOptions) {
@@ -240,6 +260,7 @@ export async function updateOfflineCache() {
         // Warm audio: the sentence file goes straight into the SW cache, the
         // per-word files land in wordAudioCacheV1 + SW cache via TTS.
         let done = 0;
+        setAudioProgress(0, exercises.length);
         for (const exercise of exercises) {
             if (exercise.audio_file_path) {
                 try {
@@ -255,10 +276,13 @@ export async function updateOfflineCache() {
             }
             done++;
             setStatus(`Caching audio ${done}/${exercises.length}…`);
+            setAudioProgress(done, exercises.length);
         }
 
         renderOfflineCacheStatus();
+        toast({ tone: 'success', text: `Offline cache updated · ${exercises.length} exercise${exercises.length === 1 ? '' : 's'}` });
     } finally {
+        setAudioProgress(0, 0);
         if (dom.offlineCacheBtn) dom.offlineCacheBtn.disabled = false;
     }
 }

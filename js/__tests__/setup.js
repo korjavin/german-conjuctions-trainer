@@ -118,6 +118,14 @@ vi.mock('../dom.js', () => {
       skipRemoveBtn: createMockElement('button'),
       offlineCacheBtn: createMockElement('button'),
       offlineCacheStatus: createMockElement('span'),
+      offlineCacheCount: createMockElement('div'),
+      offlineCacheProgress: createMockElement('div'),
+      offlineCacheProgressFill: createMockElement('div'),
+      offlineCacheProgressText: createMockElement('span'),
+      prefSound: createMockElement('button'),
+      prefAutoplay: createMockElement('button'),
+      prefVoice: createMockElement('button'),
+      prefVoiceRow: createMockElement('div'),
 
       // Additional elements can be added here as needed by tests
       constructedSentenceEl: createMockElement('div'),
