@@ -18,6 +18,7 @@
     <link href="/css/shell.css" rel="stylesheet">
     <link href="/css/me.css" rel="stylesheet">
     <link href="/css/manage.css" rel="stylesheet">
+    <link href="/css/today.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 </head>
 <body class="app-body">
@@ -64,10 +65,30 @@
     </div>
 
     <main class="gct-main">
-        <section data-screen="today">
-            <h1 class="gct-page-title">Today</h1>
-            <!-- TEMPORARY (until T1): practice launcher for the current scope (js/scope.js) -->
-            <button id="generate-btn" class="gct-btn gct-btn--primary">Start practice</button>
+        <section data-screen="today" id="screen-today" class="gct-today">
+            <div class="gct-today__head">
+                <h1 class="gct-page-title">Today</h1>
+                <div id="today-date" class="gct-today__date"></div>
+            </div>
+            <div class="gct-today__grid">
+                <div class="gct-today__column">
+                    <div class="gct-card gct-today__hero">
+                        <div id="today-hero"></div>
+                        <div class="gct-today__actions">
+                            <button id="generate-btn" class="gct-btn gct-btn--primary gct-btn--lg">Practice anyway</button>
+                            <a href="/auth/google/login" class="gct-btn gct-btn--secondary gct-btn--lg" data-auth="anon">Login with Google</a>
+                            <a href="#/topics" id="today-browse" class="gct-btn gct-btn--ghost gct-btn--lg gct-today__desk">Browse topics</a>
+                        </div>
+                    </div>
+                    <div id="today-lesson" class="gct-card gct-today__card gct-today__lesson" hidden></div>
+                    <div id="today-sections" class="gct-card gct-today__card gct-today__sections" hidden></div>
+                </div>
+                <div class="gct-today__column">
+                    <div id="today-episode" class="gct-card gct-today__card gct-today__episode" data-auth="user" hidden></div>
+                    <div id="today-week" class="gct-card gct-today__card gct-today__week-card" data-auth="user" hidden></div>
+                    <div id="today-upcoming" class="gct-card gct-today__card gct-today__upcoming" data-auth="user" hidden></div>
+                </div>
+            </div>
         </section>
 
         <section data-screen="topics" hidden>

@@ -1,0 +1,93 @@
+/* Today screen (#/today, js/today.js). Ported from docs/design/claude-design/ui_kits/app/ScreensHome.jsx TodayScreen. */
+.gct-today [hidden] { display: none !important; }
+.gct-today__head { margin-bottom: 24px; }
+.gct-today__head .gct-page-title { margin: 0; }
+.gct-today__date { margin-top: 4px; font-size: 14px; color: var(--fg-secondary); }
+.gct-today__grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.gct-today__column { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+.gct-today__caption { font: 700 12px/1 var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted); }
+.gct-today__muted { margin: 0; font: 600 13px/1.4 var(--font-sans); color: var(--fg-muted); }
+.gct-today__meta { font: 600 13px/1.3 var(--font-sans); color: var(--fg-secondary); }
+.gct-today__hint { font: 600 12px/1 var(--font-sans); color: var(--fg-muted); white-space: nowrap; }
+.gct-today__title { margin-top: 6px; font: 800 17px/1.3 var(--font-sans); }
+.gct-today__link { font: 700 13px/1 var(--font-sans); color: var(--color-orange-dark); }
+.gct-today__grow { flex: 1; min-width: 0; }
+.gct-today__ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gct-today__row-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.gct-today__card { padding: 22px; }
+
+/* Hero */
+.gct-today__hero { padding: 28px; background: linear-gradient(160deg, var(--color-cream) 0%, var(--color-cream-soft) 100%); }
+.gct-today__due { display: flex; align-items: baseline; flex-wrap: wrap; gap: 14px; margin: 10px 0 6px; }
+.gct-today__num { font: 800 64px/0.9 var(--font-sans); letter-spacing: -.02em; color: var(--color-orange-dark); }
+.gct-today__due-text { font: 600 16px/1.3 var(--font-sans); color: var(--fg-secondary); }
+.gct-today__anon { margin: 12px 0 6px; font: 800 24px/1.2 var(--font-sans); color: var(--fg-primary); }
+.gct-today__pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.gct-today__pills .gct-pill { max-width: 100%; }
+.gct-today__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.gct-today__actions .gct-btn { text-decoration: none; }
+
+/* Latest lesson */
+.gct-today__lesson .gct-today__row-head { align-items: center; margin-bottom: 10px; }
+.gct-today__lesson-name { font: 800 18px/1.3 var(--font-sans); text-wrap: pretty; }
+.gct-today__crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; font: 600 13px/1.3 var(--font-sans); color: var(--fg-secondary); }
+.gct-today__crumbs svg { opacity: .6; }
+.gct-today__lesson-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }
+.gct-today__mastery { display: block; flex: none; width: 120px; height: 4px; border-radius: 2px; background: var(--color-cream-medium); overflow: hidden; }
+.gct-today__mastery > span { display: block; height: 100%; border-radius: 2px; background: var(--color-orange); }
+
+/* Sections */
+.gct-today__section { display: grid; grid-template-columns: auto minmax(0, 1fr) 140px 44px 72px; align-items: center; gap: 12px; width: calc(100% + 16px); margin: 0 -8px; padding: 11px 8px; border: 0; border-top: 1px solid var(--color-border); border-radius: 8px; background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.gct-today__section:first-of-type { border-top: 0; }
+.gct-today__section .gct-today__mastery { width: 140px; }
+.gct-today__icon { display: flex; color: var(--fg-muted); }
+.gct-today__icon.is-folder { color: var(--color-orange); }
+.gct-today__name { font: 700 14px/1.3 var(--font-sans); }
+.gct-today__pct { font: 700 13px/1 var(--font-sans); color: var(--fg-secondary); text-align: right; }
+.gct-today__status { text-align: right; }
+
+/* Episode */
+.gct-today__episode { display: flex; align-items: center; gap: 14px; padding: 18px; }
+.gct-today__play { width: 48px; height: 48px; flex: none; }
+.gct-today__listen-icon { width: 48px; height: 48px; flex: none; border-radius: 50%; background: var(--color-orange-tint); color: var(--color-orange-dark); display: flex; align-items: center; justify-content: center; }
+.gct-today__ep-title { margin-top: 5px; font: 800 15px/1.3 var(--font-sans); }
+.gct-today__episode .gct-btn { text-decoration: none; }
+
+/* This week */
+.gct-today__week-card, .gct-today__upcoming { padding: 20px; }
+.gct-today__week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; height: 64px; margin: 16px 0 8px; }
+.gct-today__bar { border-radius: 4px; background: var(--color-cream-medium); }
+.gct-today__bar.is-on { background: var(--color-orange-bright); }
+.gct-today__bar.is-today { outline: 2px dashed var(--color-border-strong); outline-offset: 2px; }
+.gct-today__week-days { height: auto; margin: 0; font: 700 12px/1 var(--font-sans); color: var(--fg-muted); text-align: center; }
+.gct-today__week-days .is-today { color: var(--color-orange-dark); }
+.gct-today__week-sum { margin-top: 14px; font: 600 14px/1.3 var(--font-sans); color: var(--fg-secondary); }
+.gct-today__week-sum b { color: var(--fg-primary); }
+
+/* Upcoming reviews (same buckets as the History chart) */
+.gct-today__upcoming .gct-today__row-head { align-items: center; margin-bottom: 14px; }
+.gct-today__histo { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; align-items: end; }
+.gct-today__col { display: flex; flex-direction: column; align-items: center; gap: 4px; font: 700 12px/1 var(--font-sans); color: var(--fg-muted); }
+.gct-today__col > span:last-child { font-weight: 600; white-space: nowrap; letter-spacing: -.02em; }
+.gct-today__col.is-now > span:first-child { color: var(--color-orange-dark); }
+.gct-today__hbar { width: 100%; border-radius: 4px; background: var(--color-cream-strong); }
+.gct-today__col.is-now .gct-today__hbar { background: var(--color-orange); }
+
+/* Mobile: one column in the prototype's order (hero, lesson, episode, sections, week, upcoming); ScopeBar sits first. */
+@media (max-width: 759px) {
+    .gct-today__head, .gct-today__desk { display: none !important; }
+    .gct-today__grid { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+    .gct-today__column { display: contents; }
+    .gct-today__hero { order: 1; padding: 20px; }
+    .gct-today__lesson { order: 2; }
+    .gct-today__episode { order: 3; }
+    .gct-today__sections { order: 4; }
+    .gct-today__week-card { order: 5; }
+    .gct-today__upcoming { order: 6; }
+    .gct-today__card { padding: 18px; }
+    .gct-today__episode { padding: 18px; }
+    .gct-today__actions .gct-btn { flex: 1 1 100%; }
+    .gct-today__mastery { width: 80px; }
+    .gct-today__section { grid-template-columns: auto minmax(0, 1fr) auto; }
+}
