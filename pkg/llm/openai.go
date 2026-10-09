@@ -43,6 +43,30 @@ type OpenAIRequest struct {
 	Model          string          `json:"model"`
 	Messages       []Message       `json:"messages"`
 	ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
+	// OutputSchema is a JSON schema the native Claude provider enforces via
+	// output_config.format; the /chat/completions path ignores it.
+	OutputSchema map[string]any `json:"-"`
+}
+
+// exercisesSchema is the structured-output schema for exercise generation.
+var exercisesSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"exercises": map[string]any{
+			"type": "array",
+			"items": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"english_hint":            map[string]any{"type": "string"},
+					"correct_german_sentence": map[string]any{"type": "string"},
+				},
+				"required":             []string{"english_hint", "correct_german_sentence"},
+				"additionalProperties": false,
+			},
+		},
+	},
+	"required":             []string{"exercises"},
+	"additionalProperties": false,
 }
 
 type Message struct {
@@ -262,7 +286,8 @@ type providerStatusError struct {
 
 func (e *providerStatusError) Error() string { return e.err.Error() }
 
-// callChatCompletions calls the primary provider and, when it answers with an
+// callChatCompletions calls the primary provider (native Claude Messages API
+// when LLM_PROVIDER=anthropic, else /chat/completions) and, when it answers with an
 // HTTP error status (e.g. 402 out of credits), retries once on the optional
 // fallback provider from LLM_FALLBACK_URL / LLM_FALLBACK_API_KEY /
 // LLM_FALLBACK_MODEL. Timeouts and transport errors are not retried.
@@ -276,7 +301,11 @@ func callChatCompletions(
 	timeout time.Duration,
 	stage string,
 ) (*OpenAIResponse, time.Duration, error) {
-	resp, elapsed, err := callChatCompletionsOnce(client, openaiURL, apiKey, reqPayload, timeout, stage)
+	primary := callChatCompletionsOnce
+	if isAnthropicProvider() {
+		primary = callAnthropicMessages
+	}
+	resp, elapsed, err := primary(client, openaiURL, apiKey, reqPayload, timeout, stage)
 	var statusErr *providerStatusError
 	fallbackURL := strings.TrimSpace(os.Getenv("LLM_FALLBACK_URL"))
 	if err == nil || fallbackURL == "" || !errors.As(err, &statusErr) {
@@ -306,7 +335,40 @@ func callChatCompletionsOnce(
 	timeout time.Duration,
 	stage string,
 ) (*OpenAIResponse, time.Duration, error) {
-	reqBody, err := json.Marshal(reqPayload)
+	respBody, elapsed, err := postProvider(client, strings.TrimRight(openaiURL, "/")+"/chat/completions",
+		map[string]string{"Authorization": "Bearer " + apiKey}, reqPayload, timeout, stage)
+	if err != nil {
+		return nil, elapsed, err
+	}
+
+	var openaiResp OpenAIResponse
+	if err := json.Unmarshal(respBody, &openaiResp); err != nil {
+		return nil, elapsed, fmt.Errorf("%s returned non-JSON response: %s", stage, formatBodySnippet(respBody))
+	}
+
+	if openaiResp.Error != nil {
+		return nil, elapsed, fmt.Errorf("%s returned API error after %s: %s (type=%s code=%s)", stage, elapsed.Round(time.Millisecond), openaiResp.Error.Message, openaiResp.Error.Type, openaiResp.Error.Code)
+	}
+
+	if len(openaiResp.Choices) == 0 || strings.TrimSpace(openaiResp.Choices[0].Message.Content) == "" {
+		return nil, elapsed, fmt.Errorf("%s returned empty choices after %s", stage, elapsed.Round(time.Millisecond))
+	}
+
+	return &openaiResp, elapsed, nil
+}
+
+// postProvider POSTs a JSON payload and returns the raw 2xx body. A non-2xx
+// answer becomes a *providerStatusError carrying the provider's error.message
+// (OpenAI and Anthropic both use that shape), so callChatCompletions can fall back.
+func postProvider(
+	client *http.Client,
+	url string,
+	headers map[string]string,
+	payload any,
+	timeout time.Duration,
+	stage string,
+) ([]byte, time.Duration, error) {
+	reqBody, err := json.Marshal(payload)
 	if err != nil {
 		return nil, 0, fmt.Errorf("%s: failed to encode request body: %w", stage, err)
 	}
@@ -314,12 +376,14 @@ func callChatCompletionsOnce(
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	apiReq, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(openaiURL, "/")+"/chat/completions", bytes.NewBuffer(reqBody))
+	apiReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, 0, fmt.Errorf("%s: failed to create request: %w", stage, err)
 	}
 	apiReq.Header.Set("Content-Type", "application/json")
-	apiReq.Header.Set("Authorization", "Bearer "+apiKey)
+	for k, v := range headers {
+		apiReq.Header.Set(k, v)
+	}
 
 	start := time.Now()
 	resp, err := client.Do(apiReq)
@@ -337,34 +401,42 @@ func callChatCompletionsOnce(
 		return nil, elapsed, fmt.Errorf("%s: failed to read response body: %w", stage, err)
 	}
 
-	var openaiResp OpenAIResponse
-	if len(respBody) > 0 {
-		if err := json.Unmarshal(respBody, &openaiResp); err != nil && resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
-			return nil, elapsed, fmt.Errorf("%s returned non-JSON response (status=%d): %s", stage, resp.StatusCode, formatBodySnippet(respBody))
-		}
-	}
-
-	requestID := resp.Header.Get("x-request-id")
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		providerMessage := formatBodySnippet(respBody)
-		if openaiResp.Error != nil && openaiResp.Error.Message != "" {
-			providerMessage = openaiResp.Error.Message
+		var errBody struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(respBody, &errBody) == nil && errBody.Error.Message != "" {
+			providerMessage = errBody.Error.Message
+		}
+		requestID := resp.Header.Get("x-request-id")
+		if requestID == "" {
+			requestID = resp.Header.Get("request-id")
 		}
 		return nil, elapsed, &providerStatusError{
 			status: resp.StatusCode,
 			err:    fmt.Errorf("%s failed with status %d after %s (request_id=%s): %s", stage, resp.StatusCode, elapsed.Round(time.Millisecond), requestID, providerMessage),
 		}
 	}
+	return respBody, elapsed, nil
+}
 
-	if openaiResp.Error != nil {
-		return nil, elapsed, fmt.Errorf("%s returned API error after %s: %s (type=%s code=%s)", stage, elapsed.Round(time.Millisecond), openaiResp.Error.Message, openaiResp.Error.Type, openaiResp.Error.Code)
+// splitGenerationPrompt moves the topic part of a generation prompt (stable
+// per topic) into a system message and keeps the per-request variation
+// profile, coverage and output contract in the user message. The native
+// Claude provider caches the system message, so a second generation for the
+// same topic reads it from the prompt cache.
+func splitGenerationPrompt(prompt string) []Message {
+	stable, variable, found := strings.Cut(prompt, variationProfileHeader)
+	if !found || strings.TrimSpace(stable) == "" {
+		return []Message{{Role: "user", Content: prompt}}
 	}
-
-	if len(openaiResp.Choices) == 0 || strings.TrimSpace(openaiResp.Choices[0].Message.Content) == "" {
-		return nil, elapsed, fmt.Errorf("%s returned empty choices after %s", stage, elapsed.Round(time.Millisecond))
+	return []Message{
+		{Role: "system", Content: strings.TrimSpace(stable)},
+		{Role: "user", Content: variationProfileHeader + variable},
 	}
-
-	return &openaiResp, elapsed, nil
 }
 
 func requestExercisesFromProvider(
@@ -381,8 +453,9 @@ func requestExercisesFromProvider(
 
 	openaiReq := OpenAIRequest{
 		Model:          modelName,
-		Messages:       []Message{{Role: "user", Content: prompt}},
+		Messages:       splitGenerationPrompt(prompt),
 		ResponseFormat: &ResponseFormat{Type: "json_object"},
+		OutputSchema:   exercisesSchema,
 	}
 
 	openaiResp, elapsed, err := callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, stage)
@@ -390,8 +463,8 @@ func requestExercisesFromProvider(
 	if err != nil {
 		if isMissingJSONPromptError(err) {
 			providerRetries = 1
-			retryPrompt := strings.TrimSpace(prompt) + "\n\nReminder: respond with valid json."
-			openaiReq.Messages = []Message{{Role: "user", Content: retryPrompt}}
+			last := len(openaiReq.Messages) - 1
+			openaiReq.Messages[last].Content = strings.TrimSpace(openaiReq.Messages[last].Content) + "\n\nReminder: respond with valid json."
 			openaiResp, elapsed, err = callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, stage+" retry")
 			totalElapsed += elapsed
 		}

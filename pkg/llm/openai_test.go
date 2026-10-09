@@ -38,7 +38,7 @@ func TestGenerateExercisesVariationProfileSuccess(t *testing.T) {
 		_ = json.Unmarshal(body, &reqBody)
 
 		messages := reqBody["messages"].([]interface{})
-		capturedPrompt = messages[0].(map[string]interface{})["content"].(string)
+		capturedPrompt = messages[len(messages)-1].(map[string]interface{})["content"].(string)
 		exercises := buildExercises(10, "valid")
 		writeChatChoice(w, http.StatusOK, mustJSONString(t, map[string]interface{}{"exercises": exercises}))
 	}))
@@ -314,7 +314,7 @@ func TestGenerateExercisesRefinementFallbackWhenMalformed(t *testing.T) {
 
 		if _, ok := reqBody["response_format"]; ok {
 			messages := reqBody["messages"].([]interface{})
-			generationPrompt = messages[0].(map[string]interface{})["content"].(string)
+			generationPrompt = messages[len(messages)-1].(map[string]interface{})["content"].(string)
 			exercises := buildExercises(10, "refine-fallback")
 			writeChatChoice(w, http.StatusOK, mustJSONString(t, map[string]interface{}{"exercises": exercises}))
 			return
