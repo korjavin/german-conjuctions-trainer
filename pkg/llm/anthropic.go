@@ -34,21 +34,11 @@ type anthropicTextBlock struct {
 	CacheControl *anthropicCacheControl `json:"cache_control,omitempty"`
 }
 
-type anthropicFormat struct {
-	Type   string         `json:"type"`
-	Schema map[string]any `json:"schema"`
-}
-
-type anthropicOutputConfig struct {
-	Format anthropicFormat `json:"format"`
-}
-
 type anthropicRequest struct {
-	Model        string                 `json:"model"`
-	MaxTokens    int                    `json:"max_tokens"`
-	System       []anthropicTextBlock   `json:"system,omitempty"`
-	Messages     []Message              `json:"messages"`
-	OutputConfig *anthropicOutputConfig `json:"output_config,omitempty"`
+	Model     string               `json:"model"`
+	MaxTokens int                  `json:"max_tokens"`
+	System    []anthropicTextBlock `json:"system,omitempty"`
+	Messages  []Message            `json:"messages"`
 }
 
 type anthropicResponse struct {
@@ -66,7 +56,10 @@ type anthropicResponse struct {
 }
 
 // buildAnthropicRequest maps system messages to the top-level system field
-// (cache breakpoint on the last block) and OutputSchema to structured outputs.
+// (cache breakpoint on the last block). Deliberately no structured outputs
+// (output_config json_schema): under that grammar Claude closed the exercises
+// array after one item in most replies (gct-6d0). The prompt's json contract
+// plus extractJSONObject yields the full set.
 func buildAnthropicRequest(req OpenAIRequest) anthropicRequest {
 	out := anthropicRequest{Model: req.Model, MaxTokens: anthropicMaxTokens}
 	for _, m := range req.Messages {
@@ -78,9 +71,6 @@ func buildAnthropicRequest(req OpenAIRequest) anthropicRequest {
 	}
 	if n := len(out.System); n > 0 {
 		out.System[n-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
-	}
-	if req.OutputSchema != nil {
-		out.OutputConfig = &anthropicOutputConfig{Format: anthropicFormat{Type: "json_schema", Schema: req.OutputSchema}}
 	}
 	return out
 }

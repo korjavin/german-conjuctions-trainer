@@ -43,30 +43,6 @@ type OpenAIRequest struct {
 	Model          string          `json:"model"`
 	Messages       []Message       `json:"messages"`
 	ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
-	// OutputSchema is a JSON schema the native Claude provider enforces via
-	// output_config.format; the /chat/completions path ignores it.
-	OutputSchema map[string]any `json:"-"`
-}
-
-// exercisesSchema is the structured-output schema for exercise generation.
-var exercisesSchema = map[string]any{
-	"type": "object",
-	"properties": map[string]any{
-		"exercises": map[string]any{
-			"type": "array",
-			"items": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"english_hint":            map[string]any{"type": "string"},
-					"correct_german_sentence": map[string]any{"type": "string"},
-				},
-				"required":             []string{"english_hint", "correct_german_sentence"},
-				"additionalProperties": false,
-			},
-		},
-	},
-	"required":             []string{"exercises"},
-	"additionalProperties": false,
 }
 
 type Message struct {
@@ -461,7 +437,6 @@ func requestExercisesFromProvider(
 		Model:          modelName,
 		Messages:       splitGenerationPrompt(prompt),
 		ResponseFormat: &ResponseFormat{Type: "json_object"},
-		OutputSchema:   exercisesSchema,
 	}
 
 	openaiResp, elapsed, err := callChatCompletions(client, openaiURL, apiKey, openaiReq, timeout, stage)

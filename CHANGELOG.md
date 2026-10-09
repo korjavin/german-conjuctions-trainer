@@ -5,6 +5,10 @@ To get notified, click **Watch → Custom → Releases** on GitHub.
 
 ## [Unreleased]
 
+### Fixed
+
+- With `LLM_PROVIDER=anthropic`, exercise generation (live and background batch) returns the full set again instead of a single exercise. Background pre-generation also stops resubmitting a topic that keeps failing every 15 minutes; it waits longer after each failure (up to a day).
+
 ## [2.0.0] - 2026-10-09
 
 A year of work since v1. The app has a new look, a podcast mode, offline practice and Claude support.

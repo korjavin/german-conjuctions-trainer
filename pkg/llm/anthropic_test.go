@@ -41,16 +41,15 @@ func TestNativeClaudeProviderServesAllStages(t *testing.T) {
 			MaxTokens int                  `json:"max_tokens"`
 			System    []anthropicTextBlock `json:"system"`
 			Messages  []Message            `json:"messages"`
-			Output    *struct {
-				Format struct {
-					Type   string         `json:"type"`
-					Schema map[string]any `json:"schema"`
-				} `json:"format"`
-			} `json:"output_config"`
+			Output    json.RawMessage      `json:"output_config"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if req.MaxTokens <= 0 {
 			t.Errorf("max_tokens missing")
+		}
+		// gct-6d0: the json_schema grammar cut the exercise set to one item.
+		if req.Output != nil {
+			t.Errorf("output_config must not be sent, got %s", req.Output)
 		}
 		for _, m := range req.Messages {
 			if m.Role == "system" {
@@ -59,11 +58,8 @@ func TestNativeClaudeProviderServesAllStages(t *testing.T) {
 		}
 		prompt := req.Messages[len(req.Messages)-1].Content
 		switch {
-		case req.Output != nil:
-			// Exercise generation: schema-enforced, topic prompt cached in system.
-			if req.Output.Format.Type != "json_schema" || req.Output.Format.Schema["required"] == nil {
-				t.Errorf("bad output_config: %+v", req.Output)
-			}
+		case strings.Contains(prompt, `"exercises"`):
+			// Exercise generation: topic prompt cached in system.
 			if len(req.System) != 1 || req.System[0].CacheControl == nil || !strings.Contains(req.System[0].Text, "Nebensätze mit weil") {
 				t.Errorf("bad system: %+v", req.System)
 			}
@@ -73,7 +69,8 @@ func TestNativeClaudeProviderServesAllStages(t *testing.T) {
 			mu.Lock()
 			genSystems = append(genSystems, req.System[0].Text)
 			mu.Unlock()
-			writeClaudeMessage(w, mustJSONString(t, map[string]any{"exercises": buildExercises(10, "native")}))
+			// Unconstrained Claude replies may wrap the json in a fence.
+			writeClaudeMessage(w, "```json\n"+mustJSONString(t, map[string]any{"exercises": buildExercises(10, "native")})+"\n```")
 		case strings.Contains(prompt, "refine the following"):
 			writeClaudeMessage(w, "B1 Nebensätze mit weil im Alltag, Arbeit und Freizeit.")
 		case strings.Contains(prompt, "extract all key terms"):
