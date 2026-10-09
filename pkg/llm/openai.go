@@ -335,7 +335,7 @@ func callChatCompletionsOnce(
 	timeout time.Duration,
 	stage string,
 ) (*OpenAIResponse, time.Duration, error) {
-	respBody, elapsed, err := postProvider(client, strings.TrimRight(openaiURL, "/")+"/chat/completions",
+	respBody, elapsed, err := callProvider(client, http.MethodPost, strings.TrimRight(openaiURL, "/")+"/chat/completions",
 		map[string]string{"Authorization": "Bearer " + apiKey}, reqPayload, timeout, stage)
 	if err != nil {
 		return nil, elapsed, err
@@ -357,26 +357,32 @@ func callChatCompletionsOnce(
 	return &openaiResp, elapsed, nil
 }
 
-// postProvider POSTs a JSON payload and returns the raw 2xx body. A non-2xx
-// answer becomes a *providerStatusError carrying the provider's error.message
-// (OpenAI and Anthropic both use that shape), so callChatCompletions can fall back.
-func postProvider(
+// callProvider sends a JSON payload (nil = no body) and returns the raw 2xx
+// body. A non-2xx answer becomes a *providerStatusError carrying the
+// provider's error.message (OpenAI and Anthropic both use that shape), so
+// callChatCompletions can fall back.
+func callProvider(
 	client *http.Client,
+	method string,
 	url string,
 	headers map[string]string,
 	payload any,
 	timeout time.Duration,
 	stage string,
 ) ([]byte, time.Duration, error) {
-	reqBody, err := json.Marshal(payload)
-	if err != nil {
-		return nil, 0, fmt.Errorf("%s: failed to encode request body: %w", stage, err)
+	var body io.Reader
+	if payload != nil {
+		reqBody, err := json.Marshal(payload)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%s: failed to encode request body: %w", stage, err)
+		}
+		body = bytes.NewReader(reqBody)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	apiReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(reqBody))
+	apiReq, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, 0, fmt.Errorf("%s: failed to create request: %w", stage, err)
 	}
@@ -641,35 +647,46 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName, cover
 	return exercises, nil
 }
 
-// GenerateAndCacheExercises generates exercises and saves them to storage.
-func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool, coverageSection string) ([]*storage.Exercise, error) {
-	apiKey := os.Getenv("OPENAI_API_KEY")
+// providerConfig reads the primary provider's key, base URL and model.
+func providerConfig() (apiKey, openaiURL, modelName string, err error) {
+	apiKey = os.Getenv("OPENAI_API_KEY")
 	if strings.TrimSpace(apiKey) == "" {
-		return nil, fmt.Errorf("OPENAI_API_KEY is not configured")
+		return "", "", "", fmt.Errorf("OPENAI_API_KEY is not configured")
 	}
-	openaiURL := os.Getenv("OPENAI_URL")
+	openaiURL = os.Getenv("OPENAI_URL")
 	if openaiURL == "" {
 		openaiURL = "https://api.openai.com/v1"
 	}
-	modelName := os.Getenv("MODEL_NAME")
+	modelName = os.Getenv("MODEL_NAME")
 	if modelName == "" {
 		modelName = "gpt-3.5-turbo-1106"
+	}
+	return apiKey, openaiURL, modelName, nil
+}
+
+// GenerateAndCacheExercises generates exercises and saves them to storage.
+func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool, coverageSection string) ([]*storage.Exercise, error) {
+	apiKey, openaiURL, modelName, err := providerConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	generatedExercises, err := GenerateExercises(topic, apiKey, openaiURL, modelName, coverageSection)
 	if err != nil {
 		return nil, err
 	}
+	if generateAudio {
+		// NOTE: Audio generation logic (generateAndSaveAudio) is not included in this package.
+		log.Printf("Audio generation is requested but not implemented in this package.")
+	}
+	return CacheExercises(storage.DB, topic.ID, storage.GetPromptHash(topic.Prompt), generatedExercises), nil
+}
 
-	promptHash := storage.GetPromptHash(topic.Prompt)
+// CacheExercises stores generated exercises under a topic's prompt version
+// and returns the saved ones; a failing row is logged and skipped.
+func CacheExercises(db storage.Storage, topicID, promptHash string, generatedExercises []GeneratedExercise) []*storage.Exercise {
 	var newlyCached []*storage.Exercise
 	for _, exData := range generatedExercises {
-		var audioPath string
-		if generateAudio {
-			// NOTE: Audio generation logic (generateAndSaveAudio) is not included in this package.
-			log.Printf("Audio generation is requested but not implemented in this package.")
-			audioPath = ""
-		}
 
 		exJSONBytes, err := json.Marshal(exData)
 		if err != nil {
@@ -677,15 +694,14 @@ func GenerateAndCacheExercises(topic *storage.Topic, generateAudio bool, coverag
 			continue
 		}
 
-		exercise, err := storage.DB.CreateExercise(topic.ID, promptHash, string(exJSONBytes), audioPath)
+		exercise, err := db.CreateExercise(topicID, promptHash, string(exJSONBytes), "")
 		if err != nil {
 			log.Printf("Warning: failed to cache exercise: %v", err)
 			continue
 		}
 		newlyCached = append(newlyCached, exercise)
 	}
-
-	return newlyCached, nil
+	return newlyCached
 }
 
 // GetLastRefinedPrompt is kept for backward compatibility with the existing UI.

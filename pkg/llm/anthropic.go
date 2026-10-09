@@ -95,8 +95,8 @@ func callAnthropicMessages(
 	timeout time.Duration,
 	stage string,
 ) (*OpenAIResponse, time.Duration, error) {
-	respBody, elapsed, err := postProvider(client, strings.TrimRight(baseURL, "/")+"/messages",
-		map[string]string{"x-api-key": apiKey, "anthropic-version": anthropicVersion},
+	respBody, elapsed, err := callProvider(client, http.MethodPost, strings.TrimRight(baseURL, "/")+"/messages",
+		anthropicHeaders(apiKey),
 		buildAnthropicRequest(reqPayload), timeout, stage)
 	if err != nil {
 		return nil, elapsed, err
@@ -110,17 +110,9 @@ func callAnthropicMessages(
 	log.Printf("[LLM] %s usage model=%s input_tokens=%d output_tokens=%d cache_creation_input_tokens=%d cache_read_input_tokens=%d stop_reason=%s",
 		stage, reqPayload.Model, u.InputTokens, u.OutputTokens, u.CacheCreationInputTokens, u.CacheReadInputTokens, msg.StopReason)
 
-	if msg.StopReason == "refusal" || msg.StopReason == "max_tokens" {
-		return nil, elapsed, fmt.Errorf("%s stopped with stop_reason=%s after %s", stage, msg.StopReason, elapsed.Round(time.Millisecond))
-	}
-	var text strings.Builder
-	for _, block := range msg.Content {
-		if block.Type == "text" {
-			text.WriteString(block.Text)
-		}
-	}
-	if strings.TrimSpace(text.String()) == "" {
-		return nil, elapsed, fmt.Errorf("%s returned no text after %s", stage, elapsed.Round(time.Millisecond))
+	text, err := msg.text()
+	if err != nil {
+		return nil, elapsed, fmt.Errorf("%s %v after %s", stage, err, elapsed.Round(time.Millisecond))
 	}
 
 	var out OpenAIResponse
@@ -129,6 +121,27 @@ func callAnthropicMessages(
 			Content string `json:"content"`
 		} `json:"message"`
 	}, 1)
-	out.Choices[0].Message.Content = text.String()
+	out.Choices[0].Message.Content = text
 	return &out, elapsed, nil
+}
+
+func anthropicHeaders(apiKey string) map[string]string {
+	return map[string]string{"x-api-key": apiKey, "anthropic-version": anthropicVersion}
+}
+
+// text joins the reply's text blocks; a refusal, a cut-off or an empty reply is an error.
+func (m anthropicResponse) text() (string, error) {
+	if m.StopReason == "refusal" || m.StopReason == "max_tokens" {
+		return "", fmt.Errorf("stopped with stop_reason=%s", m.StopReason)
+	}
+	var text strings.Builder
+	for _, block := range m.Content {
+		if block.Type == "text" {
+			text.WriteString(block.Text)
+		}
+	}
+	if strings.TrimSpace(text.String()) == "" {
+		return "", fmt.Errorf("returned no text")
+	}
+	return text.String(), nil
 }

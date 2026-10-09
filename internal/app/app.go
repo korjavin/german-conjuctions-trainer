@@ -144,6 +144,11 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 	// Backfill key terms for existing topics that don't have them yet
 	go a.backfillKeyTerms()
 
+	// Top up small exercise pools via the Message Batches API (opt-in).
+	if threshold := pregenThreshold(); threshold > 0 {
+		go a.runPregen(threshold)
+	}
+
 	// Start background job to manage audio_cache size
 	if a.ElevenLabs.AudioCacheMaxSizeMB > 0 {
 		go func() {
