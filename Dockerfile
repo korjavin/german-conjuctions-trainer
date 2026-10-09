@@ -37,7 +37,10 @@ COPY js/ ./static/js/
 COPY css/ ./static/css/
 
 # Make the binary executable and change ownership
-RUN chmod +x ./main && chown -R appuser:appuser /app
+# Mount points must exist and belong to appuser: Docker gives an empty named
+# volume the ownership of the image directory it is mounted on.
+RUN chmod +x ./main && mkdir -p /data /app/audio_cache \
+    && chown -R appuser:appuser /app /data
 
 USER appuser
 
