@@ -3,6 +3,8 @@ import { dom } from './dom.js';
 import { loadExerciseHistoryAPI, toggleHideExerciseAPI } from './api.js';
 import { toast } from './ui.js';
 
+let historyRequest = 0;
+
 export async function showExerciseHistory() {
     if (!state.isLoggedIn) {
         toast({ tone: 'danger', text: "Please log in to view your exercise history." });
@@ -25,7 +27,9 @@ export async function showExerciseHistory() {
             dom.historyTopicName.textContent = 'All Topics';
         }
 
+        const request = ++historyRequest;
         const data = await loadExerciseHistoryAPI(state.currentTopicId);
+        if (request !== historyRequest) return; // the scope changed meanwhile; the newer load wins
         state.historyData = data.history || [];
         state.historyPage = 1;
 
