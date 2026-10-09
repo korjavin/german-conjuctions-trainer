@@ -285,7 +285,7 @@ The backend includes rate limiting to prevent abuse. By default, it allows one r
 .
 ├── main.go              # Go backend server with API and Airtable integration
 ├── index.html           # Main application UI
-├── app.js               # Frontend JavaScript for interactivity and topics management
+├── js/, css/            # Frontend ES modules (entry js/main.js) and stylesheets
 ├── agent.md             # Context file for AI development
 ├── Dockerfile           # Container definition for production
 ├── docker-compose.yml   # Docker Compose for local development

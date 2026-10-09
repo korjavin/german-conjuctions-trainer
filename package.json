@@ -2,7 +2,7 @@
   "name": "app",
   "version": "1.0.0",
   "description": "An interactive German language learning application that helps B1-level students master German grammar through engaging word-scramble exercises.",
-  "main": "app.js",
+  "main": "js/main.js",
   "directories": {
     "doc": "docs"
   },
