@@ -2261,6 +2261,7 @@ button .loading-spinner {
     overflow: visible;
 }
 #confirm-dialog {
+    margin: auto; /* the global `* { margin: 0 }` reset would pin it top-left */
     width: min(420px, calc(100% - 40px));
     max-width: none;
     padding: 0;

@@ -14,9 +14,10 @@
     <link rel="manifest" href="/manifest.json">
     <link href="/css/colors_and_type.css" rel="stylesheet">
     <link href="/css/components.css" rel="stylesheet">
-    <link href="style.css?v=202610090002" rel="stylesheet">
+    <link href="style.css?v=202610090003" rel="stylesheet">
     <link href="/css/shell.css" rel="stylesheet">
     <link href="/css/me.css" rel="stylesheet">
+    <link href="/css/manage.css" rel="stylesheet">
     <link href="/css/today.css" rel="stylesheet">
     <link href="/css/history.css" rel="stylesheet">
     <link href="/css/practice.css" rel="stylesheet">
@@ -314,240 +315,123 @@
           </div>
         </section>
 
-        <section data-screen="manage" hidden>
-            <h1 class="gct-page-title">Manage</h1>
-            <!-- Topics management (admin only) -->
-            <div id="topics-admin-section" class="hidden">
-            <div class="db-stats-separator"></div>
-
-            <!-- Observability -->
-            <div class="observability-section mb-6">
-                <h3 class="section-title mb-2">Observability</h3>
-                <div class="flex justify-between items-center">
-                    <p class="section-desc">Inspect the prompt that was last used to generate exercises.</p>
-                    <button id="view-last-refined-prompt-btn" class="btn-secondary btn-sm">View Last Refined Prompt</button>
-                </div>
+        <section data-screen="manage" hidden class="gct-manage">
+            <div class="gct-manage__head">
+                <a href="#/me" class="gct-icon-btn gct-manage__back" aria-label="Back" title="Back"><i data-icon="chevron-left"></i></a>
+                <h1 class="gct-manage__title">Manage</h1>
+                <span class="gct-badge gct-badge--neutral gct-manage__admin">Admin</span>
+            </div>
+            <div class="gct-manage__tabs" role="tablist" aria-label="Manage sections">
+                <button type="button" role="tab" data-manage-tab="topics" aria-selected="true"><i data-icon="topics" data-size="16"></i>Topics</button>
+                <button type="button" role="tab" data-manage-tab="obs" aria-selected="false"><i data-icon="activity" data-size="16"></i>Observability</button>
+                <button type="button" role="tab" data-manage-tab="db" aria-selected="false"><i data-icon="database" data-size="16"></i>Database</button>
+                <button type="button" role="tab" data-manage-tab="cli" aria-selected="false"><i data-icon="terminal" data-size="16"></i>CLI access</button>
             </div>
 
-            <!-- Topics List -->
-            <div class="mb-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="section-title">All Topics</h3>
-                    <div class="flex items-center space-x-4">
-                        <div class="flex items-center space-x-2">
-                            <label for="topic-sort" class="text-label">Sort by:</label>
-                            <select id="topic-sort" class="form-select">
-                                <option value="tree">Tree Order (Manual)</option>
-                                <option value="name-asc">Name (A-Z)</option>
-                                <option value="name-desc">Name (Z-A)</option>
-                                <option value="date-newest">Newest First</option>
-                                <option value="date-oldest">Oldest First</option>
-                            </select>
+            <!-- Topics: tree (left / first on mobile) + editor (right / pushed on mobile). js/topics.js -->
+            <div id="manage-topics" class="gct-manage__panel gct-manage__topics" data-manage-panel="topics" role="tabpanel">
+                <div class="gct-manage__tree" id="manage-tree">
+                    <div class="gct-manage__toolbar">
+                        <div class="gct-manage__search">
+                            <i data-icon="search" data-size="16"></i>
+                            <input type="text" id="topics-search-input" class="gct-input" placeholder="Search · Ctrl F" aria-label="Search topics" autocomplete="off">
                         </div>
-                        <button id="collapse-all-btn" class="btn-icon btn-sm" title="Collapse All" aria-label="Collapse all topics">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M7 3L12 8L17 3"></path>
-                                <path d="M7 11L12 16L17 11"></path>
-                            </svg>
-                        </button>
-                        <button id="expand-all-btn" class="btn-icon btn-sm" title="Expand All" aria-label="Expand all topics">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M7 8L12 3L17 8"></path>
-                                <path d="M7 16L12 11L17 16"></path>
-                            </svg>
-                        </button>
-                        <button id="add-topic-btn" class="btn-primary btn-sm">Add New Topic</button>
+                        <select id="topic-sort" class="gct-input gct-manage__sort" aria-label="Sort topics">
+                            <option value="tree">Tree</option>
+                            <option value="name-asc">A–Z</option>
+                            <option value="name-desc">Z–A</option>
+                            <option value="date-newest">Newest</option>
+                            <option value="date-oldest">Oldest</option>
+                        </select>
+                        <button type="button" id="add-topic-btn" class="gct-icon-btn" aria-label="New root topic" title="New root topic"><i data-icon="plus"></i></button>
                     </div>
-                </div>
-                <div class="relative mb-3">
-                    <input type="text" id="topics-search-input" class="form-input w-full pr-10" placeholder="Search topics (Ctrl+F / Cmd+F)...">
-                    <button id="topics-search-clear" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden" aria-label="Clear search">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
-                </div>
-                <p class="section-desc mb-2">Drop on a topic to make it a child, or drop between topics to reorder siblings.</p>
-                <div id="topics-list" class="topics-list">
-                    <!-- Topics will be loaded here -->
-                </div>
-            </div>
-
-            <!-- Prompt Editor (shown when topic is selected) -->
-            <div id="prompt-editor" class="mb-6 hidden">
-                <div class="flex justify-between items-center mb-2">
-                    <label class="text-label">Edit Topic: <span id="current-topic-name" class="font-semibold"></span></label>
-                    <button id="view-versions-btn" class="text-link">View Version History</button>
+                    <div id="topics-list" class="gct-manage__rows"></div>
+                    <div class="gct-manage__hint gct-kbd-only">Drag to nest or reorder · ↑↓ to move · Enter to open</div>
                 </div>
 
-                <!-- Recently used topics quick-select -->
-                <div id="edit-recently-used-topics" class="mb-4 hidden">
-                    <label class="text-label mb-1 block">Recently Used Topics</label>
-                    <div id="edit-recent-topics-container" class="flex flex-wrap gap-2 mb-2">
-                        <!-- Recently used topic badges will be inserted here -->
-                    </div>
-                </div>
-
-                <div class="mb-4">
-                    <label for="edit-topic-parent" class="text-label block mb-1">Parent Topic</label>
-                    <select id="edit-topic-parent" class="form-select w-full">
-                        <!-- Options populated via JS -->
-                    </select>
-                </div>
-
-                <!-- Topic Hierarchy Preview for Edit -->
-                <div id="edit-topic-hierarchy-preview" class="mb-4 p-3 bg-gray-50 rounded border border-gray-200">
-                    <label class="text-label mb-1 block text-sm text-gray-600">Current hierarchy:</label>
-                    <div id="edit-topic-current-path" class="text-sm font-medium text-gray-800"></div>
-                </div>
-
-                <div class="mb-4">
-                    <label for="prompt-textarea" class="text-label block mb-1">
-                        Prompt <span class="text-red-500">*</span>
-                    </label>
-                    <textarea id="prompt-textarea" rows="10" class="form-textarea w-full mb-2"></textarea>
-                    <p class="section-desc mt-2 mb-2">Describe what to practice: grammar topic, vocabulary themes, and situations. Technical details (JSON format, etc.) are handled automatically.</p>
-                    <div id="edit-topic-prompt-error" class="text-error mt-1 text-sm hidden"></div>
-                </div>
-
-                <div class="flex justify-end space-x-2">
-                    <button id="cancel-edit-btn" class="btn-secondary">Cancel (Esc)</button>
-                    <button id="save-prompt-btn" class="btn-primary flex items-center gap-2">
-                        <span>Save Changes</span>
-                        <span class="loading-spinner hidden" style="width: 16px; height: 16px; border-width: 2px;"></span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Version History Modal Content (shown within settings modal) -->
-            <div id="version-history" class="hidden">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="section-title">Version History for: <span id="version-topic-name"></span></h3>
-                    <button id="close-versions-btn" class="close-btn">&times;</button>
-                </div>
-                <div id="versions-list" class="versions-list mb-4">
-                    <!-- Versions will be loaded here -->
-                </div>
-            </div>
-
-            <!-- Add Topic Form (hidden by default) -->
-            <div id="add-topic-form" class="mb-6 hidden">
-                <h3 class="section-title mb-4">Add New Topic</h3>
-
-                <!-- Recently used topics quick-select -->
-                <div id="recently-used-topics" class="mb-4 hidden">
-                    <label class="text-label mb-1 block">Recently Used Topics</label>
-                    <div id="recent-topics-container" class="flex flex-wrap gap-2 mb-2">
-                        <!-- Recently used topic badges will be inserted here -->
-                    </div>
-                </div>
-
-                <div class="mb-4">
-                    <label for="new-topic-parent" class="text-label mb-1 block">Parent Topic</label>
-                    <select id="new-topic-parent" class="form-select w-full">
-                        <option value="">(Root Topic)</option>
-                    </select>
-                </div>
-
-                <!-- Topic Hierarchy Preview -->
-                <div id="add-topic-hierarchy-preview" class="mb-4 p-3 bg-gray-50 rounded border border-gray-200 hidden">
-                    <label class="text-label mb-1 block text-sm text-gray-600">Topic will be created as:</label>
-                    <div id="add-topic-preview-path" class="text-sm font-medium text-gray-800"></div>
-                </div>
-
-                <div class="mb-4">
-                    <label for="new-topic-name" class="text-label mb-1 block">
-                        Topic Name <span class="text-red-500">*</span>
-                    </label>
-                    <input type="text" id="new-topic-name" class="form-input w-full" placeholder="e.g., Conjunctions, Verb + Preposition">
-                    <div id="new-topic-name-error" class="text-error mt-1 text-sm hidden"></div>
-                </div>
-
-                <div class="mb-4">
-                    <label for="new-topic-prompt" class="text-label mb-1 block">
-                        Prompt <span class="text-red-500">*</span>
-                    </label>
-                    <textarea id="new-topic-prompt" rows="8" class="form-textarea w-full" placeholder="Topic: [grammar concept, e.g. &#34;um...zu&#34; and &#34;damit&#34; conjunctions]
+                <div class="gct-manage__editor">
+                    <p id="topic-editor-empty" class="gct-manage__empty">Select a topic to edit its prompt, or create a new one with +.</p>
+                    <form id="topic-editor" class="gct-manage__form" hidden novalidate>
+                        <button type="button" id="topic-editor-back" class="gct-manage__backlink"><i data-icon="chevron-left" data-size="18"></i>All topics</button>
+                        <div class="gct-manage__ehead">
+                            <div class="gct-manage__grow">
+                                <nav id="topic-editor-crumbs" class="gct-crumbs" aria-label="Topic path"></nav>
+                                <h2 id="topic-editor-title" class="gct-manage__etitle"></h2>
+                                <div id="topic-editor-meta" class="gct-manage__meta"></div>
+                            </div>
+                            <div class="gct-manage__eactions">
+                                <button type="button" id="topic-editor-archive" class="gct-icon-btn" aria-label="Archive" title="Archive"><i data-icon="archive"></i></button>
+                                <button type="button" id="topic-editor-delete" class="gct-icon-btn" aria-label="Delete" title="Delete"><i data-icon="trash"></i></button>
+                            </div>
+                        </div>
+                        <label class="gct-manage__field">
+                            <span class="gct-manage__label">Name</span>
+                            <input type="text" id="topic-name-input" class="gct-input" placeholder="e.g. Konjunktionen — weil, obwohl" maxlength="200">
+                            <span id="topic-name-error" class="gct-manage__error" role="alert" hidden></span>
+                        </label>
+                        <div class="gct-manage__field">
+                            <label class="gct-manage__label" for="topic-parent-select">Parent</label>
+                            <select id="topic-parent-select" class="gct-input"></select>
+                            <div id="recently-used-topics" class="gct-manage__recent" hidden>
+                                <span class="gct-manage__small">Recent:</span>
+                                <span id="recent-topics-container" class="gct-manage__recent"></span>
+                            </div>
+                        </div>
+                        <label class="gct-manage__field">
+                            <span class="gct-manage__split"><span class="gct-manage__label">Prompt</span><span id="prompt-counter" class="gct-manage__small"></span></span>
+                            <textarea id="prompt-textarea" class="gct-input gct-manage__prompt" rows="8" placeholder="Topic: [grammar concept, e.g. &#34;um...zu&#34; and &#34;damit&#34;]
 Level: B1
-Vocabulary: [themes, e.g. daily life, travel, work, common German verbs]
-Situations: [contexts, e.g. explaining reasons, expressing goals, giving instructions]"></textarea>
-                    <p class="section-desc mt-2 mb-2">Describe what to practice: grammar topic, vocabulary themes, and situations. Technical details (JSON format, etc.) are handled automatically.</p>
-                    <div id="new-topic-prompt-error" class="text-error mt-1 text-sm hidden"></div>
-                </div>
-
-                <div class="flex justify-end space-x-2">
-                    <button id="cancel-add-btn" class="btn-secondary">Cancel (Esc)</button>
-                    <button id="save-topic-btn" class="btn-primary flex items-center gap-2">
-                        <span>Create Topic</span>
-                        <span class="loading-spinner hidden" style="width: 16px; height: 16px; border-width: 2px;"></span>
-                    </button>
-                </div>
-            </div>
-
-            </div>
-
-            <!-- Database Stats (admin only) -->
-            <div id="db-stats-section" class="mb-6 hidden">
-                <div class="db-stats-separator"></div>
-                <h3 class="section-title mb-4">Database</h3>
-                <div id="db-stats-container" class="db-stats-container">
-                    <div id="db-stats-loading" class="section-desc">Loading statistics...</div>
-                    <div id="db-stats-content" class="hidden">
-                        <div class="db-stats-grid">
-                            <div class="db-stat-item">
-                                <span class="db-stat-label">Total Exercises</span>
-                                <span id="db-stat-exercises" class="db-stat-value">-</span>
-                            </div>
-                            <div class="db-stat-item">
-                                <span class="db-stat-label">Total Topics</span>
-                                <span id="db-stat-topics" class="db-stat-value">-</span>
-                            </div>
-                            <div class="db-stat-item">
-                                <span class="db-stat-label">Database Size</span>
-                                <span id="db-stat-db-size" class="db-stat-value">-</span>
-                            </div>
-                            <div class="db-stat-item">
-                                <span class="db-stat-label">Audio Cache</span>
-                                <span id="db-stat-audio-cache" class="db-stat-value">-</span>
-                            </div>
+Vocabulary: [themes, e.g. daily life, travel, work]
+Situations: [contexts, e.g. explaining reasons, expressing goals]"></textarea>
+                            <span id="prompt-error" class="gct-manage__error" role="alert" hidden></span>
+                        </label>
+                        <div class="gct-manage__savebar">
+                            <button type="submit" id="save-prompt-btn" class="gct-btn gct-btn--primary">Save</button>
+                            <button type="button" id="discard-btn" class="gct-btn gct-btn--ghost">Discard</button>
+                            <span class="gct-manage__small gct-kbd-only">Ctrl Enter saves</span>
                         </div>
-                        <details class="mt-4">
-                            <summary class="db-stats-summary">Exercises per topic</summary>
-                            <div id="db-stats-per-topic" class="db-stats-per-topic mt-2"></div>
-                        </details>
-                    </div>
-                    <div id="db-stats-error" class="text-error text-sm hidden"></div>
+                        <div id="versions-section" hidden>
+                            <h3 class="gct-manage__caption">Prompt versions</h3>
+                            <div id="versions-list" class="gct-card gct-manage__versions"></div>
+                        </div>
+                    </form>
                 </div>
             </div>
 
-            <!-- CLI Access (admin only) -->
-            <div id="cli-access-section" class="mb-6 hidden">
-                <div class="db-stats-separator"></div>
-                <h3 class="section-title mb-2">CLI Access</h3>
-                <p class="section-desc mb-3">
-                    Generate a bearer token for the <code>gct</code> command-line tool.
-                    The token grants the same permissions as your current admin session.
-                    Save the token now — it is shown only once.
-                </p>
-                <div class="flex items-center gap-2 mb-3">
-                    <label for="cli-token-label" class="text-label">Label:</label>
-                    <input type="text" id="cli-token-label" class="form-input" placeholder="laptop" maxlength="64" style="max-width: 16rem;">
-                    <button id="cli-token-generate-btn" class="btn-primary btn-sm">Generate token</button>
+            <!-- Observability: the prompt that last generated exercises. js/manage.js -->
+            <div class="gct-manage__panel gct-manage__pad" data-manage-panel="obs" role="tabpanel" hidden>
+                <h3 id="obs-caption" class="gct-manage__caption">Last refined prompt</h3>
+                <pre id="obs-prompt" class="gct-manage__pre">Loading…</pre>
+            </div>
+
+            <!-- Database statistics. js/manage.js -->
+            <div class="gct-manage__panel gct-manage__pad" data-manage-panel="db" role="tabpanel" hidden>
+                <div class="gct-manage__stats">
+                    <div class="gct-card gct-manage__stat"><h3 class="gct-manage__caption">Topics</h3><div id="db-stat-topics" class="gct-manage__num">–</div></div>
+                    <div class="gct-card gct-manage__stat"><h3 class="gct-manage__caption">Exercises</h3><div id="db-stat-exercises" class="gct-manage__num">–</div></div>
+                    <div class="gct-card gct-manage__stat"><h3 class="gct-manage__caption">DB size</h3><div id="db-stat-db-size" class="gct-manage__num">–</div></div>
+                    <div class="gct-card gct-manage__stat"><h3 class="gct-manage__caption">Audio cache</h3><div id="db-stat-audio-cache" class="gct-manage__num">–</div><div id="db-stat-audio-files" class="gct-manage__small"></div></div>
                 </div>
-                <div id="cli-token-result" class="hidden">
-                    <label class="text-label block mb-1">Token (copy now):</label>
-                    <div class="flex items-center gap-2 mb-2">
-                        <input type="text" id="cli-token-value" class="form-input flex-1" readonly>
-                        <button id="cli-token-copy-btn" class="btn-secondary btn-sm">Copy</button>
-                    </div>
-                    <details>
-                        <summary class="db-stats-summary">How to use this token</summary>
-                        <pre class="cli-token-snippet mt-2"># On the machine that will run gct:
+                <div id="db-stats-error" class="gct-manage__error" role="alert" hidden></div>
+                <h3 class="gct-manage__caption">Exercises per topic</h3>
+                <div id="db-stats-per-topic" class="gct-card gct-manage__versions"></div>
+            </div>
+
+            <!-- CLI access: one-time bearer token for the gct CLI. js/manage.js -->
+            <div class="gct-manage__panel gct-manage__pad gct-manage__cli" data-manage-panel="cli" role="tabpanel" hidden>
+                <p class="gct-manage__text">A personal token lets the <code>gct</code> command-line tool add topics and read stats with your admin rights. It is shown once — copy it now.</p>
+                <div class="gct-manage__cliform">
+                    <input type="text" id="cli-token-label" class="gct-input" placeholder="Label, e.g. laptop" maxlength="64" aria-label="Token label">
+                    <button type="button" id="cli-token-generate-btn" class="gct-btn gct-btn--primary"><i data-icon="terminal" data-size="16"></i>Generate token</button>
+                </div>
+                <div id="cli-token-result" class="gct-manage__cliform" hidden>
+                    <input type="text" id="cli-token-value" class="gct-input gct-manage__mono" readonly aria-label="CLI token">
+                    <button type="button" id="cli-token-copy-btn" class="gct-btn gct-btn--secondary"><i data-icon="copy" data-size="16"></i>Copy</button>
+                </div>
+                <div id="cli-token-error" class="gct-manage__error" role="alert" hidden></div>
+                <pre class="gct-manage__code"># On the machine that will run gct:
 gct auth set-token &lt;PASTED_TOKEN&gt; --server &lt;THIS_SERVER_URL&gt;
 gct whoami</pre>
-                    </details>
-                </div>
-                <div id="cli-token-error" class="text-error text-sm hidden mt-2"></div>
             </div>
         </section>
     </main>
@@ -559,31 +443,6 @@ gct whoami</pre>
         <a href="#/history" data-nav="history"><i data-icon="history" data-size="22"></i>History</a>
         <a href="#/me" data-nav="me"><i data-icon="user" data-size="22"></i>Me</a>
     </nav>
-
-    <!-- Last Refined Prompt Modal -->
-    <dialog id="last-refined-prompt-modal" class="modal-backdrop">
-        <div class="card modal-content modal-lg">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="modal-title">Last Refined Prompt</h2>
-                <button id="last-refined-prompt-close-btn" class="close-btn">&times;</button>
-            </div>
-            <pre id="last-refined-prompt-content" class="code-block"></pre>
-        </div>
-    </dialog>
-
-    <!-- Templates for JS dynamic rendering -->
-    <template id="topic-item-template">
-        <div class="topic-list-item flex justify-between items-center p-3">
-            <div>
-                <div class="topic-item-name"></div>
-                <div class="topic-item-date"></div>
-            </div>
-            <div class="flex space-x-2">
-                <button class="edit-topic-btn text-link">Edit</button>
-                <button class="delete-topic-btn text-danger">Delete</button>
-            </div>
-        </div>
-    </template>
 
     <!-- v2 feedback hosts (js/ui.js) -->
     <div id="toast-root" popover="manual"></div>
