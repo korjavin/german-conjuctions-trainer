@@ -37,33 +37,13 @@
 
 body {
     font-family: var(--font-family-base);
-    background:
-        radial-gradient(circle at 10% 8%, rgba(239, 134, 57, 0.22), transparent 38%),
-        radial-gradient(circle at 95% 0%, rgba(163, 63, 17, 0.16), transparent 35%),
-        linear-gradient(160deg, #fffaf4 0%, #ffeed6 48%, #ffe3bf 100%);
-    background-size: 200% 200%;
-    background-position: 50% 50%;
-    animation: background-breathe 25s ease-in-out infinite;
+    background: var(--gradient-page);
+    background-attachment: fixed;
     min-height: 100vh;
     color: var(--mr-text);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-}
-
-@keyframes background-breathe {
-    0%   { background-position: 42% 44%; }
-    33%  { background-position: 58% 52%; }
-    66%  { background-position: 46% 56%; }
-    100% { background-position: 42% 44%; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    body {
-        animation: none;
-        background-size: auto;
-        background-position: initial;
-    }
 }
 
 button,
@@ -237,10 +217,10 @@ textarea:focus-visible {
 }
 
 .hint-word {
-    background: linear-gradient(145deg, #f59e44 0%, #d96f27 100%);
-    border-color: #ca5e19;
+    background: linear-gradient(145deg, var(--color-orange-light) 0%, var(--color-orange) 100%);
+    border-color: var(--color-orange-dark);
     color: #fff;
-    box-shadow: 0 8px 15px rgba(217, 111, 39, 0.35);
+    box-shadow: 0 8px 15px var(--color-shadow);
     transform: translateY(-2px);
 }
 
@@ -273,14 +253,14 @@ textarea:focus-visible {
 /* Privacy Page */
 
 .privacy-page {
-    background: linear-gradient(160deg, #fffaf4 0%, #ffefd9 100%);
-    color: #4f3426;
+    background: var(--gradient-page);
+    color: var(--fg-primary);
 }
 
 .privacy-page .card {
-    background-color: #fffdf9;
-    border: 1px solid #f2dec6;
-    box-shadow: 0 10px 22px rgba(105, 45, 18, 0.08);
+    background-color: var(--bg-card);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 10px 22px var(--color-shadow);
 }
 
 .page-title {
