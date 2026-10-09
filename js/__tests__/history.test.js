@@ -1,235 +1,188 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { showExerciseHistory, renderHistoryPage, updateHistoryFilterUI, bucketReviewItems, REVIEW_BUCKETS } from '../history.js';
+import {
+    showExerciseHistory, renderHistory, initHistory, getFilteredHistoryData, filterCounts,
+    relativeTopic, statusBadge, bucketReviewItems, REVIEW_BUCKETS,
+} from '../history.js';
 import { state } from '../state.js';
-import { dom } from '../dom.js';
+import { initScope } from '../scope.js';
 import * as api from '../api.js';
 import { toast } from '../ui.js';
 
 vi.mock('../api.js', () => ({
-    loadExerciseHistoryAPI: vi.fn()
+    loadExerciseHistoryAPI: vi.fn(),
+    toggleHideExerciseAPI: vi.fn(),
+    toggleFavoriteAPI: vi.fn(),
+    fetchTopicProgressAPI: vi.fn(),
+    saveUserSettingsAPI: vi.fn(async () => {}),
 }));
+vi.mock('../session.js', () => ({ resetForNewSession: vi.fn() }));
 
-// Mock template structure
-const mockTemplate = document.createElement('template');
-mockTemplate.id = 'history-item-template';
-mockTemplate.innerHTML = `
-    <div class="history-item">
-        <div class="history-item-title"></div>
-        <div class="history-item-hint"></div>
-        <div class="history-item-status-container"></div>
-        <button class="history-item-ignore-btn"><svg></svg></button>
-        <div class="history-item-topic"></div>
-        <div class="history-item-date"></div>
-        <div class="history-item-success"></div>
-        <div class="history-item-failed"></div>
-        <div class="history-item-hints"></div>
-        <div class="history-item-total"></div>
-        <div class="history-item-rate"></div>
-    </div>
-`;
-document.body.appendChild(mockTemplate);
+const NOW = Date.parse('2026-10-09T12:00:00Z');
+const OLD = '2026-08-01T00:00:00Z';
+const topics = [
+    { id: 'telc', name: 'telc B1 (Berlin) — Prüfung', parent_id: null, sort_order: 0, created_at: OLD },
+    { id: 'g', name: 'G. Mündliche Prüfung', parent_id: 'telc', sort_order: 0, created_at: OLD },
+    { id: 'g1', name: 'G1. Teil 1 — Kontaktaufnahme', parent_id: 'g', sort_order: 0, created_at: OLD },
+];
+
+const row = (o = {}) => ({
+    exercise_id: 'x', german_sentence: 'Ich gehe, weil es regnet.', english_hint: 'I go because it rains.',
+    topic_id: 'g1', topic_name: 'G1', last_viewed: new Date(NOW - 36e5).toISOString(), next_review_hours: 5,
+    ready_to_repeat: false, is_hidden: false, is_favorite: false,
+    total_attempts: 4, successful_attempts: 3, failed_attempts: 1, hints_used: 0, ...o,
+});
+
+const PAGE_HTML = '<section id="screen-history"><div id="history-sub"></div><div id="history-loading" hidden></div><div id="history-body" hidden>'
+    + '<div id="history-review-chart-bars"></div><div id="history-filters">'
+    + ['due', 'training', 'fav', 'ignored'].map((f) => `<button data-filter="${f}"><span class="gct-pill__count"></span></button>`).join('')
+    + '</div><div id="history-sort">'
+    + ['timing', 'errors', 'date'].map((k) => `<button data-sort="${k}"><span class="gct-history__dir"></span></button>`).join('')
+    + '</div><div id="history-content"></div><button id="history-more-btn" hidden></button></div></section>';
+
+initScope();
+let inited = false;
 
 describe('history.js', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-
+        localStorage.clear();
         state.isLoggedIn = true;
-        state.currentTopicId = 'topic1';
-        state.topics = [{ id: 'topic1', name: 'Test Topic' }];
+        state.scopeId = null;
+        state.recentlyUsedTopics = [];
+        state.topics = topics;
+        window.dispatchEvent(new Event('topicschange'));
         state.historyData = [];
         state.historyPage = 1;
-        state.historyItemsPerPage = 10;
-        state.historyFilterReady = false;
-        state.historyFilterFavorites = false;
-        state.historyFilterTrained = false;
-        state.historyFilterIgnored = false;
+        state.historyFilter = 'due';
+        state.historySort = { key: 'timing', dir: 1 };
+        document.body.innerHTML = PAGE_HTML;
+        if (!inited) { initHistory(); inited = true; }
+    });
 
-        // Reset DOM elements mock classes
-        dom.historyLoading.classList.remove = vi.fn();
-        dom.historyLoading.classList.add = vi.fn();
-        dom.historyEmpty.classList.remove = vi.fn();
-        dom.historyEmpty.classList.add = vi.fn();
-        dom.historyContent.classList.remove = vi.fn();
-        dom.historyContent.classList.add = vi.fn();
-        dom.historyPagination.classList.remove = vi.fn();
-        dom.historyPagination.classList.add = vi.fn();
-        dom.historySummary.classList.remove = vi.fn();
-        dom.historySummary.classList.add = vi.fn();
-        dom.historyControlsContainer.classList.add = vi.fn();
+    describe('filters', () => {
+        const rows = [
+            row({ ready_to_repeat: true, is_favorite: true }),
+            row({ ready_to_repeat: true }),
+            row(),
+            row({ is_hidden: true, ready_to_repeat: true, is_favorite: true }),
+        ];
 
-        // Setup filter icons
-        dom.historyFilterReady.classList.add = vi.fn();
-        dom.historyFilterReady.classList.remove = vi.fn();
-        dom.historyFilterTrained.classList.add = vi.fn();
-        dom.historyFilterTrained.classList.remove = vi.fn();
-        dom.historyFilterFavorites.innerHTML = '<svg></svg>';
-        dom.historyFilterFavorites.classList.add = vi.fn();
-        dom.historyFilterFavorites.classList.remove = vi.fn();
-        dom.historyFilterIgnored.classList.add = vi.fn();
-        dom.historyFilterIgnored.classList.remove = vi.fn();
+        it('are single-select and never show ignored rows outside Ignored', () => {
+            expect(getFilteredHistoryData(rows, 'due', { key: 'timing', dir: 1 })).toHaveLength(2);
+            expect(getFilteredHistoryData(rows, 'training', { key: 'timing', dir: 1 })).toHaveLength(1);
+            expect(getFilteredHistoryData(rows, 'fav', { key: 'timing', dir: 1 })).toHaveLength(1);
+            expect(getFilteredHistoryData(rows, 'ignored', { key: 'timing', dir: 1 })).toHaveLength(1);
+        });
 
-        dom.historySortTiming.classList.add = vi.fn();
-        dom.historySortTiming.classList.remove = vi.fn();
-        dom.historySortErrors.classList.add = vi.fn();
-        dom.historySortErrors.classList.remove = vi.fn();
-        dom.historySortDate.classList.add = vi.fn();
-        dom.historySortDate.classList.remove = vi.fn();
-        dom.historySortTiming.innerHTML = '<span class="sort-dir"></span>';
-        dom.historySortErrors.innerHTML = '<span class="sort-dir"></span>';
-        dom.historySortDate.innerHTML = '<span class="sort-dir"></span>';
+        it('counts equal the rows each pill shows', () => {
+            const c = filterCounts(rows);
+            expect(c).toEqual({ due: 2, training: 1, fav: 1, ignored: 1 });
+            for (const k of Object.keys(c)) expect(getFilteredHistoryData(rows, k, { key: 'date', dir: -1 })).toHaveLength(c[k]);
+        });
+    });
 
-        toast.mockClear();
+    it('sorts by errors and flips on a repeat click', () => {
+        state.historyFilter = 'training';
+        state.historyData = [
+            row({ exercise_id: 'good', german_sentence: 'good', successful_attempts: 4 }),
+            row({ exercise_id: 'bad', german_sentence: 'bad', successful_attempts: 0 }),
+        ];
+        renderHistory(NOW);
+        const first = () => document.querySelector('.gct-history__de').textContent;
+        const errors = document.querySelector('[data-sort="errors"]');
+        errors.click();
+        expect(first()).toBe('bad');
+        expect(errors.textContent).toBe('↓');
+        errors.click();
+        expect(first()).toBe('good');
+        expect(errors.textContent).toBe('↑');
+    });
+
+    it('relative topic label drops the scope prefix; the leaf alone when the row is the scope', () => {
+        expect(relativeTopic(row(), null)).toBe('telc B1 › G. Mündliche Prüfung › G1. Teil 1');
+        expect(relativeTopic(row(), 'telc')).toBe('G. Mündliche Prüfung › G1. Teil 1');
+        expect(relativeTopic(row(), 'g1')).toBe('G1. Teil 1');
+        expect(relativeTopic(row({ topic_id: 'gone', topic_name: 'Old' }), 'telc')).toBe('Old');
+    });
+
+    it('status badge: Due now (info), in N h / N d, Ignored', () => {
+        expect(statusBadge(row({ ready_to_repeat: true }), NOW)).toContain('gct-badge--info');
+        expect(statusBadge(row({ ready_to_repeat: true }), NOW)).toContain('Due now');
+        expect(statusBadge(row(), NOW)).toContain('in 4 h');
+        expect(statusBadge(row({ next_review_hours: 49 }), NOW)).toContain('in 2 d');
+        expect(statusBadge(row({ is_hidden: true }), NOW)).toContain('Ignored');
     });
 
     describe('showExerciseHistory', () => {
-        it('requires login', async () => {
+        it('does not load when logged out', async () => {
             state.isLoggedIn = false;
             await showExerciseHistory();
-            expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', text: "Please log in to view your exercise history." }));
             expect(api.loadExerciseHistoryAPI).not.toHaveBeenCalled();
         });
 
-        it('calls API and calculates summary stats', async () => {
-            const historyItem1 = {
-                ready_to_repeat: true,
-                total_attempts: 10,
-                successful_attempts: 8,
-                last_viewed: new Date().toISOString()
-            };
-            const historyItem2 = {
-                ready_to_repeat: false,
-                total_attempts: 5,
-                successful_attempts: 1,
-                last_viewed: new Date().toISOString()
-            };
-
-            api.loadExerciseHistoryAPI.mockResolvedValueOnce({
-                history: [historyItem1, historyItem2]
-            });
-
+        it('loads the scope, shows counts, sub line and the Due rows', async () => {
+            state.scopeId = 'telc';
+            api.loadExerciseHistoryAPI.mockResolvedValueOnce({ history: [
+                row({ ready_to_repeat: true, successful_attempts: 1, total_attempts: 4 }),
+                row({ successful_attempts: 3, total_attempts: 4 }),
+                row({ is_hidden: true, successful_attempts: 0, total_attempts: 10 }),
+            ] });
             await showExerciseHistory();
-
-            expect(api.loadExerciseHistoryAPI).toHaveBeenCalledWith('topic1');
-
-            // Stats checks
-            expect(dom.historyTotalCount.textContent).toBe('2'); // length
-            expect(dom.historyFilterFavoritesCount.textContent).toBe('0'); // 0 favorites
-
-            expect(dom.historyFilterReadyCount.textContent).toBe('1'); // 1 ready
-            expect(dom.historyFilterTrainedCount.textContent).toBe('1'); // 1 trained
-            expect(dom.historyTotalAttempts.textContent).toBe('15'); // 10 + 5
-
-            // Math.round((9 / 15) * 100) = 60
-            expect(dom.historySuccessRate.textContent).toBe('60%');
-
-            expect(dom.historySummary.classList.remove).toHaveBeenCalledWith('hidden');
+            expect(api.loadExerciseHistoryAPI).toHaveBeenCalledWith('telc');
+            expect(document.getElementById('history-body').hidden).toBe(false);
+            expect(document.getElementById('history-sub').textContent).toBe('2 practiced · 50% right first time');
+            const count = (f) => document.querySelector(`[data-filter="${f}"] .gct-pill__count`).textContent;
+            expect([count('due'), count('training'), count('fav'), count('ignored')]).toEqual(['1', '1', '0', '1']);
+            expect(document.querySelectorAll('.gct-history__row')).toHaveLength(1);
+            expect(document.querySelector('.gct-history__where').textContent).toMatch(/^G\. Mündliche Prüfung › G1\. Teil 1 · /);
         });
 
-        it('handles empty state', async () => {
+        it('shows the empty line and a toast on failure', async () => {
             api.loadExerciseHistoryAPI.mockResolvedValueOnce({ history: [] });
-
             await showExerciseHistory();
-
-            expect(dom.historyEmpty.classList.remove).toHaveBeenCalledWith('hidden');
-            expect(dom.historySummary.classList.add).toHaveBeenCalledWith('hidden');
-
-            // Check for historyControlsContainer if it exists in mock DOM
-            if (dom.historyControlsContainer.classList.add.mock.calls.length > 0) {
-                expect(dom.historyControlsContainer.classList.add).toHaveBeenCalledWith('hidden');
-            }
+            expect(document.getElementById('history-content').textContent).toBe('Nothing here yet.');
+            api.loadExerciseHistoryAPI.mockRejectedValueOnce(new Error('x'));
+            await showExerciseHistory();
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger' }));
         });
     });
 
-    describe('renderHistoryPage and pagination', () => {
-        beforeEach(() => {
-            // Setup some dummy items
-            state.historyData = Array(15).fill().map((_, i) => ({
-                id: i,
-                ready_to_repeat: i % 2 === 0,
-                is_favorite: i === 0,
-                german_sentence: `Item ${i}`,
-                english_hint: `Hint ${i}`,
-                topic_name: 'Topic',
-                last_viewed: new Date().toISOString(),
-                total_attempts: 5,
-                successful_attempts: Math.min(i, 5),
-                failed_attempts: 0,
-                hints_used: 0
-            }));
-        });
-
-        it('filters Ready to Repeat correctly', () => {
-            state.historyFilterReady = true;
-            renderHistoryPage();
-
-            // Only even indices are ready (15 total -> 8 items)
-            expect(dom.historyContent.childNodes.length).toBe(8);
-        });
-
-        it('filters Favorites correctly', () => {
-            state.historyFilterFavorites = true;
-            renderHistoryPage();
-
-            // Only index 0 is favorite
-            expect(dom.historyContent.childNodes.length).toBe(1);
-        });
-
-        it('filters Trained (not ready) correctly', () => {
-            state.historyFilterTrained = true;
-            renderHistoryPage();
-
-            // Only odd indices are trained (15 total -> 7 items)
-            expect(dom.historyContent.childNodes.length).toBe(7);
-        });
-
-        it('paginates over multiple pages', () => {
-            // Page 1 should have 10 items
-            state.historyPage = 1;
-            renderHistoryPage();
-            expect(dom.historyContent.childNodes.length).toBe(10);
-            expect(dom.historyPageInfo.textContent).toBe('Page 1 of 2');
-            expect(dom.historyPrevBtn.disabled).toBe(true);
-            expect(dom.historyNextBtn.disabled).toBe(false);
-
-            // Page 2 should have 5 items
-            state.historyPage = 2;
-            renderHistoryPage();
-            expect(dom.historyContent.childNodes.length).toBe(5);
-            expect(dom.historyPageInfo.textContent).toBe('Page 2 of 2');
-            expect(dom.historyPrevBtn.disabled).toBe(false);
-            expect(dom.historyNextBtn.disabled).toBe(true);
-        });
+    it('Show more reveals the next 10 rows', () => {
+        state.historyData = Array.from({ length: 15 }, (_, i) => row({ ready_to_repeat: true, exercise_id: String(i) }));
+        renderHistory(NOW);
+        expect(document.querySelectorAll('.gct-history__row')).toHaveLength(10);
+        const more = document.getElementById('history-more-btn');
+        expect(more.hidden).toBe(false);
+        more.click();
+        expect(document.querySelectorAll('.gct-history__row')).toHaveLength(15);
+        expect(more.hidden).toBe(true);
     });
 
-    describe('updateHistoryFilterUI', () => {
-        it('toggles classes based on filter state', () => {
-            state.historyFilterReady = true;
-            state.historyFilterFavorites = true;
-            state.historyFilterTrained = false;
+    it('ignore moves the row to Ignored and Undo brings it back', async () => {
+        const item = row({ ready_to_repeat: true });
+        state.historyData = [item];
+        renderHistory(NOW);
+        api.toggleHideExerciseAPI.mockResolvedValueOnce({ is_hidden: true }).mockResolvedValueOnce({ is_hidden: false });
+        document.querySelector('[data-act="ignore"]').click();
+        await vi.waitFor(() => expect(toast).toHaveBeenCalled());
+        expect(item.is_hidden).toBe(true);
+        expect(document.querySelectorAll('.gct-history__row')).toHaveLength(0);
+        const { text, action } = toast.mock.calls[0][0];
+        expect(text).toBe('Hidden from future sessions');
+        await action.run();
+        expect(item.is_hidden).toBe(false);
+        expect(document.querySelectorAll('.gct-history__row')).toHaveLength(1);
+        expect(api.toggleHideExerciseAPI).toHaveBeenCalledTimes(2);
+    });
 
-            const svg = dom.historyFilterFavorites.querySelector('svg');
-            svg.setAttribute = vi.fn();
-
-            updateHistoryFilterUI();
-
-            // Check for 'filter-active-green' or 'active-green' to support local or pr-merge codebases
-            expect(
-                dom.historyFilterReady.classList.add.mock.calls.some(call =>
-                    call[0] === 'filter-active-green' || call[0] === 'active-green'
-                )
-            ).toBe(true);
-            expect(
-                dom.historyFilterFavorites.classList.add.mock.calls.some(call =>
-                    call[0] === 'filter-active-yellow' || call[0] === 'active-yellow'
-                )
-            ).toBe(true);
-            expect(
-                dom.historyFilterTrained.classList.remove.mock.calls.some(call =>
-                    call[0] === 'filter-active-yellow' || call[0] === 'active-yellow'
-                )
-            ).toBe(true);
-            expect(svg.setAttribute).toHaveBeenCalledWith('fill', 'currentColor');
-        });
+    it('star toggles favorite', async () => {
+        const item = row({ ready_to_repeat: true });
+        state.historyData = [item];
+        renderHistory(NOW);
+        api.toggleFavoriteAPI.mockResolvedValueOnce({ is_favorite: true });
+        document.querySelector('[data-act="fav"]').click();
+        await vi.waitFor(() => expect(item.is_favorite).toBe(true));
+        expect(document.querySelector('[data-act="fav"]').getAttribute('aria-pressed')).toBe('true');
     });
 
     describe('bucketReviewItems', () => {
