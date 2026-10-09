@@ -5,6 +5,7 @@ import { initVoice, handleVoiceToggle } from './voice.js';
 import { initPodcast, loadPodcastFeed, openPodcastDialog } from './podcast.js';
 import { initMe } from './me.js';
 import { initToday } from './today.js';
+import { initTopicsBrowser } from './topics-browser.js';
 import { initRouter, markAuthReady, route, currentRoute } from './router.js';
 import { initScope, startPractice, refreshProgress } from './scope.js';
 import {
@@ -79,6 +80,7 @@ initSession({ renderExercise });
 // Before the routechange listener below: outside practice, screens read the scope's topic.
 initScope();
 initToday();
+initTopicsBrowser();
 initHistory();
 
 // --- Event Listeners ---
