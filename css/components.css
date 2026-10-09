@@ -6,6 +6,7 @@
 /* Buttons — one primary per view */
 .gct-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 18px;border-radius:var(--radius-md);font:700 var(--text-sm)/1 var(--font-sans);font-size:14px;border:1px solid transparent;cursor:pointer;white-space:nowrap;transition:transform var(--transition-fast),box-shadow var(--transition-fast),background var(--transition-fast)}
 .gct-btn--primary{background:var(--gradient-primary);color:var(--fg-on-dark);box-shadow:var(--shadow-btn)}
+a.gct-btn--primary:hover{color:var(--fg-on-dark)} /* beats the global a:hover tint on link-buttons */
 .gct-btn--primary:hover{transform:translateY(-1px);box-shadow:0 10px 20px rgba(105,45,18,.26)}
 .gct-btn--secondary{background:var(--color-surface);color:var(--color-orange-dark);border-color:var(--color-border-strong)}
 .gct-btn--secondary:hover{background:var(--bg-hover)}

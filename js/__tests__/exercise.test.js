@@ -3,6 +3,7 @@ import {
     handleWordClick,
     handleHintClick,
     handleKeyPress,
+    handleSkipExercise,
     updateFavoriteButtonState,
     getHotkey,
     addPunctuationIfNeeded,
@@ -215,6 +216,28 @@ describe('exercise.js', () => {
             expect(dom.toggleFavoriteBtn.getAttribute('aria-pressed')).toBe('true');
             updateFavoriteButtonState(false);
             expect(dom.toggleFavoriteBtn.getAttribute('aria-pressed')).toBe('false');
+        });
+    });
+
+    describe('handleSkipExercise', () => {
+        it('drops the item and shifts the index-keyed mistake/hint sets the summary reads', () => {
+            for (const k of ['exerciseContent', 'emptyStateContainer', 'exerciseCounter', 'englishHintEl', 'scrambledWordsContainer',
+                'constructedSentenceEl', 'correctSentenceDisplay', 'explanationContainer', 'answerPrompt', 'exerciseTopicLabel', 'progressBar']) {
+                dom[k] = document.createElement('div');
+            }
+            state.exercises = [{ correct_german_sentence: 'A b.' }, { correct_german_sentence: 'C d.' }, { correct_german_sentence: 'E f.' }];
+            state.exerciseIds = ['a', 'c', 'e'];
+            state.exercisePerformance = new Map([['a', { hints: 0, mistakes: 1 }], ['c', { hints: 0, mistakes: 0 }], ['e', { hints: 1, mistakes: 0 }]]);
+            state.exercisesWithMistakes = new Set([0]);
+            state.exercisesWithHints = new Set([2]);
+            state.currentExerciseIndex = 1;
+
+            handleSkipExercise();
+
+            expect(state.exerciseIds).toEqual(['a', 'e']);
+            expect([...state.exercisesWithMistakes]).toEqual([0]);
+            expect([...state.exercisesWithHints]).toEqual([1]);
+            expect(state.exercisePerformance.has('c')).toBe(false);
         });
     });
 

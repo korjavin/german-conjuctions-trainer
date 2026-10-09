@@ -466,7 +466,7 @@ bearer flows through the existing auth middleware via
 - **No Build Process**: Pure vanilla JavaScript
 
 ## Known Considerations
-- **Sample Data**: App initializes with sample exercises for testing
+- **Empty start**: The practice card stays empty until a session is started from Today (no sample exercises)
 - **Error Handling**: API failures show alerts with error details
 - **Keyboard Support**: Full hotkey navigation (1-9, a-z)
 - **Responsive Design**: Mobile-friendly with Tailwind classes
@@ -476,7 +476,6 @@ bearer flows through the existing auth middleware via
 - Console logging added for exercise completion flow
 - Check browser developer tools for API response errors
 - Cache issues resolved by server restart (generates new timestamps)
-- Sample exercises automatically loaded for testing
 
 ## Future Enhancement Areas
 - Exercise difficulty levels

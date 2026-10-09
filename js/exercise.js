@@ -120,7 +120,6 @@ function spawnConfetti() {
         dot.className = 'confetti-dot';
         burst.appendChild(dot);
     }
-    dom.feedbackArea.style.position = 'relative';
     dom.feedbackArea.appendChild(burst);
     setTimeout(() => burst.remove(), 1000);
 }
@@ -259,6 +258,7 @@ export function handleWordClick(word, button) {
         button.classList.add('word-collected');
         button.classList.remove('hint-word');
         clearTimeout(wrongTimer);
+        dom.scrambledWordsContainer.querySelectorAll(".gct-chip--wrong").forEach((b) => b.classList.remove("gct-chip--wrong", "gct-shake"));
         renderSentence();
         renderStatus();
 
@@ -479,64 +479,48 @@ export function handleNextExercise() {
     }
 }
 
-export function handleSkipExercise() {
-    const wasLastExercise = state.currentExerciseIndex === state.exercises.length - 1;
-    const skippedExerciseId = state.exerciseIds[state.currentExerciseIndex];
-    if (skippedExerciseId) {
-        state.exercisePerformance.delete(skippedExerciseId);
-        state.completedExerciseIds.delete(skippedExerciseId);
+// Shift an index-keyed set after removing queue item i (the summary reads these by index).
+const dropIndex = (set, i) => new Set([...set].filter((j) => j !== i).map((j) => (j > i ? j - 1 : j)));
+
+// Remove the current exercise from the session queue (client-side only) and move on.
+function dropCurrent() {
+    const i = state.currentExerciseIndex;
+    const wasLastExercise = i === state.exercises.length - 1;
+    const exerciseId = state.exerciseIds[i];
+    if (exerciseId) {
+        state.exercisePerformance.delete(exerciseId);
+        state.completedExerciseIds.delete(exerciseId);
+        delete state.exerciseMistakes[exerciseId];
     }
+    state.exercises.splice(i, 1);
+    state.exerciseIds.splice(i, 1);
+    state.exercisesWithMistakes = dropIndex(state.exercisesWithMistakes, i);
+    state.exercisesWithHints = dropIndex(state.exercisesWithHints, i);
 
-    // Remove the current exercise from the session queue (client-side only)
-    state.exercises.splice(state.currentExerciseIndex, 1);
-    state.exerciseIds.splice(state.currentExerciseIndex, 1);
-
-    // If the last queue item was skipped, session should finish immediately.
     if (state.exercises.length === 0 || wasLastExercise) {
         _onSessionComplete();
         return;
     }
-
-    // Stay at the same index (which now points to the next exercise), or go back if at end
     if (state.currentExerciseIndex >= state.exercises.length) {
         state.currentExerciseIndex = state.exercises.length - 1;
     }
-
     renderExercise();
+}
+
+export function handleSkipExercise() {
+    dropCurrent();
 }
 
 export async function handleHideExercise() {
     if (!state.isLoggedIn) return;
-
-    const wasLastExercise = state.currentExerciseIndex === state.exercises.length - 1;
-    const exerciseId = state.exerciseIds[state.currentExerciseIndex];
-
     try {
-        await toggleHideExerciseAPI(exerciseId);
+        await toggleHideExerciseAPI(state.exerciseIds[state.currentExerciseIndex]);
     } catch (error) {
         console.error('Error hiding exercise:', error);
         toast({ tone: 'danger', text: 'Failed to remove the exercise. Please try again.' });
         return;
     }
-
-    // Remove from session queue
-    if (exerciseId) {
-        state.exercisePerformance.delete(exerciseId);
-        state.completedExerciseIds.delete(exerciseId);
-    }
-    state.exercises.splice(state.currentExerciseIndex, 1);
-    state.exerciseIds.splice(state.currentExerciseIndex, 1);
-
-    if (state.exercises.length === 0 || wasLastExercise) {
-        _onSessionComplete();
-        return;
-    }
-
-    if (state.currentExerciseIndex >= state.exercises.length) {
-        state.currentExerciseIndex = state.exercises.length - 1;
-    }
-
-    renderExercise();
+    dropCurrent();
 }
 
 export async function handleToggleFavorite() {
