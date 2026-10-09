@@ -15,7 +15,7 @@ const svg = (name, size = 16) => (typeof window.gctIconSvg === 'function' ? wind
 const $ = (id) => document.getElementById(id);
 
 let showArchive = false;
-let recent = { id: null, rows: null }; // history rows of the leaf in scope; null = unknown/loading
+let recent = { id: null, rows: null }; // history rows of the leaf in scope; null = loading, false = failed
 let request = 0;
 
 // Flat name filter over the non-archived tree (tree.roots excludes the archive), with each hit's trail.
@@ -79,6 +79,7 @@ function archiveHtml() {
 function leafHtml(n) {
     const rows = recent.id === n.id ? recent.rows : null;
     const list = rows === null ? '<div class="gct-topics__empty">Loading…</div>'
+        : rows === false ? '<div class="gct-topics__empty">Could not load recent sentences. Check your connection and open the topic again.</div>'
         : rows.length ? rows.map((r) => `<div class="gct-topics__sentence"><div class="gct-topics__de">${esc(r.german_sentence)}</div><div class="gct-topics__en">${esc(r.english_hint)}</div></div>`).join('')
             : '<div class="gct-topics__empty">Not practiced yet. <i>Aller Anfang ist schwer</i> — every beginning is hard.</div>';
     return '<div class="gct-topics__stats">'
@@ -139,7 +140,7 @@ async function loadRecent() {
         if (req === request) recent = { id: n.id, rows: recentRows(res.history || []) };
     } catch (error) {
         console.error('Failed to load recent sentences:', error);
-        if (req === request) recent = { id: n.id, rows: [] };
+        if (req === request) recent = { id: n.id, rows: false };
     }
     if (req === request) renderTopicsBrowser();
 }
