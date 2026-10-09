@@ -129,6 +129,9 @@ docker run -p 8080:8080 \
 | `OPENAI_TIMEOUT_SECONDS` | No | `180` | Timeout for each LLM request (refinement and generation) |
 | `ENABLE_PROMPT_REFINEMENT` | No | `false` | When `true`, runs refinement before generation; otherwise uses variation-profile generation directly |
 | `MODEL_NAME` | No | `gpt-3.5-turbo-1106` | Model name to use |
+| `LLM_FALLBACK_URL` | No | - | OpenAI-compatible endpoint retried once when the primary answers with a 4xx/5xx status (e.g. out of credits). Timeouts are not retried. Unset = no fallback |
+| `LLM_FALLBACK_API_KEY` | No | - | API key for the fallback endpoint |
+| `LLM_FALLBACK_MODEL` | No | `MODEL_NAME` | Model name for the fallback endpoint |
 | `SQLITE_PATH` | No | `german.db` | Path to the SQLite database file |
 | `PORT` | No | `8080` | Port for the web server |
 | `CORS_ALLOWED_ORIGINS` | No | `*` | Comma-separated list of allowed CORS origins. Defaults to wildcard (`*`) for development. **It is strongly recommended to set this to your specific domain(s) in production.** |
@@ -246,11 +249,15 @@ You can assign a parent topic to any new or existing topic to keep your exercise
 The application supports any OpenAI-compatible API through environment variables:
 
 ```bash
-# Example: Using Claude via Anthropic API
+# Example: Claude via Anthropic's OpenAI-compatible endpoint, with OpenAI as fallback
+# when the Anthropic credits run out
 docker run -p 8080:8080 \
-  -e OPENAI_API_KEY=your_anthropic_key \
+  -e OPENAI_API_KEY=your_anthropic_console_key \
   -e OPENAI_URL=https://api.anthropic.com/v1 \
-  -e MODEL_NAME=claude-3-sonnet-20240229 \
+  -e MODEL_NAME=claude-sonnet-5-5 \
+  -e LLM_FALLBACK_URL=https://api.openai.com/v1 \
+  -e LLM_FALLBACK_API_KEY=your_openai_api_key \
+  -e LLM_FALLBACK_MODEL=gpt-4o-mini \
   german-conjunctions-trainer
 
 # Example: Using Azure OpenAI

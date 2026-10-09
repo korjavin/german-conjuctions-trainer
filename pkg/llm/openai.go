@@ -197,11 +197,23 @@ func isMissingJSONPromptError(err error) bool {
 		strings.Contains(lowerErr, "prompt must contain the word \"json\"")
 }
 
+// extractJSONObject returns the outermost JSON object in an LLM reply, so a
+// reply wrapped in a ```json fence or in prose still parses. Anthropic's
+// OpenAI-compat layer ignores response_format, so every parser goes through here.
+func extractJSONObject(content string) []byte {
+	start := strings.Index(content, "{")
+	end := strings.LastIndex(content, "}")
+	if start < 0 || end < start {
+		return []byte(content)
+	}
+	return []byte(content[start : end+1])
+}
+
 func parseGeneratedExercises(content string) ([]GeneratedExercise, error) {
 	var exerciseData struct {
 		Exercises []GeneratedExercise `json:"exercises"`
 	}
-	if err := json.Unmarshal([]byte(content), &exerciseData); err != nil {
+	if err := json.Unmarshal(extractJSONObject(content), &exerciseData); err != nil {
 		return nil, fmt.Errorf("failed to parse exercises from provider response: %w", err)
 	}
 	if len(exerciseData.Exercises) == 0 {
@@ -242,7 +254,51 @@ func IsTimeoutError(err error) bool {
 	return false
 }
 
+// providerStatusError is an HTTP error status (4xx/5xx) from the provider.
+type providerStatusError struct {
+	status int
+	err    error
+}
+
+func (e *providerStatusError) Error() string { return e.err.Error() }
+
+// callChatCompletions calls the primary provider and, when it answers with an
+// HTTP error status (e.g. 402 out of credits), retries once on the optional
+// fallback provider from LLM_FALLBACK_URL / LLM_FALLBACK_API_KEY /
+// LLM_FALLBACK_MODEL. Timeouts and transport errors are not retried.
+// ponytail: no circuit breaker; while the primary is down every request pays
+// one failed primary round trip first.
 func callChatCompletions(
+	client *http.Client,
+	openaiURL string,
+	apiKey string,
+	reqPayload OpenAIRequest,
+	timeout time.Duration,
+	stage string,
+) (*OpenAIResponse, time.Duration, error) {
+	resp, elapsed, err := callChatCompletionsOnce(client, openaiURL, apiKey, reqPayload, timeout, stage)
+	var statusErr *providerStatusError
+	fallbackURL := strings.TrimSpace(os.Getenv("LLM_FALLBACK_URL"))
+	if err == nil || fallbackURL == "" || !errors.As(err, &statusErr) {
+		if err == nil {
+			log.Printf("[LLM] %s served by primary %s model=%s", stage, openaiURL, reqPayload.Model)
+		}
+		return resp, elapsed, err
+	}
+
+	if model := strings.TrimSpace(os.Getenv("LLM_FALLBACK_MODEL")); model != "" {
+		reqPayload.Model = model
+	}
+	log.Printf("[LLM] %s primary failed with status %d, retrying on fallback %s model=%s", stage, statusErr.status, fallbackURL, reqPayload.Model)
+	fbResp, fbElapsed, fbErr := callChatCompletionsOnce(client, fallbackURL, os.Getenv("LLM_FALLBACK_API_KEY"), reqPayload, timeout, stage+" (fallback)")
+	if fbErr != nil {
+		return nil, elapsed + fbElapsed, fmt.Errorf("%v; fallback: %w", err, fbErr)
+	}
+	log.Printf("[LLM] %s served by fallback %s model=%s", stage, fallbackURL, reqPayload.Model)
+	return fbResp, elapsed + fbElapsed, nil
+}
+
+func callChatCompletionsOnce(
 	client *http.Client,
 	openaiURL string,
 	apiKey string,
@@ -294,7 +350,10 @@ func callChatCompletions(
 		if openaiResp.Error != nil && openaiResp.Error.Message != "" {
 			providerMessage = openaiResp.Error.Message
 		}
-		return nil, elapsed, fmt.Errorf("%s failed with status %d after %s (request_id=%s): %s", stage, resp.StatusCode, elapsed.Round(time.Millisecond), requestID, providerMessage)
+		return nil, elapsed, &providerStatusError{
+			status: resp.StatusCode,
+			err:    fmt.Errorf("%s failed with status %d after %s (request_id=%s): %s", stage, resp.StatusCode, elapsed.Round(time.Millisecond), requestID, providerMessage),
+		}
 	}
 
 	if openaiResp.Error != nil {
@@ -400,7 +459,7 @@ func GenerateExplanation(apiKey, openaiURL, modelName, topic, correctSentence st
 	var respData struct {
 		Explanation string `json:"explanation"`
 	}
-	if err := json.Unmarshal([]byte(content), &respData); err != nil {
+	if err := json.Unmarshal(extractJSONObject(content), &respData); err != nil {
 		return "", fmt.Errorf("failed to parse explanation from provider response: %w", err)
 	}
 
