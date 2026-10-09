@@ -290,6 +290,8 @@ export async function loadPodcastEpisodes() {
     const inScope = inScopeFn(topicId);
     listedEpisodes = sessionEpisodes.filter((ep) => inScope(ep.topic_id));
     const willLoad = state.isLoggedIn && navigator.onLine !== false;
+    // Offline, the stored list can't load: an in-scope loaded episode stays listed.
+    if (state.isLoggedIn && !willLoad && current && inScope(current.topic_id)) listedEpisodes = mergeEpisodes(listedEpisodes, [current]);
     syncSelection(willLoad);
     if (!willLoad) return;
     try {
