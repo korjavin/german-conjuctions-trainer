@@ -113,7 +113,7 @@ Topic description:
 	var result struct {
 		Terms []string `json:"terms"`
 	}
-	if err := json.Unmarshal([]byte(openaiResp.Choices[0].Message.Content), &result); err != nil {
+	if err := json.Unmarshal(extractJSONObject(openaiResp.Choices[0].Message.Content), &result); err != nil {
 		return nil, fmt.Errorf("failed to parse key terms response: %w", err)
 	}
 
