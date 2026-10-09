@@ -284,6 +284,37 @@ describe('podcast.js', () => {
             expect(dom.podcastPlayer.hidden).toBe(true);
         });
 
+        it('shows the transcript again when the scope comes back to the loaded episode', async () => {
+            api.generatePodcastAPI.mockResolvedValueOnce(ep('one', 'topic1', '2026-10-08T10:00:00Z'));
+            await generatePodcast();
+            state.currentTopicId = 'other';
+            await loadPodcastEpisodes();
+            expect(dom.podcastTranscript.hidden).toBe(true);
+            state.currentTopicId = 'topic1';
+            await loadPodcastEpisodes();
+            expect(dom.podcastTranscript.hidden).toBe(false);
+        });
+
+        it('keeps the selected stored episode while the stored list reloads', async () => {
+            state.isLoggedIn = true;
+            api.generatePodcastAPI.mockResolvedValueOnce(ep('fresh', 'topic1', '2026-10-08T12:00:00Z'));
+            await generatePodcast();
+            api.listPodcastEpisodesAPI.mockResolvedValueOnce({ episodes: [ep('stored', 'topic1', '2026-10-01T10:00:00Z')] });
+            await loadPodcastEpisodes();
+            rows()[1].dispatchEvent(new Event('click'));
+            dom.podcastAudio.pause();
+            expect(src()).toContain('/api/podcast/stored.mp3');
+
+            let finishLoad;
+            api.listPodcastEpisodesAPI.mockReturnValueOnce(new Promise((resolve) => { finishLoad = resolve; }));
+            const load = loadPodcastEpisodes();
+            expect(src()).toContain('/api/podcast/stored.mp3');
+            finishLoad({ episodes: [ep('stored', 'topic1', '2026-10-01T10:00:00Z')] });
+            await load;
+            expect(src()).toContain('/api/podcast/stored.mp3');
+            expect(rows()[1].classList.contains('is-current')).toBe(true);
+        });
+
         it('does not drop a just-built episode when an older list load finishes late', async () => {
             state.isLoggedIn = true;
             let finishLoad;

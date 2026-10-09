@@ -226,7 +226,7 @@ function renderEpisode(data) {
 function showPlayer(on) {
     dom.podcastPlayer.hidden = !on;
     dom.podcastEmpty.hidden = on;
-    if (!on) dom.podcastTranscript.hidden = true;
+    dom.podcastTranscript.hidden = !on || !current?.phrases?.length;
 }
 
 // Loads an episode into the player; play starts it (a click is a user gesture).
@@ -244,9 +244,10 @@ function selectEpisode(data, { play = false } = {}) {
 }
 
 // The list changed: keep the loaded episode while it plays or is still listed, else load the newest one.
-function syncSelection() {
+// pending = the stored list is still loading, so the loaded episode stays until it arrives.
+function syncSelection(pending = false) {
     const playing = current && !dom.podcastAudio.paused;
-    if (playing || (current && listedEpisodes.some((ep) => ep.id === current.id))) {
+    if (playing || (pending && current) || (current && listedEpisodes.some((ep) => ep.id === current.id))) {
         showPlayer(true);
         renderEpisodeList();
     } else if (listedEpisodes.length) {
@@ -288,8 +289,9 @@ export async function loadPodcastEpisodes() {
     const request = ++listRequest;
     const inScope = inScopeFn(topicId);
     listedEpisodes = sessionEpisodes.filter((ep) => inScope(ep.topic_id));
-    syncSelection();
-    if (!state.isLoggedIn || navigator.onLine === false) return;
+    const willLoad = state.isLoggedIn && navigator.onLine !== false;
+    syncSelection(willLoad);
+    if (!willLoad) return;
     try {
         const data = await listPodcastEpisodesAPI(topicId);
         if (request !== listRequest) return;
