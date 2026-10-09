@@ -1,8 +1,61 @@
-# German Conjunctions Trainer
+<div align="center">
 
-An interactive German language learning application that helps B1-level students master German grammar through engaging word-scramble exercises.
+# German Grammar Trainer
 
-## Features
+**Stop memorizing rules. Build German sentences until word order feels natural.**
+
+An open-source, self-hosted language trainer: an LLM writes fresh B1-level exercises for any grammar topic you describe, spaced repetition decides what you review, and podcast mode lets you keep drilling on a walk.
+
+[![Release](https://img.shields.io/github/v/release/korjavin/german-conjuctions-trainer)](https://github.com/korjavin/german-conjuctions-trainer/releases)
+[![Docker image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://github.com/korjavin/german-conjuctions-trainer/pkgs/container/german-conjuctions-trainer)
+[![Go](https://img.shields.io/github/go-mod/go-version/korjavin/german-conjuctions-trainer)](go.mod)
+[![Stars](https://img.shields.io/github/stars/korjavin/german-conjuctions-trainer?style=social)](https://github.com/korjavin/german-conjuctions-trainer/stargazers)
+
+[**Try the live demo →**](https://srs.wandergeek.org/) · [Run your own](#quick-start) · [What's new](CHANGELOG.md)
+
+<img src="docs/screenshots/practice.png" alt="Build the sentence: tap the German words in the right order" width="800">
+
+</div>
+
+## Why
+
+Textbooks give you ten example sentences per grammar point. You need hundreds — with *weil*, *obwohl*, *damit*, verb + preposition, Konjunktiv II — until you stop thinking about where the verb goes. This trainer generates them on demand, in situations you choose (a Jobcenter appointment, the telc speaking exam, small talk at work), and keeps bringing back the ones you get wrong.
+
+## Screenshots
+
+| AI explains your mistakes | On your phone |
+|:---:|:---:|
+| <img src="docs/screenshots/mistake-explained.png" alt="After a mistake, the trainer explains why: time before place" width="520"> | <img src="docs/screenshots/mobile.png" alt="Mobile layout" width="220"> |
+
+<p align="center"><img src="docs/screenshots/today.png" alt="Today page: due reviews, latest lesson, your tracks" width="800"></p>
+
+## Highlights
+
+- 🧩 **Build the sentence.** See English, tap the German words in order (or press 1–9 / a–z, or answer by voice). Punctuation is placed for you.
+- 🤖 **Unlimited AI exercises.** Describe a topic in plain words; the model writes varied sentences for it. Works with Claude, OpenAI or any OpenAI-compatible API, with automatic fallback when credits run out.
+- 🧠 **Spaced repetition.** Log in with Google and the trainer schedules reviews and brings back what you got wrong.
+- 💡 **Explains your mistakes.** Put a word in the wrong place and the AI tells you why — *Time before Place*, *seit + Dativ* — in plain English.
+- 🎧 **Podcast mode.** Turn a topic into a Glossika-style MP3: listen, then recall. Private RSS feed for any podcast app.
+- 🔊 **Natural audio** via ElevenLabs, cached on disk.
+- 📱 **Installable PWA** that works offline and syncs when you're back.
+- 🌳 **Your own curriculum.** Nested topic tree (e.g. *telc B1 → Mündliche Prüfung → Teil 2*) with drag-and-drop, search and archive.
+- 🛠️ **Small and self-hosted.** One Go binary and SQLite in a Docker image. The `gct` CLI lets you — or a coding agent — manage topics from the terminal.
+
+German B1 is where it started, but topics are just prompts: point it at any language or level.
+
+## Quick start
+
+```bash
+docker run -p 8080:8080 \
+  -e OPENAI_API_KEY=your_api_key \
+  -e MODEL_NAME=gpt-4o-mini \
+  ghcr.io/korjavin/german-conjuctions-trainer:2
+```
+
+Open http://localhost:8080 and start practicing. For persistent storage, Claude, Google login, audio and podcasts see [Running with Docker](#running-with-docker) and [Environment Variables](#environment-variables).
+
+## All features
+
 
 - **Exercise Caching**: Generated exercises are cached for instant access, reducing API costs and wait times.
 - **Spaced Repetition System (SRS)**: For logged-in users, exercises are presented using an SRS algorithm to optimize learning and retention.
