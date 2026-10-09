@@ -302,21 +302,7 @@ func (a *App) generateForSubtree(topicIDs []string, existing []*storage.Exercise
 		return nil, fmt.Errorf("failed to get selected topic for generation: %w", err)
 	}
 
-	// Build coverage section if key terms exist for this topic
-	coverageSection := ""
-	promptHash := storage.GetPromptHash(selectedTopic.Prompt)
-	keyTerms, ktErr := a.DB.GetTopicKeyTerms(selectedTopic.ID, promptHash)
-	if ktErr == nil && keyTerms != nil && len(keyTerms.Terms) > 0 {
-		var topicExercises []*storage.Exercise
-		for _, ex := range existing {
-			if ex.TopicID == selectedTopic.ID && ex.PromptHash == promptHash {
-				topicExercises = append(topicExercises, ex)
-			}
-		}
-		termCounts := llm.ComputeTermCoverage(topicExercises, keyTerms.Terms)
-		coverageSection = llm.BuildCoverageSection(keyTerms.Terms, termCounts)
-		log.Printf("[EXERCISES] Coverage stats for topic %s: %d terms, %d existing exercises", selectedTopic.ID, len(keyTerms.Terms), len(topicExercises))
-	}
+	coverageSection := a.coverageSection(selectedTopic, existing)
 
 	log.Printf("[EXERCISES] Generating new exercises for randomly selected sub-tree topic %s", randomTopicID)
 	generate := a.generateExercises
@@ -331,6 +317,25 @@ func (a *App) generateForSubtree(topicIDs []string, existing []*storage.Exercise
 	}
 	log.Printf("[EXERCISES] Generated and cached %d new exercises for topic %s", len(generated), selectedTopic.ID)
 	return generated, nil
+}
+
+// coverageSection builds the key-term coverage hint for topic from its
+// existing exercises, or "" when the topic has no key terms.
+func (a *App) coverageSection(topic *storage.Topic, existing []*storage.Exercise) string {
+	promptHash := storage.GetPromptHash(topic.Prompt)
+	keyTerms, ktErr := a.DB.GetTopicKeyTerms(topic.ID, promptHash)
+	if ktErr != nil || keyTerms == nil || len(keyTerms.Terms) == 0 {
+		return ""
+	}
+	var topicExercises []*storage.Exercise
+	for _, ex := range existing {
+		if ex.TopicID == topic.ID && ex.PromptHash == promptHash {
+			topicExercises = append(topicExercises, ex)
+		}
+	}
+	termCounts := llm.ComputeTermCoverage(topicExercises, keyTerms.Terms)
+	log.Printf("[EXERCISES] Coverage stats for topic %s: %d terms, %d existing exercises", topic.ID, len(keyTerms.Terms), len(topicExercises))
+	return llm.BuildCoverageSection(keyTerms.Terms, termCounts)
 }
 
 func (a *App) handleExercisesComplete(w http.ResponseWriter, r *http.Request) {

@@ -50,6 +50,7 @@ type App struct {
 	voiceID           string
 	limits            keyedLimiters // shared per-client rate limits; keys namespaced per endpoint
 	genInFlight       atomic.Int32  // exercise generations running for /api/exercises
+	pregenBatch       *pregenState  // in-flight background batch; only the pregen goroutine touches it
 	shutdown          chan struct{} // Channel to signal goroutine shutdown
 	// bgWG tracks per-request fire-and-forget goroutines (currently only the
 	// async TouchCLIToken update in resolveBearer). It lets tests drain
@@ -143,6 +144,11 @@ func New(db storage.Storage, sc *securecookie.SecureCookie, oauthConfig *oauth2.
 
 	// Backfill key terms for existing topics that don't have them yet
 	go a.backfillKeyTerms()
+
+	// Top up small exercise pools via the Message Batches API (opt-in).
+	if threshold := pregenThreshold(); threshold > 0 {
+		go a.runPregen(threshold)
+	}
 
 	// Start background job to manage audio_cache size
 	if a.ElevenLabs.AudioCacheMaxSizeMB > 0 {

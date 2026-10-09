@@ -133,6 +133,7 @@ docker run -p 8080:8080 \
 | `LLM_FALLBACK_URL` | No | - | OpenAI-compatible endpoint retried once when the primary answers with a 4xx/5xx status (e.g. out of credits). Timeouts are not retried. Unset = no fallback |
 | `LLM_FALLBACK_API_KEY` | No | - | API key for the fallback endpoint |
 | `LLM_FALLBACK_MODEL` | No | `MODEL_NAME` | Model name for the fallback endpoint |
+| `LLM_BATCH_MIN_POOL` | No | - | With `LLM_PROVIDER=anthropic`: every 15 minutes, topics with fewer cached exercises than this get topped up in the background through the Message Batches API (50% cheaper, async). The in-flight batch id is kept in `llm_batch.json` next to the database. Unset/0 = off |
 | `SQLITE_PATH` | No | `german.db` | Path to the SQLite database file |
 | `PORT` | No | `8080` | Port for the web server |
 | `CORS_ALLOWED_ORIGINS` | No | `*` | Comma-separated list of allowed CORS origins. Defaults to wildcard (`*`) for development. **It is strongly recommended to set this to your specific domain(s) in production.** |
