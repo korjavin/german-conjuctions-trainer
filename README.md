@@ -268,6 +268,8 @@ docker run -p 8080:8080 \
   german-conjunctions-trainer
 ```
 
+Anthropic's compatibility layer ignores `response_format`, so replies may arrive wrapped in a ```` ```json ```` fence or in prose; the app extracts the outermost JSON object before parsing. The app sends no `temperature`, so the compat layer's cap of 1 does not apply.
+
 ## Development
 
 ### Local Development:
