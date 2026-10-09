@@ -21,8 +21,15 @@ type SQLiteStorage struct {
 }
 
 // NewSQLiteStorage initializes a new SQLite storage backend.
+// Concurrent writers wait (busy_timeout) instead of failing with "database is
+// locked"; WAL lets readers run alongside a writer; _txlock=immediate takes the
+// write lock at BEGIN, so a read-then-write tx can't hit an unretryable lock upgrade.
 func NewSQLiteStorage(dataSourceName string) (*SQLiteStorage, error) {
-	db, err := sql.Open("sqlite3", dataSourceName)
+	sep := "?"
+	if strings.Contains(dataSourceName, "?") {
+		sep = "&"
+	}
+	db, err := sql.Open("sqlite3", dataSourceName+sep+"_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
