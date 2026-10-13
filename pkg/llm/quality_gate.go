@@ -14,8 +14,8 @@ const nearDuplicateThreshold = 0.9
 const minTokenCountForNearDuplicate = 5
 
 // Sentence length limits, in words. The prompt asks for at most
-// SoftMaxSentenceWords; the quality gate rejects anything above
-// HardMaxSentenceWords, which triggers the corrective retry.
+// SoftMaxSentenceWords; DropOverlongExercises removes anything above
+// HardMaxSentenceWords instead of failing the whole set.
 const (
 	SoftMaxSentenceWords = 11
 	HardMaxSentenceWords = 16
@@ -42,10 +42,6 @@ func ValidateExerciseSet(exercises []GeneratedExercise, profile VariationProfile
 		}
 		if hint == "" {
 			reasons = append(reasons, fmt.Sprintf("exercise %d has empty english_hint", i+1))
-		}
-
-		if words := countWords(sentence); words > HardMaxSentenceWords {
-			reasons = append(reasons, fmt.Sprintf("exercise %d has %d words (hard limit %d, aim for %d or fewer)", i+1, words, HardMaxSentenceWords, SoftMaxSentenceWords))
 		}
 
 		normalized := normalizeSentence(sentence)
@@ -83,6 +79,22 @@ func normalizeSentence(sentence string) string {
 	normalized = nonWordCharsRegex.ReplaceAllString(normalized, " ")
 	normalized = multiSpaceRegex.ReplaceAllString(normalized, " ")
 	return strings.TrimSpace(normalized)
+}
+
+// DropOverlongExercises removes exercises whose sentence has more than
+// HardMaxSentenceWords words and returns the dropped sentences for logging.
+// Run it after ValidateExerciseSet, which checks the set as the model
+// returned it.
+func DropOverlongExercises(exercises []GeneratedExercise) (kept []GeneratedExercise, dropped []string) {
+	kept = make([]GeneratedExercise, 0, len(exercises))
+	for _, ex := range exercises {
+		if countWords(ex.CorrectGermanSentence) > HardMaxSentenceWords {
+			dropped = append(dropped, ex.CorrectGermanSentence)
+			continue
+		}
+		kept = append(kept, ex)
+	}
+	return kept, dropped
 }
 
 // countWords counts whitespace-separated tokens that contain a letter or

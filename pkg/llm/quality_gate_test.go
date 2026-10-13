@@ -50,26 +50,31 @@ func TestValidateExerciseSetAcceptsValidSet(t *testing.T) {
 	}
 }
 
-func TestValidateExerciseSetEnforcesHardWordLimit(t *testing.T) {
-	profile := VariationProfile{TargetCount: 2}
+func TestDropOverlongExercises(t *testing.T) {
 	atLimit := "Ich gehe heute nach der Arbeit mit meinem Bruder und seiner netten Frau ins neue Kino."            // 16 words
 	overLimit := "Ich gehe heute nach der Arbeit mit meinem Bruder und seiner netten Frau ins neue Kino am Markt." // 18 words
-
-	ok := []GeneratedExercise{
+	exercises := []GeneratedExercise{
 		{EnglishHint: "Hint 1", CorrectGermanSentence: atLimit},
-		{EnglishHint: "Hint 2", CorrectGermanSentence: "Wir sprechen morgen."},
-	}
-	if err := ValidateExerciseSet(ok, profile); err != nil {
-		t.Fatalf("16-word sentence should pass, got: %v", err)
+		{EnglishHint: "Hint 2", CorrectGermanSentence: overLimit},
+		{EnglishHint: "Hint 3", CorrectGermanSentence: "Wir sprechen morgen."},
 	}
 
-	long := []GeneratedExercise{
-		{EnglishHint: "Hint 1", CorrectGermanSentence: overLimit},
-		{EnglishHint: "Hint 2", CorrectGermanSentence: "Wir sprechen morgen."},
+	kept, dropped := DropOverlongExercises(exercises)
+	if len(kept) != 2 || kept[0].CorrectGermanSentence != atLimit || kept[1].CorrectGermanSentence != "Wir sprechen morgen." {
+		t.Errorf("expected the 16-word and short sentences to be kept, got %+v", kept)
 	}
-	err := ValidateExerciseSet(long, profile)
-	if err == nil || !strings.Contains(err.Error(), "exercise 1 has 18 words") {
-		t.Fatalf("expected word-limit failure for exercise 1, got: %v", err)
+	if len(dropped) != 1 || dropped[0] != overLimit {
+		t.Errorf("expected only the 18-word sentence to be dropped, got %q", dropped)
+	}
+}
+
+func TestValidateExerciseSetIgnoresSentenceLength(t *testing.T) {
+	profile := VariationProfile{TargetCount: 1}
+	exercises := []GeneratedExercise{
+		{EnglishHint: "Hint", CorrectGermanSentence: strings.Repeat("Wort ", 20) + "Ende."},
+	}
+	if err := ValidateExerciseSet(exercises, profile); err != nil {
+		t.Fatalf("length is filtered, not a quality-gate failure; got: %v", err)
 	}
 }
 

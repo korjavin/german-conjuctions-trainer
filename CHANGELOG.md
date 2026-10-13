@@ -7,7 +7,7 @@ To get notified, click **Watch → Custom → Releases** on GitHub.
 
 ### Changed
 
-- **Shorter generated sentences.** The LLM is now asked to keep each exercise sentence to about 11 words, and a set with any sentence over 16 words is rejected and regenerated once. Exercises already cached are not affected; new ones follow the limit. No configuration needed.
+- **Shorter generated sentences.** The LLM is now asked to keep each exercise sentence to about 11 words, and any sentence over 16 words is dropped while the rest of the set is kept. Exercises already cached are not affected; new ones follow the limit. No configuration needed.
 
 ### Fixed
 

@@ -153,10 +153,38 @@ func TestGenerateExercisesQualityGateRetry(t *testing.T) {
 	}
 }
 
+func TestGenerateExercisesDropsOverlongSentences(t *testing.T) {
+	t.Setenv("ENABLE_PROMPT_REFINEMENT", "false")
+
+	var generationCalls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&generationCalls, 1)
+		exercises := buildExercises(10, "short")
+		exercises[3]["correct_german_sentence"] = strings.Repeat("Wort ", 17) + "Ende."
+		writeChatChoice(w, http.StatusOK, mustJSONString(t, map[string]interface{}{"exercises": exercises}))
+	}))
+	defer server.Close()
+
+	topic := &storage.Topic{ID: "topic-long", Prompt: "Generate B1 exercises."}
+	exercises, err := GenerateExercises(topic, "fake-api-key", server.URL, "test-model", "")
+	if err != nil {
+		t.Fatalf("expected success with the long sentence filtered, got: %v", err)
+	}
+	if len(exercises) != 9 {
+		t.Fatalf("expected 9 exercises after filtering, got %d", len(exercises))
+	}
+	if calls := atomic.LoadInt32(&generationCalls); calls != 1 {
+		t.Fatalf("expected no corrective retry, got %d generation calls", calls)
+	}
+	if debug := GetLastGenerationDebugInfo(); debug.OverlongDropped != 1 || debug.QualityGateRetryCount != 0 {
+		t.Fatalf("expected overlong_dropped=1 and no quality retry, got %+v", debug)
+	}
+}
+
 func TestBuildGenerationPromptAddsPreambleForSimpleIntent(t *testing.T) {
 	profile := VariationProfile{
-		TargetCount:          10,
-		DifficultyLevel:      "B1",
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -179,8 +207,8 @@ func TestBuildGenerationPromptAddsPreambleForSimpleIntent(t *testing.T) {
 
 func TestBuildGenerationPromptNoPreambleForFullPrompt(t *testing.T) {
 	profile := VariationProfile{
-		TargetCount:          10,
-		DifficultyLevel:      "B1",
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -208,8 +236,8 @@ func TestBuildGenerationPromptNoPreambleForIntentStartingWithYouAre(t *testing.T
 	// does NOT get duplicate boilerplate. Any prompt starting with "you are" is
 	// considered to have a preamble.
 	profile := VariationProfile{
-		TargetCount:          10,
-		DifficultyLevel:      "B1",
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -232,8 +260,8 @@ func TestBuildGenerationPromptNoPreambleForIntentStartingWithYouAre(t *testing.T
 
 func TestBuildGenerationPromptCaseInsensitivePreambleDetection(t *testing.T) {
 	profile := VariationProfile{
-		TargetCount:          10,
-		DifficultyLevel:      "B1",
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -259,8 +287,8 @@ func TestBuildGenerationPromptCaseInsensitivePreambleDetection(t *testing.T) {
 func TestBuildGenerationPromptNoPreambleForExpertTeacher(t *testing.T) {
 	// Test that a full prompt with "teacher" role does NOT get duplicate boilerplate
 	profile := VariationProfile{
-		TargetCount:          10,
-		DifficultyLevel:      "B1",
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -282,8 +310,8 @@ func TestBuildGenerationPromptNoPreambleForExpertTeacher(t *testing.T) {
 func TestBuildGenerationPromptNoPreambleForExpertTutor(t *testing.T) {
 	// Test that a full prompt with "tutor" role does NOT get duplicate boilerplate
 	profile := VariationProfile{
-		TargetCount:          10,
-		DifficultyLevel:      "B1",
+		TargetCount:      10,
+		DifficultyLevel:  "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 

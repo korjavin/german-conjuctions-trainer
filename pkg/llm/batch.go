@@ -156,8 +156,15 @@ func PollExerciseBatch(batchID string, items []BatchItem) (bool, map[int][]Gener
 			var exercises []GeneratedExercise
 			if exercises, err = parseGeneratedExercises(text); err == nil {
 				if err = ValidateExerciseSet(exercises, items[i].Profile); err == nil {
-					results[i] = exercises
-					continue
+					kept, dropped := DropOverlongExercises(exercises)
+					if len(dropped) > 0 {
+						log.Printf("[BATCH] %s topic=%s dropped %d sentences over %d words: %q", batchID, items[i].TopicID, len(dropped), HardMaxSentenceWords, dropped)
+					}
+					if len(kept) > 0 {
+						results[i] = kept
+						continue
+					}
+					err = fmt.Errorf("all generated sentences exceed %d words", HardMaxSentenceWords)
 				}
 			}
 		}
