@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 var nonWordCharsRegex = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
@@ -11,6 +12,14 @@ var multiSpaceRegex = regexp.MustCompile(`\s+`)
 
 const nearDuplicateThreshold = 0.9
 const minTokenCountForNearDuplicate = 5
+
+// Sentence length limits, in words. The prompt asks for at most
+// SoftMaxSentenceWords; DropOverlongExercises removes anything above
+// HardMaxSentenceWords instead of failing the whole set.
+const (
+	SoftMaxSentenceWords = 11
+	HardMaxSentenceWords = 16
+)
 
 // ValidateExerciseSet checks output shape and diversity constraints before caching.
 func ValidateExerciseSet(exercises []GeneratedExercise, profile VariationProfile) error {
@@ -70,6 +79,34 @@ func normalizeSentence(sentence string) string {
 	normalized = nonWordCharsRegex.ReplaceAllString(normalized, " ")
 	normalized = multiSpaceRegex.ReplaceAllString(normalized, " ")
 	return strings.TrimSpace(normalized)
+}
+
+// DropOverlongExercises removes exercises whose sentence has more than
+// HardMaxSentenceWords words and returns the dropped sentences for logging.
+// Run it after ValidateExerciseSet, which checks the set as the model
+// returned it.
+func DropOverlongExercises(exercises []GeneratedExercise) (kept []GeneratedExercise, dropped []string) {
+	kept = make([]GeneratedExercise, 0, len(exercises))
+	for _, ex := range exercises {
+		if countWords(ex.CorrectGermanSentence) > HardMaxSentenceWords {
+			dropped = append(dropped, ex.CorrectGermanSentence)
+			continue
+		}
+		kept = append(kept, ex)
+	}
+	return kept, dropped
+}
+
+// countWords counts whitespace-separated tokens that contain a letter or
+// digit, so a standalone dash does not count and "E-Mail" is one word.
+func countWords(sentence string) int {
+	count := 0
+	for _, token := range strings.Fields(sentence) {
+		if strings.IndexFunc(token, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) >= 0 {
+			count++
+		}
+	}
+	return count
 }
 
 func findNearDuplicates(normalizedSentences []string) []string {

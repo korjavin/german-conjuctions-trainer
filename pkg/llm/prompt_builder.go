@@ -51,6 +51,7 @@ func BuildGenerationPrompt(basePrompt string, profile VariationProfile, coverage
 	b.WriteString("- Avoid near-duplicate sentence skeletons.\n")
 	b.WriteString("- english_hint must be a natural English translation.\n")
 	b.WriteString("- correct_german_sentence must be complete and grammatical.\n")
+	b.WriteString(fmt.Sprintf("- Keep correct_german_sentence short: aim for %d words or fewer, and never exceed %d words.\n", SoftMaxSentenceWords, HardMaxSentenceWords))
 
 	if len(coverageSections) > 0 && coverageSections[0] != "" {
 		b.WriteString("\n")

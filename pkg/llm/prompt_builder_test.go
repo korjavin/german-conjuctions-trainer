@@ -58,3 +58,10 @@ func TestBuildCorrectivePrompt(t *testing.T) {
 		t.Errorf("Expected corrective prompt to include the quality failure, got: %s", result)
 	}
 }
+
+func TestBuildGenerationPromptIncludesSentenceLengthLimits(t *testing.T) {
+	result := BuildGenerationPrompt("Topic", VariationProfile{TargetCount: 10})
+	if !strings.Contains(result, "aim for 11 words or fewer, and never exceed 16 words") {
+		t.Errorf("expected soft/hard sentence length limits in prompt, got: %s", result)
+	}
+}

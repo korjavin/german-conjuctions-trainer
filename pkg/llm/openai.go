@@ -82,6 +82,7 @@ type GenerationDebugInfo struct {
 	ProviderRetryCount    int              `json:"provider_retry_count"`
 	QualityGateRetryCount int              `json:"quality_gate_retry_count"`
 	QualityGateFailures   []string         `json:"quality_gate_failures,omitempty"`
+	OverlongDropped       int              `json:"overlong_dropped,omitempty"`
 	GeneratedCount        int              `json:"generated_count"`
 	GenerationLatencyMS   int64            `json:"generation_latency_ms"`
 	LastError             string           `json:"last_error,omitempty"`
@@ -610,6 +611,18 @@ func GenerateExercises(topic *storage.Topic, apiKey, openaiURL, modelName, cover
 			setLastGenerationData(debugInfo.Prompt, debugInfo)
 			return nil, secondQualityErr
 		}
+	}
+
+	exercises, dropped := DropOverlongExercises(exercises)
+	debugInfo.OverlongDropped = len(dropped)
+	if len(dropped) > 0 {
+		log.Printf("[GENERATION] batch=%s dropped %d sentences over %d words: %q", batchID, len(dropped), HardMaxSentenceWords, dropped)
+	}
+	if len(exercises) == 0 {
+		err := fmt.Errorf("all generated sentences exceed %d words", HardMaxSentenceWords)
+		debugInfo.LastError = err.Error()
+		setLastGenerationData(debugInfo.Prompt, debugInfo)
+		return nil, err
 	}
 
 	debugInfo.GeneratedCount = len(exercises)
