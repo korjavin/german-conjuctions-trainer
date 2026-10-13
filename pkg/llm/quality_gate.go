@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 var nonWordCharsRegex = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
@@ -11,6 +12,14 @@ var multiSpaceRegex = regexp.MustCompile(`\s+`)
 
 const nearDuplicateThreshold = 0.9
 const minTokenCountForNearDuplicate = 5
+
+// Sentence length limits, in words. The prompt asks for at most
+// SoftMaxSentenceWords; the quality gate rejects anything above
+// HardMaxSentenceWords, which triggers the corrective retry.
+const (
+	SoftMaxSentenceWords = 11
+	HardMaxSentenceWords = 16
+)
 
 // ValidateExerciseSet checks output shape and diversity constraints before caching.
 func ValidateExerciseSet(exercises []GeneratedExercise, profile VariationProfile) error {
@@ -33,6 +42,10 @@ func ValidateExerciseSet(exercises []GeneratedExercise, profile VariationProfile
 		}
 		if hint == "" {
 			reasons = append(reasons, fmt.Sprintf("exercise %d has empty english_hint", i+1))
+		}
+
+		if words := countWords(sentence); words > HardMaxSentenceWords {
+			reasons = append(reasons, fmt.Sprintf("exercise %d has %d words (hard limit %d, aim for %d or fewer)", i+1, words, HardMaxSentenceWords, SoftMaxSentenceWords))
 		}
 
 		normalized := normalizeSentence(sentence)
@@ -70,6 +83,18 @@ func normalizeSentence(sentence string) string {
 	normalized = nonWordCharsRegex.ReplaceAllString(normalized, " ")
 	normalized = multiSpaceRegex.ReplaceAllString(normalized, " ")
 	return strings.TrimSpace(normalized)
+}
+
+// countWords counts whitespace-separated tokens that contain a letter or
+// digit, so a standalone dash does not count and "E-Mail" is one word.
+func countWords(sentence string) int {
+	count := 0
+	for _, token := range strings.Fields(sentence) {
+		if strings.IndexFunc(token, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) >= 0 {
+			count++
+		}
+	}
+	return count
 }
 
 func findNearDuplicates(normalizedSentences []string) []string {

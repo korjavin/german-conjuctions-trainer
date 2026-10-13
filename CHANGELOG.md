@@ -5,6 +5,10 @@ To get notified, click **Watch → Custom → Releases** on GitHub.
 
 ## [Unreleased]
 
+### Changed
+
+- **Shorter generated sentences.** The LLM is now asked to keep each exercise sentence to about 11 words, and a set with any sentence over 16 words is rejected and regenerated once. Exercises already cached are not affected; new ones follow the limit. No configuration needed.
+
 ### Fixed
 
 - **Docker named volumes are writable.** With plain Docker, volumes mounted on `/data` (database) and `/app/audio_cache` were owned by root and the app could not write to them, so `docker-compose.yml` failed on a fresh install. New volumes now belong to the app user. Volumes that already hold data are not touched.

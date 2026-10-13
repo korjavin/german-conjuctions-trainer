@@ -155,8 +155,8 @@ func TestGenerateExercisesQualityGateRetry(t *testing.T) {
 
 func TestBuildGenerationPromptAddsPreambleForSimpleIntent(t *testing.T) {
 	profile := VariationProfile{
-		TargetCount:      10,
-		DifficultyLevel:  "B1",
+		TargetCount:          10,
+		DifficultyLevel:      "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -179,8 +179,8 @@ func TestBuildGenerationPromptAddsPreambleForSimpleIntent(t *testing.T) {
 
 func TestBuildGenerationPromptNoPreambleForFullPrompt(t *testing.T) {
 	profile := VariationProfile{
-		TargetCount:      10,
-		DifficultyLevel:  "B1",
+		TargetCount:          10,
+		DifficultyLevel:      "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -208,8 +208,8 @@ func TestBuildGenerationPromptNoPreambleForIntentStartingWithYouAre(t *testing.T
 	// does NOT get duplicate boilerplate. Any prompt starting with "you are" is
 	// considered to have a preamble.
 	profile := VariationProfile{
-		TargetCount:      10,
-		DifficultyLevel:  "B1",
+		TargetCount:          10,
+		DifficultyLevel:      "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -232,8 +232,8 @@ func TestBuildGenerationPromptNoPreambleForIntentStartingWithYouAre(t *testing.T
 
 func TestBuildGenerationPromptCaseInsensitivePreambleDetection(t *testing.T) {
 	profile := VariationProfile{
-		TargetCount:      10,
-		DifficultyLevel:  "B1",
+		TargetCount:          10,
+		DifficultyLevel:      "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -259,8 +259,8 @@ func TestBuildGenerationPromptCaseInsensitivePreambleDetection(t *testing.T) {
 func TestBuildGenerationPromptNoPreambleForExpertTeacher(t *testing.T) {
 	// Test that a full prompt with "teacher" role does NOT get duplicate boilerplate
 	profile := VariationProfile{
-		TargetCount:      10,
-		DifficultyLevel:  "B1",
+		TargetCount:          10,
+		DifficultyLevel:      "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
@@ -282,8 +282,8 @@ func TestBuildGenerationPromptNoPreambleForExpertTeacher(t *testing.T) {
 func TestBuildGenerationPromptNoPreambleForExpertTutor(t *testing.T) {
 	// Test that a full prompt with "tutor" role does NOT get duplicate boilerplate
 	profile := VariationProfile{
-		TargetCount:      10,
-		DifficultyLevel:  "B1",
+		TargetCount:          10,
+		DifficultyLevel:      "B1",
 		MaxRepetitionPerTerm: 2,
 	}
 
