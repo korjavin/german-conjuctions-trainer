@@ -1443,7 +1443,7 @@ func (s *SQLiteStorage) GetAllUsers() ([]*User, error) {
 }
 
 func (s *SQLiteStorage) GetUserStats(userID string) (*UserStats, error) {
-	row := s.db.QueryRow("SELECT user_id, total_exercises, total_mistakes, total_hints, total_time, last_topic_id FROM user_stats WHERE user_id = ?", userID)
+	row := s.db.QueryRow("SELECT user_id, total_exercises, total_mistakes, total_hints, total_time, COALESCE(last_topic_id, '') FROM user_stats WHERE user_id = ?", userID)
 	var stats UserStats
 	err := row.Scan(&stats.UserID, &stats.TotalExercises, &stats.TotalMistakes, &stats.TotalHints, &stats.TotalTime, &stats.LastTopicID)
 	if err == sql.ErrNoRows {

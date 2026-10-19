@@ -175,3 +175,29 @@ func TestGetDatabaseStats_NonexistentAudioDir(t *testing.T) {
 		t.Errorf("Expected 0 audio cache files for nonexistent dir, got %d", stats.AudioCacheFileCount)
 	}
 }
+
+// Stats saved before the user ever picked a topic leave last_topic_id NULL;
+// reading them back must not fail (it made GET /api/user/stats a 500).
+func TestGetUserStats_NoLastTopic(t *testing.T) {
+	store, err := NewSQLiteStorage(filepath.Join(t.TempDir(), "test_user_stats.sqlite"))
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	defer store.db.Close()
+
+	user, err := store.CreateUser("google-1")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := store.UpdateUserStats(&UserStats{UserID: user.ID, TotalExercises: 10}); err != nil {
+		t.Fatalf("UpdateUserStats: %v", err)
+	}
+
+	stats, err := store.GetUserStats(user.ID)
+	if err != nil {
+		t.Fatalf("GetUserStats: %v", err)
+	}
+	if stats.TotalExercises != 10 || stats.LastTopicID != "" {
+		t.Errorf("got %+v, want 10 exercises and no last topic", stats)
+	}
+}
