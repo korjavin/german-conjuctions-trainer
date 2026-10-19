@@ -12,6 +12,7 @@ To get notified, click **Watch → Custom → Releases** on GitHub.
 ### Fixed
 
 - **Docker named volumes are writable.** With plain Docker, volumes mounted on `/data` (database) and `/app/audio_cache` were owned by root and the app could not write to them, so `docker-compose.yml` failed on a fresh install. New volumes now belong to the app user. Volumes that already hold data are not touched.
+- **Dialogs are centered again.** The Skip dialog (and other confirm dialogs) opened stuck to the left edge on installed copies of the app, because the offline cache kept serving an old stylesheet. The cache is refreshed now, and the dialog sits in the middle of the screen on desktop and phones.
 
 ### Other
 
