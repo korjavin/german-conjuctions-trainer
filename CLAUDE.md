@@ -60,13 +60,12 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+pnpm install && pnpm test   # frontend: Vitest + happy-dom (js/__tests__), same as CI
+go test ./...               # backend
 ```
+
+`js/__tests__/boot.test.js` boots the real `index.html` + `main.js`; `sw.test.js` keeps `SHELL_ASSETS` in sync with `js/` and `css/`. On PRs, CI fails if shell files (index.html, style.css, css/, js/) change without a `CACHE_VERSION` bump in `sw.js`.
 
 ## Architecture Overview
 
