@@ -61,11 +61,14 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 ## Build & Test
 
 ```bash
-pnpm install && pnpm test   # frontend: Vitest + happy-dom (js/__tests__), same as CI
+pnpm install && pnpm test   # frontend unit: Vitest + happy-dom (js/__tests__), ~6 s
+pnpm test:e2e               # frontend e2e: Playwright, real Go server + Chromium, ~1 min
 go test ./...               # backend
 ```
 
 `js/__tests__/boot.test.js` boots the real `index.html` + `main.js`; `sw.test.js` keeps `SHELL_ASSETS` in sync with `js/` and `css/`. On PRs, CI fails if shell files (index.html, style.css, css/, js/) change without a `CACHE_VERSION` bump in `sw.js`.
+
+E2E (`e2e/`, `playwright.config.js`): `e2e/server.sh` builds the server and starts it on a fresh SQLite DB seeded by `e2e/seed` (default topics + 12 exercises each from `e2e/seed/sentences.json`, so no LLM/TTS keys are needed). The `login` fixture mints a session cookie for a brand-new user (`login({ admin: true })` for the admin). Every test fails on a console error, page error or 5xx unless it calls `allowErrors(/re/)`. Runs on desktop and Pixel 7 viewports. Playwright is pinned to the version matching the Chromium preinstalled in cloud sessions. Server log: `e2e/.tmp/server.log`; on CI failure the report, traces and log are uploaded as the `playwright-report` artifact.
 
 ## Architecture Overview
 

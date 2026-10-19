@@ -52,3 +52,8 @@ tmp/
 # sqlite WAL/SHM sidecars written by tests
 *.sqlite-shm
 *.sqlite-wal
+
+# Playwright (e2e/)
+e2e/.tmp/
+test-results/
+playwright-report/

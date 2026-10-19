@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'happy-dom',
+    include: ['js/__tests__/**/*.test.js'], // e2e/ is Playwright's
     setupFiles: ['./js/__tests__/setup.js'],
     coverage: {
       provider: 'v8',

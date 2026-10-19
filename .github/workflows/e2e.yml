@@ -1,0 +1,76 @@
+name: Frontend E2E (Playwright)
+
+# Real Chromium (desktop + mobile viewport) against the real Go server on a
+# seeded SQLite DB. See playwright.config.js and e2e/.
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        cache: true
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: pnpm
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+
+    - name: Playwright version
+      id: pw
+      run: echo "version=$(pnpm exec playwright --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Playwright browser
+      id: pw-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ steps.pw.outputs.version }}
+
+    - name: Install Chromium
+      if: steps.pw-cache.outputs.cache-hit != 'true'
+      run: pnpm exec playwright install --with-deps --only-shell chromium
+
+    - name: Install Chromium system deps
+      if: steps.pw-cache.outputs.cache-hit == 'true'
+      run: pnpm exec playwright install-deps chromium
+
+    - name: Run Playwright
+      run: pnpm exec playwright test
+
+    - name: Upload report
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report
+        path: |
+          playwright-report/
+          test-results/
+          e2e/.tmp/server.log
+        retention-days: 7
