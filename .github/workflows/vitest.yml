@@ -6,43 +6,49 @@ on:
   pull_request:
     branches: [ main, master ]
 
+# A new push to the same PR/branch supersedes the running check.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        # HEAD^1 of the PR merge commit is the base, for the cache-version check.
+        fetch-depth: 2
 
     - name: Install pnpm
-      uses: pnpm/action-setup@v3
+      uses: pnpm/action-setup@v4
       with:
-        version: 9
-        run_install: false
+        version: 10
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
-
-    - name: Get pnpm store directory
-      shell: bash
-      run: |
-        echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-    - uses: actions/cache@v4
-      name: Setup pnpm cache
-      with:
-        path: ${{ env.STORE_PATH }}
-        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
-        restore-keys: |
-          ${{ runner.os }}-pnpm-store-
+        node-version: '22'
+        cache: pnpm
 
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
 
-    - name: Run Vitest
-      run: pnpm test
-
-    - name: Run Coverage
+    # One run: coverage is collected on the same pass that checks the tests.
+    - name: Run Vitest (with coverage)
       run: pnpm run test:coverage
+
+    # sw.js serves the shell cache-first: a shell change without a CACHE_VERSION
+    # bump never reaches returning visitors.
+    - name: Check sw.js CACHE_VERSION bump
+      if: github.event_name == 'pull_request'
+      run: |
+        shell=$(git diff --name-only HEAD^1 HEAD -- index.html style.css manifest.json 'favicon*.svg' css js ':!js/__tests__')
+        if [ -z "$shell" ]; then echo "No shell files changed."; exit 0; fi
+        if git diff HEAD^1 HEAD -- sw.js | grep -q '^+const CACHE_VERSION'; then echo "CACHE_VERSION bumped."; exit 0; fi
+        echo "::error file=sw.js::Shell files changed but CACHE_VERSION in sw.js was not bumped:"
+        echo "$shell"
+        exit 1
