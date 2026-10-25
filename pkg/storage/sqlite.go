@@ -1489,13 +1489,11 @@ func (s *SQLiteStorage) GetUserExerciseStats(userID string) (*UserExerciseStats,
 		return nil, err
 	}
 
-	// This logic mirrors the SRS logic from the main handler.
-	// It calculates the number of hours since the last view and compares it to the repetition counter squared (in hours).
+	// Same due rule as the SRS selection (NextReviewHours).
 	query := `
 		SELECT COUNT(*)
 		FROM user_exercise_views
-		WHERE user_id = ? AND (julianday('now') - julianday(last_viewed)) * 24 >= (repetition_counter * repetition_counter)
-	`
+		WHERE user_id = ? AND ` + dueSQL("user_exercise_views")
 	var readyToRepeatCount int
 	row = s.db.QueryRow(query, userID)
 	if err := row.Scan(&readyToRepeatCount); err != nil {
@@ -1547,7 +1545,7 @@ func (s *SQLiteStorage) GetTopicProgress(userID string) (map[string]*TopicProgre
 		SELECT e.topic_id,
 			COUNT(*),
 			COALESCE(SUM(CASE WHEN NOT uev.is_hidden
-				AND (julianday('now') - julianday(uev.last_viewed)) * 24 >= (uev.repetition_counter * uev.repetition_counter)
+				AND `+dueSQL("uev")+`
 				THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN uev.repetition_counter >= 3 THEN 1 ELSE 0 END), 0)
 		FROM user_exercise_views uev
@@ -1660,9 +1658,8 @@ func (s *SQLiteStorage) GetUserExerciseHistory(userID, topicID string) ([]*Exerc
 			item.EnglishHint = hint
 		}
 
-		// Calculate next review time using SRS formula: (counter^2) hours
 		hoursSinceView := now.Sub(item.LastViewed).Hours()
-		item.NextReviewHours = float64(item.RepetitionCounter * item.RepetitionCounter)
+		item.NextReviewHours = NextReviewHours(item.RepetitionCounter)
 		item.ReadyToRepeat = hoursSinceView >= item.NextReviewHours
 
 		history = append(history, &item)
