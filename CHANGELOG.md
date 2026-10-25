@@ -7,6 +7,8 @@ To get notified, click **Watch → Custom → Releases** on GitHub.
 
 ### Changed
 
+- **Due reviews come before new exercises.** A practice batch now starts with the exercises that are due for review (most overdue first) and only fills the rest with exercises you have never seen. Before, new exercises always came first, so the more you practiced a topic the bigger its "ready to review" count grew. No configuration needed.
+- **5-minute pause after a mistake.** An exercise you just got wrong is due again after 5 minutes instead of immediately, so it no longer shows up in the "ready to review" count the moment you answer it. Longer review intervals are unchanged.
 - **Shorter generated sentences.** The LLM is now asked to keep each exercise sentence to about 11 words, and any sentence over 16 words is dropped while the rest of the set is kept. Exercises already cached are not affected; new ones follow the limit. No configuration needed.
 
 ### Fixed

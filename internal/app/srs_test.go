@@ -149,3 +149,40 @@ func TestSRS_GetRandomExercisesExact(t *testing.T) {
 		t.Errorf("expected 5 exercises, got %d", len(random))
 	}
 }
+
+// Due reviews come before never-seen exercises, so practice works the due
+// backlog down instead of always reaching for fresh exercises.
+func TestSRS_DueReviewsBeforeNew(t *testing.T) {
+	now := time.Now()
+	allExercises := []*storage.Exercise{{ID: "new1"}, {ID: "due1"}, {ID: "new2"}, {ID: "due2"}, {ID: "new3"}}
+	userViews := map[string]*storage.UserExerciseView{
+		"due1": {ExerciseID: "due1", LastViewed: now.Add(-10 * time.Minute)},
+		"due2": {ExerciseID: "due2", LastViewed: now.Add(-3 * time.Hour), RepetitionCounter: 1},
+	}
+
+	for run := 0; run < 20; run++ {
+		eligible := getEligibleExercisesForSRS(allExercises, userViews)
+		if len(eligible) != 5 {
+			t.Fatalf("expected 5 eligible exercises, got %d", len(eligible))
+		}
+		// due2 is 2h overdue, due1 only a few minutes.
+		if eligible[0].ID != "due2" || eligible[1].ID != "due1" {
+			t.Fatalf("expected due2, due1 first, got %s, %s", eligible[0].ID, eligible[1].ID)
+		}
+	}
+}
+
+// An exercise just answered wrong (counter 0) waits 5 minutes before it is due.
+func TestSRS_MinimumWaitAfterMistake(t *testing.T) {
+	now := time.Now()
+	allExercises := []*storage.Exercise{{ID: "just-failed"}, {ID: "failed-earlier"}}
+	userViews := map[string]*storage.UserExerciseView{
+		"just-failed":    {ExerciseID: "just-failed", LastViewed: now.Add(-time.Minute)},
+		"failed-earlier": {ExerciseID: "failed-earlier", LastViewed: now.Add(-6 * time.Minute)},
+	}
+
+	eligible := getEligibleExercisesForSRS(allExercises, userViews)
+	if len(eligible) != 1 || eligible[0].ID != "failed-earlier" {
+		t.Errorf("expected only failed-earlier to be eligible, got %v", eligible)
+	}
+}
