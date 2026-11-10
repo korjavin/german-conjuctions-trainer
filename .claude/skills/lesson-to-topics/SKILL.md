@@ -73,4 +73,11 @@ Read the sample sentences: they must contain the marked phrases and correct form
 - Что выучить наизусть к следующему уроку (the teacher's "Next steps").
 - Update the active exam's project memory note: one line per lesson (date, new/touched keys, homework).
 
+## 7. Enrich the lesson note in Outline
+
+If the analysis found something useful that the note itself lacks — e.g. the user's typical/repeated errors (wrong → right, "wiederholter Fehler" across lessons), corrections buried only in the transcript, a teacher's strategy stated in passing, ready-to-memorize phrase blocks — write it back into the lesson doc so the knowledge base stays the source of truth.
+- `mcp__claude_ai_outline__update_document` on the lesson doc: insert a `## 🎯 Разбор урока` section before `## ✅ Action Items` (replace it if it already exists — don't duplicate). Keep the rest of the doc (summary, transcript) untouched.
+- Content in Russian with German examples: typical errors (wrong → right, repeated ones marked), phrases to memorize, links to the gct leaves touched (name + id).
+- Only add what is new relative to the note; skip if there is nothing.
+
 Server and user: `./gct whoami`. Root topic id and builder live in local, untracked `tmp/`; don't delete it.
